@@ -26,7 +26,7 @@ Documents:
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone
 from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -92,7 +92,7 @@ class MT5Cache:
 
     async def maybe_set_daily_anchor(self, login: int, balance: float) -> float:
         """Anchor today's starting balance once per UTC day. Returns the anchor."""
-        today = date.today().isoformat()
+        today = datetime.now(timezone.utc).date().isoformat()
         ov = await self.overrides.find_one({"_id": login}) or {}
         anchor = ov.get("daily_pnl_anchor")
         if not anchor or anchor.get("date") != today:

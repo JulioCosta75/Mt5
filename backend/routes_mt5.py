@@ -83,22 +83,24 @@ def build_router(cache) -> APIRouter:
     # ---- /api/accounts ----
     @router.get("/accounts")
     async def list_accounts():
-        out = []
+        out: list[dict] = []
+        any_reachable = False
         for c in clients():
             bridge_acc = await _try_account(c)
             if bridge_acc:
+                any_reachable = True
                 out.append(await _enriched_account(c, bridge_acc))
-            else:
-                # serve last known if available
-                cached_keys = await cache.cache.find(
-                    {"_id": {"$regex": r"^account:"}}, {"_id": 0}
-                ).to_list(50)
-                for d in cached_keys:
-                    payload = d.get("payload")
-                    if payload:
-                        payload["stale"] = True
-                        out.append(payload)
-                break
+            # otherwise: try next bridge (don't break — others may still be up)
+        if not any_reachable:
+            # fall back to all cached snapshots
+            cached_keys = await cache.cache.find(
+                {"_id": {"$regex": r"^account:"}}, {"_id": 0}
+            ).to_list(50)
+            for d in cached_keys:
+                payload = d.get("payload")
+                if payload:
+                    payload["stale"] = True
+                    out.append(payload)
         return out
 
     @router.get("/accounts/{account_id}")
