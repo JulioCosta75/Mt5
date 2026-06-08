@@ -1,6 +1,7 @@
 from fastapi import FastAPI, APIRouter, HTTPException
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 import math
@@ -13,8 +14,20 @@ from datetime import datetime, timezone, timedelta
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+# MongoDB (used by MT5 mode for cache + overrides)
+mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
+mongo_client = AsyncIOMotorClient(mongo_url)
+mongo_db = mongo_client[os.environ.get("DB_NAME", "test_database")]
+
 app = FastAPI(title="MT5 Quant Supervision API")
 api_router = APIRouter(prefix="/api")
+
+# ------------------------------------------------------------
+# Operating mode: if any MT5_BRIDGE_URL is configured we serve
+# REAL data via routes_mt5; otherwise we keep the mock data
+# below for development / preview.
+# ------------------------------------------------------------
+MT5_MODE = bool(os.environ.get("MT5_BRIDGE_URL") or os.environ.get("MT5_BRIDGE_URLS"))
 
 # ------------------------------------------------------------
 # In-memory state (mock data). Generated deterministically on
@@ -341,7 +354,15 @@ async def tick():
     return {"ok": True, "server_time": datetime.now(timezone.utc).isoformat()}
 
 
-app.include_router(api_router)
+if MT5_MODE:
+    from mt5_cache import MT5Cache
+    from routes_mt5 import build_router as build_mt5_router
+    _cache = MT5Cache(mongo_db)
+    app.include_router(build_mt5_router(_cache))
+    logging.getLogger("server").info("MT5 mode ENABLED — serving real data via bridge")
+else:
+    app.include_router(api_router)
+    logging.getLogger("server").info("MT5 mode disabled — serving MOCK data (set MT5_BRIDGE_URL to switch)")
 
 app.add_middleware(
     CORSMiddleware,
