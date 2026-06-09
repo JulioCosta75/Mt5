@@ -80,3 +80,7 @@ memory/test_credentials.md
 
 # Mobile development
 android-sdk/
+# Sensitive environment files (security: added before initial GitHub push)
+.env
+**/.env
+!**/.env.example
