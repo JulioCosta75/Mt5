@@ -41,6 +41,13 @@ Backend Linux (FastAPI)  ── MT5_MODE switch ──┐
 ### Implemented (Jan 2026)
 - ✅ MVP dashboard (mock 8 accounts) — iteration 1
 - ✅ Phase 1 bridge architecture — iteration 2
+- ✅ Windows installer build kit — iteration 3 (`/app/installer/`)
+  - Inno Setup script + Tkinter setup wizard + NSSM service installers
+  - SQLite drop-in for Mongo (`mt5_cache_sqlite.py`)
+  - Static frontend serving via FastAPI (`SERVE_FRONTEND=true`)
+  - `/api/system/health` endpoint + `/healthcheck` HTML page
+  - Single-build command (`build.bat`) → `dist\Atlas_Setup.exe`
+  - Embedded Python 3.11 + NSSM bundled at build time
   - Windows bridge: `MetaTrader5` wrapper + APScheduler 10s snapshots + SQLite + FastAPI server + bearer-token auth
   - Backend MT5 client (httpx, multi-bridge ready)
   - Adapter mapping MT5 schema → existing frontend schema (zero frontend changes)

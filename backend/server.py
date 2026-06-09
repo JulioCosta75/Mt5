@@ -1,7 +1,7 @@
 from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 import math
@@ -14,12 +14,21 @@ from datetime import datetime, timezone, timedelta
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB (used by MT5 mode for cache + overrides)
-mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
-mongo_client = AsyncIOMotorClient(mongo_url)
-mongo_db = mongo_client[os.environ.get("DB_NAME", "test_database")]
+# ------------------------------------------------------------
+# Storage backend selection.
+#   ATLAS_STORE=mongo   (default, Linux/Emergent)
+#   ATLAS_STORE=sqlite  (Windows installer, no Mongo needed)
+# ------------------------------------------------------------
+ATLAS_STORE = os.environ.get("ATLAS_STORE", "mongo").lower()
 
-app = FastAPI(title="MT5 Quant Supervision API")
+mongo_db = None
+if ATLAS_STORE == "mongo":
+    from motor.motor_asyncio import AsyncIOMotorClient
+    mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
+    mongo_client = AsyncIOMotorClient(mongo_url)
+    mongo_db = mongo_client[os.environ.get("DB_NAME", "test_database")]
+
+app = FastAPI(title="Atlas — MT5 Supervision API")
 api_router = APIRouter(prefix="/api")
 
 # ------------------------------------------------------------
@@ -355,14 +364,83 @@ async def tick():
 
 
 if MT5_MODE:
-    from mt5_cache import MT5Cache
     from routes_mt5 import build_router as build_mt5_router
-    _cache = MT5Cache(mongo_db)
+    if ATLAS_STORE == "sqlite":
+        from mt5_cache_sqlite import MT5CacheSQLite as MT5Cache
+        _cache = MT5Cache(os.environ.get("ATLAS_SQLITE_PATH", str(ROOT_DIR / "data" / "atlas.db")))
+    else:
+        from mt5_cache import MT5Cache
+        _cache = MT5Cache(mongo_db)
     app.include_router(build_mt5_router(_cache))
-    logging.getLogger("server").info("MT5 mode ENABLED — serving real data via bridge")
+    logging.getLogger("server").info("MT5 mode ENABLED — store=%s", ATLAS_STORE)
 else:
     app.include_router(api_router)
+    _cache = None
     logging.getLogger("server").info("MT5 mode disabled — serving MOCK data (set MT5_BRIDGE_URL to switch)")
+
+
+# ------------------------------------------------------------
+# /api/system/health — used by the health-check page (Windows installer)
+# ------------------------------------------------------------
+@app.get("/api/system/health")
+async def system_health():
+    import httpx
+    out = {
+        "mode": "mt5" if MT5_MODE else "mock",
+        "server_time": datetime.now(timezone.utc).isoformat(),
+        "store": {"backend": ATLAS_STORE, "ok": True},
+        "bridge": None,
+    }
+    if _cache is not None:
+        try:
+            await _cache.get("__health_probe__")
+        except Exception as e:  # noqa: BLE001
+            out["store"]["ok"] = False
+            out["store"]["error"] = str(e)
+    if MT5_MODE:
+        from mt5_client import clients
+        bridges = clients()
+        if bridges:
+            client = bridges[0]
+            info = {"url": client.endpoint.url, "reachable": False}
+            try:
+                h = await client.health()
+                info.update({
+                    "reachable": True,
+                    "terminal_connected": h.get("terminal_connected"),
+                    "account_logged_in": h.get("account_logged_in"),
+                    "login": h.get("login"),
+                    "server": h.get("server"),
+                    "last_error": h.get("last_error"),
+                    "trade_allowed": h.get("trade_allowed"),
+                })
+            except (httpx.HTTPError, Exception) as e:  # noqa: BLE001
+                info["error"] = str(e)
+            out["bridge"] = info
+    return out
+
+
+# ------------------------------------------------------------
+# /healthcheck — standalone HTML page (works without dashboard)
+# ------------------------------------------------------------
+@app.get("/healthcheck")
+async def healthcheck_page():
+    return FileResponse(ROOT_DIR / "healthcheck.html")
+
+
+# ------------------------------------------------------------
+# Static frontend serving (Windows installer mode).
+# Set SERVE_FRONTEND=true and FRONTEND_BUILD=/path/to/build to enable.
+# Must be mounted LAST so /api/* routes take precedence.
+# ------------------------------------------------------------
+if os.environ.get("SERVE_FRONTEND", "false").lower() == "true":
+    from fastapi.staticfiles import StaticFiles
+    fb = Path(os.environ.get("FRONTEND_BUILD", str(ROOT_DIR / ".." / "frontend_build")))
+    if (fb / "index.html").exists():
+        app.mount("/", StaticFiles(directory=str(fb), html=True), name="frontend")
+        logging.getLogger("server").info("Serving frontend from %s", fb)
+    else:
+        logging.getLogger("server").warning("SERVE_FRONTEND=true but %s/index.html missing", fb)
 
 app.add_middleware(
     CORSMiddleware,

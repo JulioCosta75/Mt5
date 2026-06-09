@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Atlas — Health Check</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg:#0A0A0A; --panel:#121212; --bd:#27272A; --text:#F4F4F5; --dim:#A1A1AA;
+      --pos:#22C55E; --neg:#EF4444; --warn:#F59E0B;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg); color: var(--text); min-height: 100vh;
+      display: flex; align-items: center; justify-content: center; padding: 24px;
+    }
+    .card {
+      background: var(--panel); border: 1px solid var(--bd); padding: 32px;
+      max-width: 520px; width: 100%;
+    }
+    h1 {
+      margin: 0 0 4px; font-size: 18px; letter-spacing: -0.01em;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .logo {
+      width: 22px; height: 22px;
+      background: linear-gradient(135deg, #22C55E, #16A34A);
+      display: grid; place-items: center; font-family: monospace;
+      font-size: 11px; font-weight: 700; color: #0A0A0A;
+    }
+    .sub { color: var(--dim); font-size: 12px; margin-bottom: 24px; }
+    .row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 0; border-bottom: 1px solid var(--bd);
+    }
+    .row:last-child { border-bottom: none; }
+    .label { font-size: 13px; }
+    .label small { color: var(--dim); display: block; font-size: 11px; margin-top: 2px; }
+    .pill {
+      font-family: "Segoe UI", monospace;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 4px 10px; border: 1px solid; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .ok    { color: var(--pos);  border-color: rgba(34,197,94,0.4);  background: rgba(34,197,94,0.08); }
+    .fail  { color: var(--neg);  border-color: rgba(239,68,68,0.4);  background: rgba(239,68,68,0.08); }
+    .warn  { color: var(--warn); border-color: rgba(245,158,11,0.4); background: rgba(245,158,11,0.08); }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .footer { color: var(--dim); font-size: 11px; margin-top: 20px; text-align: center; }
+    a { color: var(--text); }
+    .actions { margin-top: 18px; display: flex; gap: 8px; }
+    .btn {
+      padding: 8px 14px; border: 1px solid var(--bd); background: var(--bg); color: var(--text);
+      font-size: 12px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .btn:hover { background: #1A1A1A; border-color: #3F3F46; }
+    code { font-family: "Consolas", "Geist Mono", monospace; color: var(--dim); font-size: 11px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1><span class="logo">A</span> Atlas — System Health</h1>
+    <div class="sub" id="updated">Checking…</div>
+
+    <div class="row">
+      <div class="label">Backend API
+        <small>FastAPI service on this machine</small></div>
+      <span id="s-backend" class="pill warn"><span class="dot"></span>checking…</span>
+    </div>
+    <div class="row">
+      <div class="label">Data store
+        <small>SQLite / MongoDB cache + overrides</small></div>
+      <span id="s-store" class="pill warn"><span class="dot"></span>checking…</span>
+    </div>
+    <div class="row">
+      <div class="label">MT5 Bridge
+        <small id="s-bridge-url">—</small></div>
+      <span id="s-bridge" class="pill warn"><span class="dot"></span>checking…</span>
+    </div>
+    <div class="row">
+      <div class="label">MT5 Terminal
+        <small id="s-terminal">—</small></div>
+      <span id="s-terminal-pill" class="pill warn"><span class="dot"></span>checking…</span>
+    </div>
+    <div class="row">
+      <div class="label">Mode
+        <small>mock = preview · mt5 = real account</small></div>
+      <span id="s-mode" class="pill warn"><span class="dot"></span>—</span>
+    </div>
+
+    <div class="actions">
+      <button class="btn" onclick="refresh()">Refresh</button>
+      <button class="btn" onclick="window.location='/'">Open Dashboard</button>
+    </div>
+
+    <div class="footer">Atlas v0.2.0 · <code id="ver">—</code></div>
+  </div>
+
+<script>
+function setPill(el, status, text) {
+  el.className = "pill " + (status === "ok" ? "ok" : status === "fail" ? "fail" : "warn");
+  el.innerHTML = '<span class="dot"></span>' + text;
+}
+async function refresh() {
+  const out = document.getElementById("updated");
+  out.textContent = "Checking…";
+  try {
+    const r = await fetch("/api/system/health", { cache: "no-store" });
+    const d = await r.json();
+    setPill(document.getElementById("s-backend"), "ok", "running");
+    setPill(document.getElementById("s-store"),
+      d.store?.ok ? "ok" : "fail",
+      d.store?.ok ? (d.store?.backend || "ok") : "error");
+    setPill(document.getElementById("s-mode"),
+      d.mode === "mt5" ? "ok" : "warn",
+      d.mode || "unknown");
+    if (d.mode === "mt5") {
+      const b = d.bridge || {};
+      document.getElementById("s-bridge-url").textContent = b.url || "—";
+      setPill(document.getElementById("s-bridge"),
+        b.reachable ? "ok" : "fail",
+        b.reachable ? "reachable" : "unreachable");
+      document.getElementById("s-terminal").textContent =
+        b.account_logged_in ? ("login " + (b.login || "?")) : (b.last_error || "not logged in");
+      setPill(document.getElementById("s-terminal-pill"),
+        b.terminal_connected ? "ok" : "fail",
+        b.terminal_connected ? "connected" : "disconnected");
+    } else {
+      document.getElementById("s-bridge-url").textContent = "not configured (mock mode)";
+      setPill(document.getElementById("s-bridge"), "warn", "n/a");
+      document.getElementById("s-terminal").textContent = "n/a in mock mode";
+      setPill(document.getElementById("s-terminal-pill"), "warn", "n/a");
+    }
+    document.getElementById("ver").textContent =
+      "store=" + (d.store?.backend || "?") + " · server=" + (d.server_time || "?");
+    out.textContent = "Last check: " + new Date().toLocaleString();
+  } catch (e) {
+    setPill(document.getElementById("s-backend"), "fail", "unreachable");
+    out.textContent = "Backend unreachable — service may be stopped.";
+  }
+}
+refresh();
+setInterval(refresh, 10000);
+</script>
+</body>
+</html>
