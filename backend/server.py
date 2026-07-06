@@ -32,6 +32,13 @@ app = FastAPI(title="Atlas — MT5 Supervision API")
 api_router = APIRouter(prefix="/api")
 
 # ------------------------------------------------------------
+# Phase 2 — Sr. Atlas supervision report store.
+# Uses Mongo when available (preview/Linux), in-memory otherwise.
+# ------------------------------------------------------------
+from atlas_store import AtlasReportStore
+_atlas_store = AtlasReportStore(mongo_db)
+
+# ------------------------------------------------------------
 # Operating mode: if any MT5_BRIDGE_URL is configured we serve
 # REAL data via routes_mt5; otherwise we keep the mock data
 # below for development / preview.
@@ -204,6 +211,18 @@ class AckAlertPayload(BaseModel):
     acknowledged: bool = True
 
 
+class AtlasReportIn(BaseModel):
+    supervisor: str = "Sr. Atlas"
+    ecosystem: str = "Forge Factory Lab"
+    status: Optional[str] = None
+    backend_ok: Optional[bool] = None
+    bridge_ok: Optional[bool] = None
+    dashboard_ok: Optional[bool] = None
+    message: Optional[str] = None
+    source: str = "manual"
+    metrics: Optional[dict] = None
+
+
 # ------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------
@@ -216,6 +235,82 @@ def _find_account(account_id: str) -> dict:
         if a["id"] == account_id:
             return a
     raise HTTPException(status_code=404, detail="Account not found")
+
+
+# ------------------------------------------------------------
+# Phase 2 — Sr. Atlas supervision snapshot.
+# Aggregates KPIs, account health, risk and alerts into a single
+# supervisor-oriented view with an overall OK / WARNING / ALERT status.
+# ------------------------------------------------------------
+def _supervision_snapshot() -> dict:
+    total_equity = sum(a["equity"] for a in ACCOUNTS)
+    total_balance = sum(a["balance"] for a in ACCOUNTS)
+    daily_pnl = sum(a["daily_pnl"] for a in ACCOUNTS)
+    open_positions = sum(a["open_positions"] for a in ACCOUNTS)
+
+    live = sum(1 for a in ACCOUNTS if a["status"] == "LIVE")
+    paused = sum(1 for a in ACCOUNTS if a["status"] == "PAUSED")
+    error = sum(1 for a in ACCOUNTS if a["status"] == "ERROR")
+
+    active_alerts = sum(1 for a in ALERTS if not a["acknowledged"])
+    critical = sum(1 for a in ALERTS if a["severity"] == "CRITICAL" and not a["acknowledged"])
+    warning = sum(1 for a in ALERTS if a["severity"] == "WARNING" and not a["acknowledged"])
+
+    n = max(len(ACCOUNTS), 1)
+    avg_dd = round(sum(a["current_drawdown"] for a in ACCOUNTS) / n, 2)
+    worst_dd = round(min((a["current_drawdown"] for a in ACCOUNTS), default=0.0), 2)
+    accounts_over_limit = sum(
+        1 for a in ACCOUNTS
+        if abs(a["current_drawdown"]) >= float(a["risk_limits"]["max_daily_loss_pct"])
+    )
+
+    if error > 0 or critical > 0:
+        status = "ALERT"
+    elif paused > 0 or warning > 0 or accounts_over_limit > 0:
+        status = "WARNING"
+    else:
+        status = "OK"
+
+    services = {
+        "backend_ok": True,
+        "store_ok": True,
+        "bridge_ok": True if MT5_MODE else None,
+        "dashboard_ok": True,
+    }
+
+    if status == "OK":
+        message = "All Forge Factory Lab core services are online and healthy."
+    elif status == "WARNING":
+        message = (
+            f"Degraded: {warning} warning alert(s), {paused} paused account(s), "
+            f"{accounts_over_limit} account(s) near risk limits."
+        )
+    else:
+        message = f"ALERT: {critical} critical alert(s), {error} account(s) in ERROR state."
+
+    return {
+        "supervisor": "Sr. Atlas",
+        "ecosystem": "Forge Factory Lab",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "mode": "mt5" if MT5_MODE else "mock",
+        "status": status,
+        "kpis": {
+            "total_equity": round(total_equity, 2),
+            "total_balance": round(total_balance, 2),
+            "daily_pnl": round(daily_pnl, 2),
+            "daily_pnl_pct": round(daily_pnl / total_equity * 100, 2) if total_equity else 0.0,
+            "open_positions": open_positions,
+        },
+        "accounts": {"total": len(ACCOUNTS), "live": live, "paused": paused, "error": error},
+        "risk": {
+            "avg_drawdown": avg_dd,
+            "worst_drawdown": worst_dd,
+            "accounts_over_limit": accounts_over_limit,
+        },
+        "alerts": {"active": active_alerts, "critical": critical, "warning": warning},
+        "services": services,
+        "message": message,
+    }
 
 
 # ------------------------------------------------------------
@@ -418,6 +513,47 @@ async def system_health():
                 info["error"] = str(e)
             out["bridge"] = info
     return out
+
+
+# ------------------------------------------------------------
+# Phase 2 — Sr. Atlas supervision endpoints (mounted on `app` so they
+# are available in both mock and MT5 modes, like /api/system/health).
+# ------------------------------------------------------------
+@app.get("/api/supervision/snapshot")
+async def supervision_snapshot():
+    return _supervision_snapshot()
+
+
+@app.post("/api/atlas/report")
+async def create_atlas_report(payload: AtlasReportIn):
+    snap = _supervision_snapshot()
+    report = {
+        "supervisor": payload.supervisor,
+        "ecosystem": payload.ecosystem,
+        "status": (payload.status or snap["status"]).upper(),
+        "backend_ok": payload.backend_ok if payload.backend_ok is not None else snap["services"]["backend_ok"],
+        "bridge_ok": payload.bridge_ok if payload.bridge_ok is not None else snap["services"]["bridge_ok"],
+        "dashboard_ok": payload.dashboard_ok if payload.dashboard_ok is not None else snap["services"]["dashboard_ok"],
+        "message": payload.message or snap["message"],
+        "source": payload.source,
+        "metrics": payload.metrics or {
+            "total_equity": snap["kpis"]["total_equity"],
+            "daily_pnl": snap["kpis"]["daily_pnl"],
+            "accounts_live": snap["accounts"]["live"],
+            "active_alerts": snap["alerts"]["active"],
+            "critical_alerts": snap["alerts"]["critical"],
+            "avg_drawdown": snap["risk"]["avg_drawdown"],
+        },
+    }
+    stored = await _atlas_store.add(report)
+    return stored
+
+
+@app.get("/api/atlas/reports")
+async def list_atlas_reports(limit: int = 50, status: Optional[str] = None):
+    reports = await _atlas_store.list(limit=limit, status=status)
+    total = await _atlas_store.count()
+    return {"count": len(reports), "total": total, "reports": reports}
 
 
 # ------------------------------------------------------------

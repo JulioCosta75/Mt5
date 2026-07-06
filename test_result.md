@@ -101,3 +101,80 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "Re-implement Forge Factory Lab Phase 2 (Sr. Atlas Supervision) on the freshly imported repo. Add GET /api/supervision/snapshot, POST /api/atlas/report, GET /api/atlas/reports, a Sr. Atlas Supervision panel in the frontend with API integration, a webpack config fix, and Phase 2 tests. Do not modify Phase 1 behaviour; preserve architecture; all tests must pass."
+
+backend:
+  - task: "GET /api/supervision/snapshot — Sr. Atlas aggregated supervision snapshot"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "New endpoint mounted on app (works in mock + mt5 modes like /api/system/health). Returns supervisor/ecosystem/status(OK|WARNING|ALERT)/kpis/accounts/risk/alerts/services/message. Verified via curl + 44 local pytest pass."
+        -working: true
+        -agent: "testing"
+        -comment: "✅ VERIFIED on running backend. Returns 200 OK with correct structure: supervisor='Sr. Atlas', ecosystem='Forge Factory Lab', status in [OK/WARNING/ALERT], mode='mock', generated_at present. All required sections present (kpis, accounts, risk, alerts, services) with correct fields. accounts.total==8 in mock mode. services.backend_ok==true. All 30+ field checks passed."
+  - task: "POST /api/atlas/report — persist Sr. Atlas report"
+    implemented: true
+    working: true
+    file: "backend/server.py, backend/atlas_store.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Persists to Mongo collection atlas_reports (UUID ids, _id excluded) with in-memory fallback. Fills status/message/metrics from live snapshot when omitted; accepts explicit overrides. Verified via curl."
+        -working: true
+        -agent: "testing"
+        -comment: "✅ VERIFIED on running backend. (1) Minimal body {source:'qa'} returns 200 with id, created_at, supervisor='Sr. Atlas', ecosystem='Forge Factory Lab', valid status, message, metrics, source='qa'. Defaults filled from live snapshot. (2) Explicit overrides {status:'alert', message:'QA drill', bridge_ok:false, dashboard_ok:true} returns 200 with status='ALERT' (uppercased), message='QA drill', bridge_ok=false, dashboard_ok=true. Both tests passed."
+  - task: "GET /api/atlas/reports — list persisted reports"
+    implemented: true
+    working: true
+    file: "backend/server.py, backend/atlas_store.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Returns {count,total,reports} sorted newest-first, supports limit and status filter. Verified via curl + pytest."
+        -working: true
+        -agent: "testing"
+        -comment: "✅ VERIFIED on running backend. (1) Basic GET returns 200 with {count, total, reports}, count==len(reports), freshly POSTed report ID appears in list (newest-first). (2) ?limit=2 returns at most 2 reports. (3) ?status=OK returns only reports with status=OK. All filtering and pagination tests passed."
+
+frontend:
+  - task: "Sr. Atlas Supervision panel + API integration"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/SupervisionPanel.jsx, frontend/src/Dashboard.jsx, frontend/src/lib/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "New right-column panel: status badge, KPI stats, core services health, Generate Report button (POST /atlas/report), recent reports list (GET /atlas/reports). Snapshot re-syncs on dashboard refresh. Renders correctly in screenshot. Not yet automated-tested (awaiting user permission for frontend testing)."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 2
+  run_ui: false
+
+test_plan:
+  current_focus: []
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: "Phase 2 backend implemented (3 new endpoints on app, works in mock+mt5). Full local pytest suite (44 tests incl. new Phase 2 module) passes. Please verify the 3 new endpoints against the running backend: (1) GET /api/supervision/snapshot shape+status; (2) POST /api/atlas/report defaults + explicit overrides (status/message/bridge_ok) + returns id/created_at; (3) GET /api/atlas/reports count/total/reports, limit and status filters, and that a freshly POSTed report appears in the list. Do NOT retest Phase 1 endpoints beyond a light regression. Do not modify code."
+    -agent: "testing"
+    -message: "✅ ALL PHASE 2 BACKEND TESTS PASSED (8/8). Verified all 3 new Sr. Atlas endpoints on running backend: (1) GET /api/supervision/snapshot returns correct structure with all required fields, accounts.total==8 in mock mode, services.backend_ok==true. (2) POST /api/atlas/report works with minimal body (defaults from snapshot) and explicit overrides (status uppercased, bridge_ok/dashboard_ok respected). (3) GET /api/atlas/reports returns correct structure, freshly POSTed reports appear in list, limit and status filters work correctly. Light regression passed: GET /api/kpis returns accounts_total==8, GET /api/ returns status=ok. No code modifications made. Phase 2 backend implementation is production-ready."

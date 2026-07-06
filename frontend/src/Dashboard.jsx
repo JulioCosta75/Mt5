@@ -8,6 +8,7 @@ import { EquityChart, DrawdownChart } from "@/components/Charts";
 import TradesTable from "@/components/TradesTable";
 import AlertsPanel from "@/components/AlertsPanel";
 import RiskPanel from "@/components/RiskPanel";
+import SupervisionPanel from "@/components/SupervisionPanel";
 
 function Header({ refreshing, onRefresh, sessionId }) {
   return (
@@ -203,6 +204,7 @@ export default function Dashboard() {
 
           {/* RIGHT COLUMN */}
           <aside style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+            <SupervisionPanel serverTime={kpis?.server_time} />
             <AlertsPanel alerts={alerts} onAck={onAckAlert} />
             <div className="panel" data-testid="system-panel">
               <div className="panel-header">
@@ -231,7 +233,7 @@ export default function Dashboard() {
           display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap",
         }}
       >
-        <span>Forge Factory Lab · Sr. Atlas — MT5 Quantitative Supervision. Phase 1.</span>
+        <span>Forge Factory Lab · Sr. Atlas — MT5 Quantitative Supervision. Phase 2.</span>
         <span className="mono">© 2026 Forge Factory Lab · Sr. Atlas</span>
       </footer>
     </div>

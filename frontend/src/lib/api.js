@@ -17,6 +17,10 @@ export const api = {
   killSwitch: (id, enabled) => client.post(`/accounts/${id}/kill-switch`, { enabled }).then(r => r.data),
   updateRisk: (id, payload) => client.put(`/accounts/${id}/risk-limits`, payload).then(r => r.data),
   tick: () => client.post("/sim/tick").then(r => r.data),
+  // Phase 2 — Sr. Atlas supervision
+  supervisionSnapshot: () => client.get("/supervision/snapshot").then(r => r.data),
+  atlasReports: (params = {}) => client.get("/atlas/reports", { params }).then(r => r.data),
+  postAtlasReport: (payload = {}) => client.post("/atlas/report", payload).then(r => r.data),
 };
 
 export const fmt = {

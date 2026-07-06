@@ -38,6 +38,14 @@ let webpackConfig = {
     },
     configure: (webpackConfig) => {
 
+      // Suppress noisy third-party "Failed to parse source map" warnings that
+      // some node_modules emit under react-scripts 5 / webpack 5. Keeps the
+      // dev + build output clean without affecting the bundle. (Phase 2 fix)
+      webpackConfig.ignoreWarnings = [
+        ...(webpackConfig.ignoreWarnings || []),
+        /Failed to parse source map/,
+      ];
+
       // Add ignored patterns to reduce watched directories
         webpackConfig.watchOptions = {
           ...webpackConfig.watchOptions,
