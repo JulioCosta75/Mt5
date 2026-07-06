@@ -160,6 +160,9 @@ backend:
         -comment: "GET /api/supervision/config returns {auto_snapshot_enabled,interval_sec,store_backend,mode}. POST /api/supervision/auto-snapshot captures the live snapshot as a source='auto' report and persists it. Background asyncio scheduler runs when ATLAS_AUTO_SNAPSHOT_INTERVAL_SEC>0 (default 0, off in preview). Frontend SupervisionPanel auto-polls the snapshot every 30s. Verified via curl + 46 local pytest pass."
         -working: true
         -agent: "testing"
+        -comment: "✅ VERIFIED on running backend (5/5). GET /api/supervision/config returns correct types (store_backend='mongo', mode='mock'). POST /api/supervision/auto-snapshot returns persisted source='auto' report with id/created_at/metrics; id confirmed present in GET /api/atlas/reports (MongoDB write confirmed). Regression on snapshot + reports endpoints passed."
+        -working: true
+        -agent: "testing"
         -comment: "✅ VERIFIED on running backend. (1) GET /api/supervision/config returns 200 with correct structure: auto_snapshot_enabled (bool)=false, interval_sec (int)=0, store_backend='mongo', mode='mock'. (2) POST /api/supervision/auto-snapshot returns 200 with persisted report: source='auto', supervisor='Sr. Atlas', ecosystem='Forge Factory Lab', status='ALERT', id='941a275b-7d9a-4ea3-ad1e-d3319b7b8151', created_at present, metrics object present with all required fields. (3) Persistence verified: auto-snapshot report ID appears in GET /api/atlas/reports list with source='auto'. Light regression passed: GET /api/supervision/snapshot and GET /api/atlas/reports still work correctly. All 5 tests passed."
 
 frontend:
