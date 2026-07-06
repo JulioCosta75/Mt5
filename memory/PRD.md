@@ -1,103 +1,46 @@
-# QUANT.SUPERVISE — MT5 Quantitative Supervision Dashboard
+# PRD — Forge Factory Lab / Sr. Atlas
 
-## Original Problem Statement
-User (Portuguese): asked about Emergent contact email, then requested an MVP MT5 supervision dashboard with mock data, then **Phase 1**: replace mock data with **real MT5 data** via the official `MetaTrader5` Python lib, while keeping the existing frontend exactly as-is.
+## Problem statement (Phase 1 Final Integration)
+Finalize Phase 1 of the Forge Factory Lab MT5 supervision system: resolve the Git
+unrelated‑histories issue, integrate official Sr. Atlas + Forge Factory Lab
+branding across the app, preserve the institutional dark trading terminal, keep
+all health checks operational, update docs, and prepare for Phase 2.
 
-## Phase 1 user decisions
-1. MT5 terminal already running on a separate Windows host
-2. 1 account now, design ready for N accounts
-3. Bridge ↔ backend exposure to be decided later (local testing first)
-4. Equity curve: both historical reconstruction AND going-forward snapshots
-5. Fallback when bridge unreachable: cached last-known data in Mongo with `stale=true`
+## Brand hierarchy
+- **Forge Factory Lab** — company / laboratory / engineering environment.
+- **Sr. Atlas** — AI supervisor / orchestration system / dashboard identity.
 
 ## Architecture
-```
-Frontend React (unchanged)
-        │ /api/*
-        ▼
-Backend Linux (FastAPI)  ── MT5_MODE switch ──┐
-   ├── mock data (default)                    │
-   └── routes_mt5 → mt5_client (httpx)        │
-                  → mt5_adapter (schema map)  │
-                  → mt5_cache (Mongo)         │
-                          │                   │
-                          ▼  HTTPS + Bearer   │
-                  Bridge Windows (FastAPI)    │
-                  ├── mt5_service             │
-                  ├── equity_reconstructor    │
-                  ├── snapshot_recorder       │
-                  └── storage (SQLite)        │
-                          │ IPC               │
-                          ▼                   │
-                  MT5 Terminal ───────────────┘
-```
+- Frontend: React 19 institutional dark terminal (Dashboard, About, Documentation) + welcome/loading boot splash.
+- Backend: FastAPI `/api/*`, mock + live (MT5 bridge) modes, MongoDB/SQLite cache & overrides.
+- MT5 Bridge: Windows-side MetaTrader5 service. Installer under `installer/`.
+- Supervision: n8n `Forge Factory Lab — Sr. Atlas Health Monitor` workflow (14 nodes).
 
-## File layout
-- `/app/backend/` — Linux FastAPI (`server.py`, `mt5_client.py`, `mt5_adapter.py`, `mt5_cache.py`, `routes_mt5.py`)
-- `/app/mt5-bridge/` — Windows bridge project (deliver to user; runs on his Windows host)
-- `/app/frontend/` — React 19 UI **(unchanged in Phase 1)**
+## Implemented (2026-07-05)
+- Imported full `main` project into workspace; added Phase 1 n8n workflow files.
+- Branding system under `frontend/src/assets/branding/` (swappable, one source module):
+  - `sr-atlas/logo-round.png` (official) → favicon, app icon, header badge, boot, About card.
+  - `forge-factory/logo.png` (official) → boot/welcome/loading, About hero + card, Docs hero.
+- Dashboard header rebranded QUANT.SUPERVISE → **Sr. Atlas** emblem + wordmark; nav + About/Docs links; footer rebranded.
+- New: BrandBoot welcome/loading splash, About page, Documentation page, PageShell nav.
+- Favicon + tab title + meta updated (`public/index.html`, `public/favicon.png`).
+- Standalone `/healthcheck` page rebranded to Sr. Atlas / Forge Factory Lab.
+- README rewritten (architecture, install, branding, workflow, Phase 1, Phase 2 roadmap, Git runbook).
+- Verified: `/api/system/health` 200, `/` + `/api/` ok, `/healthcheck` 200, n8n JSON valid (14 nodes).
 
-## Implementation status
-### Implemented (Jan 2026)
-- ✅ MVP dashboard (mock 8 accounts) — iteration 1
-- ✅ Phase 1 bridge architecture — iteration 2
-- ✅ Windows installer build kit — iteration 3 (`/app/installer/`)
-  - Inno Setup script + Tkinter setup wizard + NSSM service installers
-  - SQLite drop-in for Mongo (`mt5_cache_sqlite.py`)
-  - Static frontend serving via FastAPI (`SERVE_FRONTEND=true`)
-  - `/api/system/health` endpoint + `/healthcheck` HTML page
-  - Single-build command (`build.bat`) → `dist\Atlas_Setup.exe`
-  - Embedded Python 3.11 + NSSM bundled at build time
-  - Windows bridge: `MetaTrader5` wrapper + APScheduler 10s snapshots + SQLite + FastAPI server + bearer-token auth
-  - Backend MT5 client (httpx, multi-bridge ready)
-  - Adapter mapping MT5 schema → existing frontend schema (zero frontend changes)
-  - Mongo cache with stale-data fallback + per-account kill-switch + risk-limits persistence
-  - Mode switch via `MT5_BRIDGE_URL` env var (mock by default → real when configured)
-  - 32/32 backend pytest cases passing (mock regression + adapter unit + MT5-mode activation)
+## Health checks (all operational)
+- Atlas Backend Health — `GET /api/system/health`
+- Atlas Dashboard Health — `GET /` / `GET /api/`
+- MT5 Bridge Health — `GET /health` (`:8002`, live only; `n/a` in mock preview)
 
-### Endpoints
-| Endpoint | Mock mode | MT5 mode |
-|---|---|---|
-| `GET /api/kpis` | ✅ 8 mock | ✅ aggregated from bridge |
-| `GET /api/accounts` | ✅ | ✅ live (with cache fallback) |
-| `GET /api/accounts/{id}` | ✅ ACC-001..008 | ✅ MT5-{login} |
-| `GET /api/accounts/{id}/equity` | ✅ | ✅ reconstructed + snapshots |
-| `GET /api/accounts/{id}/drawdown` | ✅ | ✅ derived |
-| `GET /api/accounts/{id}/trades` | ✅ | ✅ from history_deals_get |
-| `GET /api/accounts/{id}/positions` | (none) | ✅ pass-through (frontend Phase 2) |
-| `GET /api/accounts/{id}/orders` | (none) | ✅ pass-through (frontend Phase 2) |
-| `POST /api/accounts/{id}/kill-switch` | ✅ in-memory | ✅ Mongo (advisory; Phase 2 closes positions) |
-| `PUT /api/accounts/{id}/risk-limits` | ✅ | ✅ Mongo |
-| `GET /api/bridge/health` | n/a | ✅ |
-| `POST /api/sim/tick` | ✅ | deprecated |
+## Open items / backlog
+- P1: Distinct **Sr. Atlas horizontal header logo** file not received as a separate asset;
+  header currently uses the official round emblem + "Sr. Atlas" wordmark. Trivial swap when provided
+  (`sr-atlas/logo-horizontal.*` + update `assets/branding/index.js`).
+- P1: Git remote history consolidation + delete `conflict_050726_1612` — runbook in README;
+  push via Emergent "Save to GitHub".
+- P2: Phase 2 features (Telegram alerts, MT5 telemetry probes, Sr. Atlas AI analysis, closed-loop control).
 
-## Configuration
-- **Default (preview)**: `/app/backend/.env` does **not** set `MT5_BRIDGE_URL` → mock mode → preview works
-- **Production / real use**: set `MT5_BRIDGE_URL` and `MT5_BRIDGE_TOKEN` in `/app/backend/.env` → MT5 mode auto-activates on restart
-- **Multi-account**: set `MT5_BRIDGE_URLS=url1,url2` and `MT5_BRIDGE_TOKENS=tok1,tok2`
-
-## Prioritized backlog
-### P0 (next session, when user has bridge running)
-- Test end-to-end with real MT5 account: install bridge on Windows → tunnel → set env → verify dashboard
-- Add `login_map` cache (login→bridge URL) to avoid O(N) bridge lookups per request (code review)
-- Frontend: show `stale=true` indicator in System panel (subtle, no layout change)
-
-### P1
-- **Phase 2 kill-switch**: actually close MT5 positions via `mt5.order_send` (currently advisory-only)
-- WebSocket from bridge → backend for sub-second tick feel
-- Alerts rule engine (drawdown breach, margin level, daily-loss breach)
-- Telegram/Email dispatcher
-- Strategy grouping by magic number (currently every trade tagged "Live MT5")
-
-### P2
-- Multi-tenant + per-user account groups
-- Audit log endpoint + Audit tab
-- Compliance reports (PDF/CSV exporter)
-- ML strategy lab (backtest viewer)
-
-## Code review notes (from iter 2)
-- [partially fixed] `list_accounts` no longer `break`s on first failure — tries all bridges then cache
-- [fixed] `maybe_set_daily_anchor` now uses UTC date
-- [open] Add login→bridge URL cache to avoid O(N) resolve cost
-- [open] Status fallback on kill-switch disable can be stale
-- [open] CORS middleware after router (cosmetic)
+## Notes
+- No authentication in this project (no credentials to store).
+- Backend runs in MOCK data mode in preview (set `MT5_BRIDGE_URL` for live MT5).

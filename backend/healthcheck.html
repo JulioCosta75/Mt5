@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Atlas — Health Check</title>
+  <title>Sr. Atlas — Health Check · Forge Factory Lab</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root {
@@ -24,10 +24,10 @@
       display: flex; align-items: center; gap: 10px;
     }
     .logo {
-      width: 22px; height: 22px;
-      background: linear-gradient(135deg, #22C55E, #16A34A);
+      width: 24px; height: 24px; border-radius: 50%;
+      background: #000; border: 1px solid #3F3F46;
       display: grid; place-items: center; font-family: monospace;
-      font-size: 11px; font-weight: 700; color: #0A0A0A;
+      font-size: 9px; font-weight: 700; color: #F4F4F5; letter-spacing: 0.5px;
     }
     .sub { color: var(--dim); font-size: 12px; margin-bottom: 24px; }
     .row {
@@ -59,8 +59,8 @@
 </head>
 <body>
   <div class="card">
-    <h1><span class="logo">A</span> Atlas — System Health</h1>
-    <div class="sub" id="updated">Checking…</div>
+    <h1><span class="logo">SA</span> Sr. Atlas — System Health</h1>
+    <div class="sub" id="updated">Forge Factory Lab · checking…</div>
 
     <div class="row">
       <div class="label">Backend API
@@ -93,7 +93,7 @@
       <button class="btn" onclick="window.location='/'">Open Dashboard</button>
     </div>
 
-    <div class="footer">Atlas v0.2.0 · <code id="ver">—</code></div>
+    <div class="footer">Sr. Atlas · Forge Factory Lab · v0.2.0 · <code id="ver">—</code></div>
   </div>
 
 <script>

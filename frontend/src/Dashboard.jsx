@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef, useReducer } from "react";
+import { Link } from "react-router-dom";
 import { api, fmt } from "@/lib/api";
+import { srAtlasRound } from "@/assets/branding";
 import KpiTicker from "@/components/KpiTicker";
 import AccountsTable from "@/components/AccountsTable";
 import { EquityChart, DrawdownChart } from "@/components/Charts";
@@ -19,19 +21,19 @@ function Header({ refreshing, onRefresh, sessionId }) {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{
-            width: 22, height: 22,
-            background: "linear-gradient(135deg, #22C55E, #16A34A)",
-            display: "grid", placeItems: "center",
-            fontFamily: "Geist Mono", fontSize: 11, fontWeight: 700, color: "#0A0A0A",
-          }}>
-            Q
-          </div>
-          <span style={{ fontSize: 14, letterSpacing: "-0.01em", fontWeight: 600 }}>
-            QUANT<span style={{ color: "var(--text-tertiary)" }}>.</span>SUPERVISE
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <img
+            src={srAtlasRound}
+            alt="Sr. Atlas"
+            height={30}
+            width={30}
+            style={{ borderRadius: 6, objectFit: "cover", background: "#000" }}
+            data-testid="header-sr-atlas-logo"
+          />
+          <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-0.01em" }}>
+            Sr. Atlas
           </span>
-          <span className="kbd" style={{ marginLeft: 8 }}>MT5</span>
+          <span className="kbd" style={{ marginLeft: 4 }}>MT5</span>
         </div>
         <nav style={{ display: "flex", gap: 4, marginLeft: 16 }}>
           {["Overview", "Strategies", "Risk", "Reports", "Audit"].map((n, i) => (
@@ -44,6 +46,8 @@ function Header({ refreshing, onRefresh, sessionId }) {
               {n}
             </button>
           ))}
+          <Link to="/about" className="btn" data-testid="nav-about" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>About</Link>
+          <Link to="/docs" className="btn" data-testid="nav-docs" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>Docs</Link>
         </nav>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -227,8 +231,8 @@ export default function Dashboard() {
           display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap",
         }}
       >
-        <span>QUANT.SUPERVISE — MT5 Quantitative Supervision Platform. Mock data for MVP preview.</span>
-        <span className="mono">© 2026 · Built on Emergent</span>
+        <span>Forge Factory Lab · Sr. Atlas — MT5 Quantitative Supervision. Phase 1.</span>
+        <span className="mono">© 2026 Forge Factory Lab · Sr. Atlas</span>
       </footer>
     </div>
   );
