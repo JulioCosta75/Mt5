@@ -147,6 +147,20 @@ backend:
         -working: true
         -agent: "testing"
         -comment: "✅ VERIFIED on running backend. (1) Basic GET returns 200 with {count, total, reports}, count==len(reports), freshly POSTed report ID appears in list (newest-first). (2) ?limit=2 returns at most 2 reports. (3) ?status=OK returns only reports with status=OK. All filtering and pagination tests passed."
+  - task: "Automatic supervision snapshot support (config + on-demand + scheduler)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "GET /api/supervision/config returns {auto_snapshot_enabled,interval_sec,store_backend,mode}. POST /api/supervision/auto-snapshot captures the live snapshot as a source='auto' report and persists it. Background asyncio scheduler runs when ATLAS_AUTO_SNAPSHOT_INTERVAL_SEC>0 (default 0, off in preview). Frontend SupervisionPanel auto-polls the snapshot every 30s. Verified via curl + 46 local pytest pass."
+        -working: true
+        -agent: "testing"
+        -comment: "✅ VERIFIED on running backend. (1) GET /api/supervision/config returns 200 with correct structure: auto_snapshot_enabled (bool)=false, interval_sec (int)=0, store_backend='mongo', mode='mock'. (2) POST /api/supervision/auto-snapshot returns 200 with persisted report: source='auto', supervisor='Sr. Atlas', ecosystem='Forge Factory Lab', status='ALERT', id='941a275b-7d9a-4ea3-ad1e-d3319b7b8151', created_at present, metrics object present with all required fields. (3) Persistence verified: auto-snapshot report ID appears in GET /api/atlas/reports list with source='auto'. Light regression passed: GET /api/supervision/snapshot and GET /api/atlas/reports still work correctly. All 5 tests passed."
 
 frontend:
   - task: "Sr. Atlas Supervision panel + API integration"
@@ -164,7 +178,7 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 2
+  test_sequence: 3
   run_ui: false
 
 test_plan:
@@ -178,3 +192,7 @@ agent_communication:
     -message: "Phase 2 backend implemented (3 new endpoints on app, works in mock+mt5). Full local pytest suite (44 tests incl. new Phase 2 module) passes. Please verify the 3 new endpoints against the running backend: (1) GET /api/supervision/snapshot shape+status; (2) POST /api/atlas/report defaults + explicit overrides (status/message/bridge_ok) + returns id/created_at; (3) GET /api/atlas/reports count/total/reports, limit and status filters, and that a freshly POSTed report appears in the list. Do NOT retest Phase 1 endpoints beyond a light regression. Do not modify code."
     -agent: "testing"
     -message: "✅ ALL PHASE 2 BACKEND TESTS PASSED (8/8). Verified all 3 new Sr. Atlas endpoints on running backend: (1) GET /api/supervision/snapshot returns correct structure with all required fields, accounts.total==8 in mock mode, services.backend_ok==true. (2) POST /api/atlas/report works with minimal body (defaults from snapshot) and explicit overrides (status uppercased, bridge_ok/dashboard_ok respected). (3) GET /api/atlas/reports returns correct structure, freshly POSTed reports appear in list, limit and status filters work correctly. Light regression passed: GET /api/kpis returns accounts_total==8, GET /api/ returns status=ok. No code modifications made. Phase 2 backend implementation is production-ready."
+    -agent: "main"
+    -message: "Added Automatic supervision snapshot support. Please verify the two NEW endpoints on the running backend: (1) GET /api/supervision/config returns {auto_snapshot_enabled (bool), interval_sec (int), store_backend in [mongo,memory], mode in [mock,mt5]}. (2) POST /api/supervision/auto-snapshot returns a persisted report with source=='auto', supervisor=='Sr. Atlas', valid status, id and created_at present, and the returned id must appear in GET /api/atlas/reports. Light regression: confirm GET /api/supervision/snapshot and GET /api/atlas/reports still work. Do not modify code."
+    -agent: "testing"
+    -message: "✅ ALL AUTOMATIC SNAPSHOT TESTS PASSED (5/5). Verified the two NEW automatic supervision snapshot endpoints on running backend: (1) GET /api/supervision/config returns 200 with correct structure: auto_snapshot_enabled (bool)=false, interval_sec (int)=0, store_backend='mongo', mode='mock'. (2) POST /api/supervision/auto-snapshot returns 200 with persisted report: source='auto', supervisor='Sr. Atlas', ecosystem='Forge Factory Lab', status='ALERT', non-empty id, created_at present, metrics object with all required fields (total_equity, daily_pnl, accounts_live, active_alerts, critical_alerts, avg_drawdown). (3) Persistence verified: the auto-snapshot report ID appears in GET /api/atlas/reports list with source='auto'. Light regression passed: GET /api/supervision/snapshot still returns correct structure with all fields, GET /api/atlas/reports still returns correct structure. No code modifications made. Automatic supervision snapshot feature is production-ready."

@@ -104,3 +104,29 @@ class TestAtlasReports:
         assert r.status_code == 200
         for rep in r.json()["reports"]:
             assert rep["status"] == "OK"
+
+
+class TestAutoSnapshot:
+    def test_supervision_config(self, session):
+        r = session.get(f"{API}/supervision/config", timeout=15)
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert "auto_snapshot_enabled" in d
+        assert "interval_sec" in d
+        assert d["store_backend"] in ("mongo", "memory")
+        assert d["mode"] in ("mock", "mt5")
+
+    def test_trigger_auto_snapshot(self, session):
+        r = session.post(f"{API}/supervision/auto-snapshot", timeout=15)
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["source"] == "auto"
+        assert d["supervisor"] == "Sr. Atlas"
+        assert d["status"] in VALID_STATUS
+        assert "id" in d and d["id"]
+        assert "created_at" in d
+        # the auto report should be retrievable from the list
+        lst = session.get(f"{API}/atlas/reports", timeout=15).json()
+        ids = {rep["id"] for rep in lst["reports"]}
+        assert d["id"] in ids
+

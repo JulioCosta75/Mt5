@@ -573,38 +573,242 @@ def test_root_regression():
         return False
 
 
+def test_supervision_config():
+    """Test GET /api/supervision/config"""
+    print_section("TEST 4: GET /api/supervision/config")
+    
+    url = f"{BASE_URL}/supervision/config"
+    print(f"Request: GET {url}")
+    
+    try:
+        response = requests.get(url, timeout=10)
+        print(f"Status Code: {response.status_code}")
+        
+        if response.status_code != 200:
+            print(f"❌ FAILED: Expected 200, got {response.status_code}")
+            print(f"Response: {response.text}")
+            return False
+        
+        data = response.json()
+        print(f"Response JSON:\n{json.dumps(data, indent=2)}")
+        
+        checks = []
+        
+        # Check auto_snapshot_enabled (boolean)
+        if "auto_snapshot_enabled" in data and isinstance(data["auto_snapshot_enabled"], bool):
+            print(f"✅ auto_snapshot_enabled is boolean: {data['auto_snapshot_enabled']}")
+            checks.append(True)
+        else:
+            print(f"❌ auto_snapshot_enabled: expected boolean, got {type(data.get('auto_snapshot_enabled'))}")
+            checks.append(False)
+        
+        # Check interval_sec (integer)
+        if "interval_sec" in data and isinstance(data["interval_sec"], int):
+            print(f"✅ interval_sec is integer: {data['interval_sec']}")
+            checks.append(True)
+        else:
+            print(f"❌ interval_sec: expected integer, got {type(data.get('interval_sec'))}")
+            checks.append(False)
+        
+        # Check store_backend (string, expect "mongo")
+        if data.get("store_backend") == "mongo":
+            print(f"✅ store_backend == 'mongo'")
+            checks.append(True)
+        else:
+            print(f"❌ store_backend: expected 'mongo', got '{data.get('store_backend')}'")
+            checks.append(False)
+        
+        # Check mode (string, expect "mock" or "mt5")
+        valid_modes = ["mock", "mt5"]
+        if data.get("mode") in valid_modes:
+            print(f"✅ mode is valid: {data.get('mode')}")
+            checks.append(True)
+        else:
+            print(f"❌ mode: expected one of {valid_modes}, got '{data.get('mode')}'")
+            checks.append(False)
+        
+        all_passed = all(checks)
+        if all_passed:
+            print("\n✅ TEST 4 PASSED: GET /api/supervision/config")
+        else:
+            print(f"\n❌ TEST 4 FAILED: {checks.count(False)} checks failed")
+        
+        return all_passed
+        
+    except Exception as e:
+        print(f"❌ FAILED with exception: {e}")
+        return False
+
+
+def test_auto_snapshot():
+    """Test POST /api/supervision/auto-snapshot"""
+    print_section("TEST 5: POST /api/supervision/auto-snapshot")
+    
+    url = f"{BASE_URL}/supervision/auto-snapshot"
+    print(f"Request: POST {url}")
+    
+    try:
+        response = requests.post(url, timeout=10)
+        print(f"Status Code: {response.status_code}")
+        
+        if response.status_code != 200:
+            print(f"❌ FAILED: Expected 200, got {response.status_code}")
+            print(f"Response: {response.text}")
+            return False, None
+        
+        data = response.json()
+        print(f"Response JSON:\n{json.dumps(data, indent=2)}")
+        
+        checks = []
+        
+        # Check source == "auto"
+        if data.get("source") == "auto":
+            print("✅ source == 'auto'")
+            checks.append(True)
+        else:
+            print(f"❌ source: expected 'auto', got '{data.get('source')}'")
+            checks.append(False)
+        
+        # Check supervisor == "Sr. Atlas"
+        if data.get("supervisor") == "Sr. Atlas":
+            print("✅ supervisor == 'Sr. Atlas'")
+            checks.append(True)
+        else:
+            print(f"❌ supervisor: expected 'Sr. Atlas', got '{data.get('supervisor')}'")
+            checks.append(False)
+        
+        # Check ecosystem == "Forge Factory Lab"
+        if data.get("ecosystem") == "Forge Factory Lab":
+            print("✅ ecosystem == 'Forge Factory Lab'")
+            checks.append(True)
+        else:
+            print(f"❌ ecosystem: expected 'Forge Factory Lab', got '{data.get('ecosystem')}'")
+            checks.append(False)
+        
+        # Check status in [OK, WARNING, ALERT]
+        valid_statuses = ["OK", "WARNING", "ALERT"]
+        if data.get("status") in valid_statuses:
+            print(f"✅ status is valid: {data.get('status')}")
+            checks.append(True)
+        else:
+            print(f"❌ status: expected one of {valid_statuses}, got '{data.get('status')}'")
+            checks.append(False)
+        
+        # Check id is non-empty
+        report_id = data.get("id")
+        if report_id and len(report_id) > 0:
+            print(f"✅ id present and non-empty: {report_id}")
+            checks.append(True)
+        else:
+            print(f"❌ id missing or empty")
+            checks.append(False)
+        
+        # Check created_at is present
+        if data.get("created_at"):
+            print(f"✅ created_at present: {data.get('created_at')}")
+            checks.append(True)
+        else:
+            print("❌ created_at missing")
+            checks.append(False)
+        
+        # Check metrics object is present
+        if data.get("metrics") and isinstance(data["metrics"], dict):
+            print(f"✅ metrics object present")
+            checks.append(True)
+        else:
+            print("❌ metrics object missing or not a dict")
+            checks.append(False)
+        
+        all_passed = all(checks)
+        if all_passed:
+            print("\n✅ TEST 5 PASSED: POST /api/supervision/auto-snapshot")
+        else:
+            print(f"\n❌ TEST 5 FAILED: {checks.count(False)} checks failed")
+        
+        return all_passed, report_id
+        
+    except Exception as e:
+        print(f"❌ FAILED with exception: {e}")
+        return False, None
+
+
+def test_auto_snapshot_persistence(report_id):
+    """Test that auto-snapshot report appears in GET /api/atlas/reports"""
+    print_section("TEST 6: Verify auto-snapshot persistence in /api/atlas/reports")
+    
+    if not report_id:
+        print("❌ SKIPPED: No report ID from auto-snapshot test")
+        return False
+    
+    url = f"{BASE_URL}/atlas/reports"
+    print(f"Request: GET {url}")
+    print(f"Looking for report ID: {report_id}")
+    
+    try:
+        response = requests.get(url, timeout=10)
+        print(f"Status Code: {response.status_code}")
+        
+        if response.status_code != 200:
+            print(f"❌ FAILED: Expected 200, got {response.status_code}")
+            print(f"Response: {response.text}")
+            return False
+        
+        data = response.json()
+        reports = data.get("reports", [])
+        report_ids = [r.get("id") for r in reports]
+        
+        print(f"Total reports in list: {len(reports)}")
+        
+        if report_id in report_ids:
+            print(f"✅ Auto-snapshot report ID found in list: {report_id}")
+            # Find the report and verify source
+            report = next((r for r in reports if r.get("id") == report_id), None)
+            if report and report.get("source") == "auto":
+                print(f"✅ Report has source='auto'")
+                print("\n✅ TEST 6 PASSED: Auto-snapshot persisted correctly")
+                return True
+            else:
+                print(f"❌ Report found but source != 'auto': {report.get('source') if report else 'N/A'}")
+                print("\n❌ TEST 6 FAILED")
+                return False
+        else:
+            print(f"❌ Auto-snapshot report ID NOT found in list")
+            print(f"   Available IDs: {report_ids[:5]}...")
+            print("\n❌ TEST 6 FAILED")
+            return False
+        
+    except Exception as e:
+        print(f"❌ FAILED with exception: {e}")
+        return False
+
+
 def main():
     print("\n" + "="*80)
-    print("  MT5 QUANT SUPERVISION - PHASE 2 BACKEND TESTING")
-    print("  Testing Sr. Atlas Supervision endpoints")
+    print("  MT5 QUANT SUPERVISION - AUTOMATIC SNAPSHOT TESTING")
+    print("  Testing NEW automatic supervision snapshot endpoints")
     print("="*80)
     print(f"\nBase URL: {BASE_URL}")
     print(f"Test Time: {datetime.now().isoformat()}")
     
     results = {}
     
-    # Test 1: GET /api/supervision/snapshot
-    results["supervision_snapshot"] = test_supervision_snapshot()
+    # NEW TESTS - Automatic supervision snapshot support
+    # Test 4: GET /api/supervision/config
+    results["supervision_config"] = test_supervision_config()
     
-    # Test 2a: POST /api/atlas/report (minimal)
-    test_2a_passed, report_id = test_atlas_report_minimal()
-    results["atlas_report_minimal"] = test_2a_passed
+    # Test 5: POST /api/supervision/auto-snapshot
+    test_5_passed, auto_report_id = test_auto_snapshot()
+    results["auto_snapshot"] = test_5_passed
     
-    # Test 2b: POST /api/atlas/report (explicit)
-    results["atlas_report_explicit"] = test_atlas_report_explicit()
+    # Test 6: Verify auto-snapshot persisted in /api/atlas/reports
+    results["auto_snapshot_persistence"] = test_auto_snapshot_persistence(auto_report_id)
     
-    # Test 3a: GET /api/atlas/reports (basic, with report ID check)
-    results["atlas_reports_basic"] = test_atlas_reports_list(report_id)
+    # LIGHT REGRESSION TESTS
+    # Regression 1: GET /api/supervision/snapshot still works
+    results["supervision_snapshot_regression"] = test_supervision_snapshot()
     
-    # Test 3b: GET /api/atlas/reports?limit=2
-    results["atlas_reports_limit"] = test_atlas_reports_limit()
-    
-    # Test 3c: GET /api/atlas/reports?status=OK
-    results["atlas_reports_status"] = test_atlas_reports_status_filter()
-    
-    # Regression tests
-    results["kpis_regression"] = test_kpis_regression()
-    results["root_regression"] = test_root_regression()
+    # Regression 2: GET /api/atlas/reports still works
+    results["atlas_reports_regression"] = test_atlas_reports_list()
     
     # Summary
     print_section("FINAL SUMMARY")

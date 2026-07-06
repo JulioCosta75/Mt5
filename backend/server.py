@@ -3,6 +3,7 @@ from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 import os
+import asyncio
 import logging
 import math
 import random
@@ -20,6 +21,15 @@ load_dotenv(ROOT_DIR / '.env')
 #   ATLAS_STORE=sqlite  (Windows installer, no Mongo needed)
 # ------------------------------------------------------------
 ATLAS_STORE = os.environ.get("ATLAS_STORE", "mongo").lower()
+
+# Phase 2 — automatic supervision snapshot scheduler.
+# When > 0, a background task persists a supervision report (source="auto")
+# every N seconds. Default 0 (disabled) so the preview DB stays clean; the
+# capability is always available on-demand via POST /api/supervision/auto-snapshot.
+try:
+    AUTO_SNAPSHOT_INTERVAL_SEC = int(os.environ.get("ATLAS_AUTO_SNAPSHOT_INTERVAL_SEC", "0"))
+except ValueError:
+    AUTO_SNAPSHOT_INTERVAL_SEC = 0
 
 mongo_db = None
 if ATLAS_STORE == "mongo":
@@ -554,6 +564,77 @@ async def list_atlas_reports(limit: int = 50, status: Optional[str] = None):
     reports = await _atlas_store.list(limit=limit, status=status)
     total = await _atlas_store.count()
     return {"count": len(reports), "total": total, "reports": reports}
+
+
+# ------------------------------------------------------------
+# Phase 2 — automatic supervision snapshot support.
+# Captures the live snapshot and persists it as a report. Reused by the
+# background scheduler and the on-demand endpoint below.
+# ------------------------------------------------------------
+async def _capture_snapshot_report(source: str = "auto") -> dict:
+    snap = _supervision_snapshot()
+    report = {
+        "supervisor": snap["supervisor"],
+        "ecosystem": snap["ecosystem"],
+        "status": snap["status"],
+        "backend_ok": snap["services"]["backend_ok"],
+        "bridge_ok": snap["services"]["bridge_ok"],
+        "dashboard_ok": snap["services"]["dashboard_ok"],
+        "message": snap["message"],
+        "source": source,
+        "metrics": {
+            "total_equity": snap["kpis"]["total_equity"],
+            "daily_pnl": snap["kpis"]["daily_pnl"],
+            "accounts_live": snap["accounts"]["live"],
+            "active_alerts": snap["alerts"]["active"],
+            "critical_alerts": snap["alerts"]["critical"],
+            "avg_drawdown": snap["risk"]["avg_drawdown"],
+        },
+    }
+    return await _atlas_store.add(report)
+
+
+@app.get("/api/supervision/config")
+async def supervision_config():
+    return {
+        "auto_snapshot_enabled": AUTO_SNAPSHOT_INTERVAL_SEC > 0,
+        "interval_sec": AUTO_SNAPSHOT_INTERVAL_SEC,
+        "store_backend": _atlas_store.backend,
+        "mode": "mt5" if MT5_MODE else "mock",
+    }
+
+
+@app.post("/api/supervision/auto-snapshot")
+async def trigger_auto_snapshot():
+    """On-demand automatic snapshot capture (source='auto')."""
+    return await _capture_snapshot_report(source="auto")
+
+
+async def _auto_snapshot_loop():
+    logging.getLogger("server").info(
+        "Auto-snapshot scheduler ENABLED — every %ss", AUTO_SNAPSHOT_INTERVAL_SEC
+    )
+    while True:
+        try:
+            await asyncio.sleep(AUTO_SNAPSHOT_INTERVAL_SEC)
+            await _capture_snapshot_report(source="auto")
+        except asyncio.CancelledError:  # graceful shutdown
+            break
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger("server").warning("Auto-snapshot failed: %s", e)
+
+
+@app.on_event("startup")
+async def _start_auto_snapshot():
+    if AUTO_SNAPSHOT_INTERVAL_SEC > 0:
+        app.state.auto_snapshot_task = asyncio.create_task(_auto_snapshot_loop())
+
+
+@app.on_event("shutdown")
+async def _stop_auto_snapshot():
+    task = getattr(app.state, "auto_snapshot_task", None)
+    if task:
+        task.cancel()
 
 
 # ------------------------------------------------------------

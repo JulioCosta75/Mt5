@@ -68,6 +68,11 @@ export default function SupervisionPanel({ serverTime }) {
   useEffect(() => { loadSnapshot(); loadReports(); }, [loadSnapshot, loadReports]);
   // Re-sync the snapshot whenever the dashboard refreshes (server_time changes).
   useEffect(() => { if (serverTime) loadSnapshot(); }, [serverTime, loadSnapshot]);
+  // Automatic supervision snapshot: poll the live snapshot every 30s.
+  useEffect(() => {
+    const id = setInterval(() => { loadSnapshot(); }, 30000);
+    return () => clearInterval(id);
+  }, [loadSnapshot]);
 
   const onGenerateReport = async () => {
     setBusy(true);
