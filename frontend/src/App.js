@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Dashboard from "@/Dashboard";
 import About from "@/pages/About";
 import Documentation from "@/pages/Documentation";
+import Settings from "@/pages/Settings";
 import BrandBoot from "@/components/BrandBoot";
 
 function App() {
@@ -33,6 +34,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="/about" element={<About />} />
           <Route path="/docs" element={<Documentation />} />
         </Routes>

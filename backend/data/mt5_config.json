@@ -1,0 +1,11 @@
+{
+  "configured": false,
+  "login": "",
+  "password": "",
+  "server": "",
+  "terminal_path": "",
+  "bridge_host": "127.0.0.1",
+  "bridge_port": 8002,
+  "bridge_token": "",
+  "updated_at": "2026-07-07T22:20:09.280105+00:00"
+}

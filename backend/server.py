@@ -585,6 +585,79 @@ async def system_version():
 
 
 # ------------------------------------------------------------
+# MT5 connection configuration — managed from the Dashboard.
+# (Replaces the one-time install wizard: credentials can now be
+#  set and changed at any time without reinstalling Atlas.)
+# ------------------------------------------------------------
+import mt5_config as _mt5cfg
+
+
+class MT5ConfigIn(BaseModel):
+    login: str
+    password: Optional[str] = ""
+    server: str
+    terminal_path: Optional[str] = ""
+    bridge_host: Optional[str] = "127.0.0.1"
+    bridge_port: Optional[int] = 8002
+
+
+def _connection_status(cfg: dict) -> dict:
+    configured = bool(cfg.get("configured"))
+    if MT5_MODE:
+        state = "connected"        # backend started with a bridge URL
+    elif configured:
+        state = "pending_restart"  # saved; waiting for services to pick it up
+    else:
+        state = "unconfigured"     # Configuration Mode
+    return {
+        "mode": "mt5" if MT5_MODE else "mock",
+        "configured": configured,
+        "state": state,
+        "platform": "windows" if os.name == "nt" else "preview",
+        "server": cfg.get("server") or None,
+        "login": cfg.get("login") or None,
+        "bridge_port": cfg.get("bridge_port"),
+        "updated_at": cfg.get("updated_at"),
+    }
+
+
+@app.get("/api/mt5/config")
+async def get_mt5_config():
+    cfg = _mt5cfg.load()
+    return {"config": _mt5cfg.masked(cfg), "status": _connection_status(cfg)}
+
+
+@app.put("/api/mt5/config")
+async def put_mt5_config(payload: MT5ConfigIn):
+    try:
+        cfg = _mt5cfg.save_config(payload.model_dump())
+    except _mt5cfg.ConfigError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    applied = _mt5cfg.apply_to_windows(cfg)
+    return {
+        "saved": True,
+        "applied": applied,
+        "restart_required": (not MT5_MODE),
+        "config": _mt5cfg.masked(cfg),
+        "status": _connection_status(cfg),
+        "message": (
+            "MT5 settings saved. Atlas is applying them and the services are "
+            "restarting — the dashboard will reconnect shortly."
+        ) if applied else (
+            "MT5 settings saved. On the Windows installation Atlas will restart "
+            "its services and connect automatically. In this preview the backend "
+            "stays in mock mode."
+        ),
+    }
+
+
+@app.delete("/api/mt5/config")
+async def delete_mt5_config():
+    cfg = _mt5cfg.clear_config()
+    return {"cleared": True, "config": _mt5cfg.masked(cfg), "status": _connection_status(cfg)}
+
+
+# ------------------------------------------------------------
 # Phase 2 — Sr. Atlas supervision endpoints (mounted on `app` so they
 # are available in both mock and MT5 modes, like /api/system/health).
 # ------------------------------------------------------------

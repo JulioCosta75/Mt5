@@ -71,9 +71,6 @@ Source: "payload\frontend_build\*";  DestDir: "{app}\frontend_build"; Flags: rec
 ; -- NSSM service manager (single .exe) ----------------------------------
 Source: "payload\nssm.exe";          DestDir: "{app}";                Flags: ignoreversion
 
-; -- Setup wizard (PyInstaller-built .exe) -------------------------------
-Source: "payload\wizard\Atlas Wizard.exe"; DestDir: "{app}";          Flags: ignoreversion
-
 ; -- Service & operation scripts -----------------------------------------
 Source: "scripts\install_services.bat";    DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\uninstall_services.bat";  DestDir: "{app}\scripts"; Flags: ignoreversion
@@ -83,6 +80,7 @@ Source: "scripts\open_dashboard.bat";      DestDir: "{app}\scripts"; Flags: igno
 Source: "scripts\healthcheck.bat";         DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\bootstrap_pip.bat";       DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\install_deps.bat";        DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "scripts\apply_restart.bat";       DestDir: "{app}\scripts"; Flags: ignoreversion
 
 ; -- Icons & misc ----------------------------------------------------------
 Source: "icons\atlas.ico";  DestDir: "{app}\icons";  Flags: ignoreversion
@@ -106,7 +104,6 @@ Type: files;          Name: "{app}\backend\build_info.json"
 
 [Icons]
 Name: "{group}\Atlas Dashboard";    Filename: "{app}\scripts\open_dashboard.bat"; IconFilename: "{app}\icons\atlas.ico"; Tasks: startmenu
-Name: "{group}\Atlas Wizard";       Filename: "{app}\{#MyAppExeName}";            IconFilename: "{app}\icons\atlas.ico"; Tasks: startmenu
 Name: "{group}\Atlas Health Check"; Filename: "{app}\scripts\healthcheck.bat";    IconFilename: "{app}\icons\atlas.ico"; Tasks: startmenu
 Name: "{group}\Stop Atlas";         Filename: "{app}\scripts\stop_atlas.bat";     IconFilename: "{app}\icons\atlas.ico"; Tasks: startmenu
 Name: "{group}\Start Atlas";        Filename: "{app}\scripts\start_atlas.bat";    IconFilename: "{app}\icons\atlas.ico"; Tasks: startmenu
@@ -124,8 +121,7 @@ Filename: "{app}\scripts\install_services.bat"; StatusMsg: "Registering Atlas Wi
 ; 3) Start the freshly installed build so the dashboard is live immediately.
 Filename: "{app}\scripts\start_atlas.bat"; StatusMsg: "Starting Atlas services..."; Tasks: installsvc; Flags: runhidden
 
-; 4) Launch the GUI wizard (collects MT5 credentials, writes .env, restarts services)
-Filename: "{app}\{#MyAppExeName}"; Description: "Run Atlas setup wizard (connect MetaTrader 5)"; Flags: postinstall nowait skipifsilent
+; 4) (MT5 is configured from the Dashboard after install — no wizard needed.)
 
 [UninstallRun]
 Filename: "{app}\scripts\uninstall_services.bat"; Flags: runhidden
@@ -180,17 +176,9 @@ end;
 
 function InitializeSetup(): Boolean;
 begin
+  // Zero-input install: no prompts. MetaTrader 5 is connected later from the
+  // Atlas Dashboard (Settings), so MT5 does not need to be present at install.
   Result := True;
-  // Soft warning if MetaTrader5 not detected in common paths.
-  if not (FileExists(ExpandConstant('{commonpf}\MetaTrader 5\terminal64.exe')) or
-          FileExists(ExpandConstant('{commonpf64}\MetaTrader 5\terminal64.exe')) or
-          FileExists(ExpandConstant('{userappdata}\MetaQuotes\Terminal\terminal64.exe'))) then
-  begin
-    if MsgBox('MetaTrader 5 was not detected on this machine in the usual locations.' #13#10 +
-             'Atlas needs MT5 installed and logged in to work.' #13#10 #13#10 +
-             'Continue installation anyway?', mbConfirmation, MB_YESNO) = IDNO then
-      Result := False;
-  end;
 end;
 
 // Called right before files are installed (after the user clicks Install and

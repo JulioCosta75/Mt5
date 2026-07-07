@@ -115,25 +115,12 @@ popd
 xcopy /E /I /Y ..\frontend\build payload\frontend_build >nul
 echo OK
 
-REM ---- 5) Build the wizard (PyInstaller) ---------------------
-echo.
-echo [5/6] Building Atlas Wizard.exe (PyInstaller)...
-if not exist payload\wizard mkdir payload\wizard
-pushd wizard
-if not exist .venv (
-    py -3.11 -m venv .venv 2>nul || python -m venv .venv
-)
-call .venv\Scripts\activate.bat
-pip install -q pyinstaller requests || exit /b 1
-pyinstaller --noconfirm --clean --windowed --onefile ^
-    --name "Atlas Wizard" --icon ..\icons\atlas.ico atlas_wizard.py
-copy /Y "dist\Atlas Wizard.exe" "..\payload\wizard\Atlas Wizard.exe"
-popd
-echo OK
+REM ---- 5) (MT5 setup wizard removed — configured from the Dashboard) --
+if exist payload\wizard rmdir /S /Q payload\wizard
 
-REM ---- 6) Compile Inno Setup ---------------------------------
+REM ---- 5) Compile Inno Setup ---------------------------------
 echo.
-echo [6/6] Compiling Atlas_Setup.exe...
+echo [5/5] Compiling Atlas_Setup.exe...
 iscc "/DMyAppVersion=%ATLAS_VER%" atlas_setup.iss || exit /b 1
 
 echo.

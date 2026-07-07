@@ -6,6 +6,7 @@ import { srAtlasRound, srAtlasIcon } from "@/assets/branding";
 export default function PageShell({ children, active, testId }) {
   const links = [
     { to: "/", label: "Terminal" },
+    { to: "/settings", label: "Settings" },
     { to: "/about", label: "About" },
     { to: "/docs", label: "Documentation" },
   ];

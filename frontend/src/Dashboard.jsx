@@ -61,6 +61,7 @@ function Header({ refreshing, onRefresh, sessionId, activeTab, onTabChange, buil
           ))}
           <Link to="/about" className="btn" data-testid="nav-about" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>About</Link>
           <Link to="/docs" className="btn" data-testid="nav-docs" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>Docs</Link>
+          <Link to="/settings" className="btn" data-testid="nav-settings" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>Settings</Link>
         </nav>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -129,6 +130,7 @@ export default function Dashboard() {
   const [sessionId] = useState(() => Math.floor(Math.random() * 9000 + 1000));
   const [activeTab, setActiveTab] = useState("Overview");
   const [buildInfo, setBuildInfo] = useState(null);
+  const [mt5Status, setMt5Status] = useState(null);
   const selectedIdRef = useRef(null);
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
 
@@ -167,6 +169,12 @@ export default function Dashboard() {
       } catch (e) {
         if (!cancelled) setBuildInfo(null);
       }
+      try {
+        const c = await api.getMt5Config();
+        if (!cancelled) setMt5Status(c.status || null);
+      } catch (e) {
+        if (!cancelled) setMt5Status(null);
+      }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -197,6 +205,29 @@ export default function Dashboard() {
   return (
     <div className="App" data-testid="dashboard">
       <Header refreshing={refreshing} onRefresh={onRefresh} sessionId={sessionId} activeTab={activeTab} onTabChange={setActiveTab} buildInfo={buildInfo} />
+      {mt5Status && mt5Status.state !== "connected" && (
+        <div
+          data-testid="config-mode-banner"
+          style={{
+            display: "flex", alignItems: "center", gap: 12, padding: "9px 20px",
+            background: "#2A1E05", borderBottom: "1px solid #7A5A12", color: "#FCD34D", fontSize: 13,
+          }}
+        >
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#F59E0B", display: "inline-block" }} />
+          <span>
+            <b>Configuration Mode</b> — Atlas is not connected to MetaTrader 5 yet
+            (showing sample data). Connect your MT5 account to see live data.
+          </span>
+          <Link
+            to="/settings"
+            data-testid="config-mode-cta"
+            className="btn"
+            style={{ marginLeft: "auto", textDecoration: "none", padding: "4px 12px" }}
+          >
+            Open Settings →
+          </Link>
+        </div>
+      )}
       <KpiTicker kpis={kpis} />
 
       {loading ? (

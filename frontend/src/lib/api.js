@@ -19,6 +19,9 @@ export const api = {
   tick: () => client.post("/sim/tick").then(r => r.data),
   systemHealth: () => client.get("/system/health").then(r => r.data),
   systemVersion: () => client.get("/system/version").then(r => r.data),
+  getMt5Config: () => client.get("/mt5/config").then(r => r.data),
+  saveMt5Config: (payload) => client.put("/mt5/config", payload).then(r => r.data),
+  clearMt5Config: () => client.delete("/mt5/config").then(r => r.data),
   // Phase 2 — Sr. Atlas supervision
   supervisionSnapshot: () => client.get("/supervision/snapshot").then(r => r.data),
   atlasReports: (params = {}) => client.get("/atlas/reports", { params }).then(r => r.data),
