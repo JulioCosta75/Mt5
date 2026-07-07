@@ -14,7 +14,7 @@ import os
 import pytest
 import requests
 
-BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://clean-install-fix.preview.emergentagent.com").rstrip("/")
+BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://atlas-professional.preview.emergentagent.com").rstrip("/")
 API = f"{BASE}/api"
 
 VALID_STATUS = {"OK", "WARNING", "ALERT"}
