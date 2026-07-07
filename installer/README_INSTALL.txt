@@ -29,6 +29,23 @@ Dashboard:    http://localhost:8001/
 Health page:  http://localhost:8001/healthcheck
 API root:     http://localhost:8001/api/
 
+Checking which version is running
+---------------------------------
+The running build is shown in two places, so you can always confirm an
+install/upgrade actually took effect:
+  • Dashboard header (top-right), e.g.  v0.3.0
+  • Health page footer  (http://localhost:8001/healthcheck)
+  • API:  http://localhost:8001/api/system/version
+
+Upgrading to a new version
+--------------------------
+Atlas upgrades are clean and reproducible — no manual commands:
+  1. Run the new Atlas_Setup.exe (or first uninstall via Add/Remove Programs).
+  2. The installer automatically STOPS both Atlas services, REPLACES all old
+     program files and Python packages, re-registers the services and STARTS
+     the new build. Your data (\data) and logs (\logs) are preserved.
+  3. Open the Dashboard and confirm the version number in the header changed.
+
 Logs
 ----
 <install folder>\logs\backend.out.log
