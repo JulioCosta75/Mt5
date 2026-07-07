@@ -9,8 +9,11 @@ import TradesTable from "@/components/TradesTable";
 import AlertsPanel from "@/components/AlertsPanel";
 import RiskPanel from "@/components/RiskPanel";
 import SupervisionPanel from "@/components/SupervisionPanel";
+import { StrategiesView, RiskView, ReportsView, AuditView } from "@/components/TabViews";
 
-function Header({ refreshing, onRefresh, sessionId }) {
+const TABS = ["Overview", "Strategies", "Risk", "Reports", "Audit"];
+
+function Header({ refreshing, onRefresh, sessionId, activeTab, onTabChange }) {
   return (
     <header
       data-testid="app-header"
@@ -37,11 +40,14 @@ function Header({ refreshing, onRefresh, sessionId }) {
           <span className="kbd" style={{ marginLeft: 4 }}>MT5</span>
         </div>
         <nav style={{ display: "flex", gap: 4, marginLeft: 16 }}>
-          {["Overview", "Strategies", "Risk", "Reports", "Audit"].map((n, i) => (
+          {TABS.map((n) => (
             <button
               key={n}
-              className={`btn ${i === 0 ? "active" : ""}`}
+              type="button"
+              className={`btn ${activeTab === n ? "active" : ""}`}
               data-testid={`nav-${n.toLowerCase()}`}
+              aria-current={activeTab === n ? "page" : undefined}
+              onClick={() => onTabChange(n)}
               style={{ border: "none", padding: "4px 10px" }}
             >
               {n}
@@ -110,6 +116,7 @@ export default function Dashboard() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const { kpis, accounts, selectedId, equity, drawdown, trades, alerts, refreshing, loading } = state;
   const [sessionId] = useState(() => Math.floor(Math.random() * 9000 + 1000));
+  const [activeTab, setActiveTab] = useState("Overview");
   const selectedIdRef = useRef(null);
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
 
@@ -163,14 +170,14 @@ export default function Dashboard() {
 
   return (
     <div className="App" data-testid="dashboard">
-      <Header refreshing={refreshing} onRefresh={onRefresh} sessionId={sessionId} />
+      <Header refreshing={refreshing} onRefresh={onRefresh} sessionId={sessionId} activeTab={activeTab} onTabChange={setActiveTab} />
       <KpiTicker kpis={kpis} />
 
       {loading ? (
         <div style={{ padding: 60, textAlign: "center", color: "var(--text-tertiary)", fontSize: 12 }}>
           Connecting to supervision feed…
         </div>
-      ) : (
+      ) : activeTab === "Overview" ? (
         <main
           style={{
             display: "grid",
@@ -221,6 +228,21 @@ export default function Dashboard() {
               </div>
             </div>
           </aside>
+        </main>
+      ) : (
+        <main style={{ padding: 14 }} data-testid={`tab-content-${activeTab.toLowerCase()}`}>
+          {activeTab === "Strategies" && <StrategiesView accounts={accounts} />}
+          {activeTab === "Risk" && (
+            <RiskView
+              accounts={accounts}
+              selectedId={selectedId}
+              onSelect={(id) => dispatch({ type: "SELECT", id })}
+              selectedAccount={selectedAccount}
+              onUpdate={() => { loadGlobals(); loadAccountDetail(selectedId); }}
+            />
+          )}
+          {activeTab === "Reports" && <ReportsView />}
+          {activeTab === "Audit" && <AuditView alerts={alerts} onAck={onAckAlert} />}
         </main>
       )}
       <footer
