@@ -782,26 +782,260 @@ def test_auto_snapshot_persistence(report_id):
         return False
 
 
+def test_system_version():
+    """Test GET /api/system/version - NEW endpoint for running build visibility"""
+    print_section("TEST 7: GET /api/system/version")
+    
+    url = f"{BASE_URL}/system/version"
+    print(f"Request: GET {url}")
+    
+    try:
+        response = requests.get(url, timeout=10)
+        print(f"Status Code: {response.status_code}")
+        
+        if response.status_code != 200:
+            print(f"❌ FAILED: Expected 200, got {response.status_code}")
+            print(f"Response: {response.text}")
+            return False
+        
+        data = response.json()
+        print(f"Response JSON:\n{json.dumps(data, indent=2)}")
+        
+        checks = []
+        
+        # Check version (non-empty string, expect "0.3.0")
+        version = data.get("version")
+        if version and isinstance(version, str) and len(version) > 0:
+            print(f"✅ version is non-empty string: '{version}'")
+            checks.append(True)
+            if version == "0.3.0":
+                print(f"✅ version == '0.3.0' (expected in preview)")
+            else:
+                print(f"ℹ️  version is '{version}' (expected '0.3.0' in preview, but any non-empty string is valid)")
+        else:
+            print(f"❌ version: expected non-empty string, got {type(version)}: {version}")
+            checks.append(False)
+        
+        # Check build (string)
+        build = data.get("build")
+        if build and isinstance(build, str):
+            print(f"✅ build is string: '{build}'")
+            checks.append(True)
+        else:
+            print(f"❌ build: expected string, got {type(build)}: {build}")
+            checks.append(False)
+        
+        # Check built_at (can be None or string)
+        if "built_at" in data:
+            print(f"✅ built_at present: {data['built_at']}")
+            checks.append(True)
+        else:
+            print("❌ built_at key missing")
+            checks.append(False)
+        
+        # Check channel (string, expect "release")
+        channel = data.get("channel")
+        if channel and isinstance(channel, str):
+            print(f"✅ channel is string: '{channel}'")
+            checks.append(True)
+            if channel == "release":
+                print(f"✅ channel == 'release' (expected)")
+            else:
+                print(f"ℹ️  channel is '{channel}' (expected 'release', but any string is valid)")
+        else:
+            print(f"❌ channel: expected string, got {type(channel)}: {channel}")
+            checks.append(False)
+        
+        all_passed = all(checks)
+        if all_passed:
+            print("\n✅ TEST 7 PASSED: GET /api/system/version")
+        else:
+            print(f"\n❌ TEST 7 FAILED: {checks.count(False)} checks failed")
+        
+        return all_passed
+        
+    except Exception as e:
+        print(f"❌ FAILED with exception: {e}")
+        return False
+
+
+def test_system_health_with_version():
+    """Test GET /api/system/health - UPDATED to include version/build"""
+    print_section("TEST 8: GET /api/system/health (with version/build)")
+    
+    url = f"{BASE_URL}/system/health"
+    print(f"Request: GET {url}")
+    
+    try:
+        response = requests.get(url, timeout=10)
+        print(f"Status Code: {response.status_code}")
+        
+        if response.status_code != 200:
+            print(f"❌ FAILED: Expected 200, got {response.status_code}")
+            print(f"Response: {response.text}")
+            return False
+        
+        data = response.json()
+        print(f"Response JSON:\n{json.dumps(data, indent=2)}")
+        
+        checks = []
+        
+        # NEW: Check top-level "version" (string)
+        version = data.get("version")
+        if version and isinstance(version, str) and len(version) > 0:
+            print(f"✅ top-level 'version' is non-empty string: '{version}'")
+            checks.append(True)
+        else:
+            print(f"❌ top-level 'version': expected non-empty string, got {type(version)}: {version}")
+            checks.append(False)
+        
+        # NEW: Check top-level "build" (object)
+        build = data.get("build")
+        if build and isinstance(build, dict):
+            print(f"✅ top-level 'build' is object")
+            checks.append(True)
+            
+            # Check build.version equals top-level version
+            build_version = build.get("version")
+            if build_version == version:
+                print(f"✅ build.version == top-level version: '{build_version}'")
+                checks.append(True)
+            else:
+                print(f"❌ build.version ({build_version}) != top-level version ({version})")
+                checks.append(False)
+        else:
+            print(f"❌ top-level 'build': expected object, got {type(build)}")
+            checks.append(False)
+        
+        # EXISTING: Check mode (expect "mock")
+        mode = data.get("mode")
+        if mode == "mock":
+            print(f"✅ mode == 'mock'")
+            checks.append(True)
+        else:
+            print(f"ℹ️  mode is '{mode}' (expected 'mock' in preview, but 'mt5' is also valid)")
+            checks.append(True)  # Accept both mock and mt5
+        
+        # EXISTING: Check store (object with "ok" and "backend")
+        store = data.get("store")
+        if store and isinstance(store, dict):
+            print(f"✅ 'store' is object")
+            checks.append(True)
+            
+            if store.get("ok") is True:
+                print(f"✅ store.ok == true")
+                checks.append(True)
+            else:
+                print(f"❌ store.ok: expected true, got {store.get('ok')}")
+                checks.append(False)
+            
+            if "backend" in store:
+                print(f"✅ store.backend present: '{store.get('backend')}'")
+                checks.append(True)
+            else:
+                print(f"❌ store.backend missing")
+                checks.append(False)
+        else:
+            print(f"❌ 'store': expected object, got {type(store)}")
+            checks.append(False)
+        
+        # EXISTING: Check server_time (ISO string)
+        server_time = data.get("server_time")
+        if server_time and isinstance(server_time, str):
+            print(f"✅ server_time is string: '{server_time}'")
+            checks.append(True)
+        else:
+            print(f"❌ server_time: expected string, got {type(server_time)}")
+            checks.append(False)
+        
+        # EXISTING: Check bridge (present, may be null in mock mode)
+        if "bridge" in data:
+            print(f"✅ 'bridge' key present: {data['bridge']}")
+            checks.append(True)
+        else:
+            print(f"❌ 'bridge' key missing")
+            checks.append(False)
+        
+        all_passed = all(checks)
+        if all_passed:
+            print("\n✅ TEST 8 PASSED: GET /api/system/health (with version/build)")
+        else:
+            print(f"\n❌ TEST 8 FAILED: {checks.count(False)} checks failed")
+        
+        return all_passed
+        
+    except Exception as e:
+        print(f"❌ FAILED with exception: {e}")
+        return False
+
+
+def test_version_consistency():
+    """Test that version is consistent between /api/system/version and /api/system/health"""
+    print_section("TEST 9: Version consistency check")
+    
+    try:
+        # Get version from /api/system/version
+        version_url = f"{BASE_URL}/system/version"
+        print(f"Request 1: GET {version_url}")
+        version_response = requests.get(version_url, timeout=10)
+        
+        if version_response.status_code != 200:
+            print(f"❌ FAILED: /api/system/version returned {version_response.status_code}")
+            return False
+        
+        version_data = version_response.json()
+        version_from_version_endpoint = version_data.get("version")
+        print(f"Version from /api/system/version: '{version_from_version_endpoint}'")
+        
+        # Get version from /api/system/health
+        health_url = f"{BASE_URL}/system/health"
+        print(f"Request 2: GET {health_url}")
+        health_response = requests.get(health_url, timeout=10)
+        
+        if health_response.status_code != 200:
+            print(f"❌ FAILED: /api/system/health returned {health_response.status_code}")
+            return False
+        
+        health_data = health_response.json()
+        version_from_health_endpoint = health_data.get("version")
+        print(f"Version from /api/system/health: '{version_from_health_endpoint}'")
+        
+        # Compare
+        if version_from_version_endpoint == version_from_health_endpoint:
+            print(f"✅ Versions match: '{version_from_version_endpoint}'")
+            print("\n✅ TEST 9 PASSED: Version consistency check")
+            return True
+        else:
+            print(f"❌ Versions DO NOT match!")
+            print(f"   /api/system/version: '{version_from_version_endpoint}'")
+            print(f"   /api/system/health:  '{version_from_health_endpoint}'")
+            print("\n❌ TEST 9 FAILED: Version consistency check")
+            return False
+        
+    except Exception as e:
+        print(f"❌ FAILED with exception: {e}")
+        return False
+
+
 def main():
     print("\n" + "="*80)
-    print("  MT5 QUANT SUPERVISION - AUTOMATIC SNAPSHOT TESTING")
-    print("  Testing NEW automatic supervision snapshot endpoints")
+    print("  MT5 QUANT SUPERVISION - VERSION/BUILD REPORTING TESTING")
+    print("  Testing NEW running build/version endpoints")
     print("="*80)
     print(f"\nBase URL: {BASE_URL}")
     print(f"Test Time: {datetime.now().isoformat()}")
     
     results = {}
     
-    # NEW TESTS - Automatic supervision snapshot support
-    # Test 4: GET /api/supervision/config
-    results["supervision_config"] = test_supervision_config()
+    # NEW TESTS - Running build/version reporting
+    # Test 7: GET /api/system/version
+    results["system_version"] = test_system_version()
     
-    # Test 5: POST /api/supervision/auto-snapshot
-    test_5_passed, auto_report_id = test_auto_snapshot()
-    results["auto_snapshot"] = test_5_passed
+    # Test 8: GET /api/system/health (with version/build)
+    results["system_health_with_version"] = test_system_health_with_version()
     
-    # Test 6: Verify auto-snapshot persisted in /api/atlas/reports
-    results["auto_snapshot_persistence"] = test_auto_snapshot_persistence(auto_report_id)
+    # Test 9: Version consistency between endpoints
+    results["version_consistency"] = test_version_consistency()
     
     # LIGHT REGRESSION TESTS
     # Regression 1: GET /api/supervision/snapshot still works

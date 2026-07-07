@@ -93,7 +93,7 @@
       <button class="btn" onclick="window.location='/'">Open Dashboard</button>
     </div>
 
-    <div class="footer">Sr. Atlas · Forge Factory Lab · v0.2.0 · <code id="ver">—</code></div>
+    <div class="footer">Sr. Atlas · Forge Factory Lab · <code id="app-ver">v…</code> · <code id="ver">—</code></div>
   </div>
 
 <script>
@@ -131,6 +131,9 @@ async function refresh() {
       document.getElementById("s-terminal").textContent = "n/a in mock mode";
       setPill(document.getElementById("s-terminal-pill"), "warn", "n/a");
     }
+    const bi = d.build || {};
+    document.getElementById("app-ver").textContent =
+      "v" + (d.version || "?") + (bi.build && bi.build !== "release" ? " (" + bi.build + ")" : "");
     document.getElementById("ver").textContent =
       "store=" + (d.store?.backend || "?") + " · server=" + (d.server_time || "?");
     out.textContent = "Last check: " + new Date().toLocaleString();

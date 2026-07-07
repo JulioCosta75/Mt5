@@ -4,7 +4,9 @@
 ;  Build:   Run build.bat (downloads payload deps + invokes ISCC.exe)
 ; ===========================================================================
 #define MyAppName      "Atlas"
-#define MyAppVersion   "0.2.0"
+#ifndef MyAppVersion
+  #define MyAppVersion "0.3.0"
+#endif
 #define MyAppPublisher "Quant.Supervise"
 #define MyAppURL       "https://quant.supervise"
 #define MyAppExeName   "Atlas Wizard.exe"
@@ -30,6 +32,10 @@ Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
+; -- Close the Atlas Wizard if it is running so its files can be replaced.
+CloseApplications=yes
+RestartApplications=no
+; -- Always deploy on top of a clean tree (see [InstallDelete]).
 ArchitecturesInstallIn64BitMode=x64compatible
 DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\icons\atlas.ico
@@ -87,6 +93,17 @@ Source: "README_INSTALL.txt"; DestDir: "{app}";      Flags: ignoreversion
 Name: "{app}\data";  Permissions: users-modify
 Name: "{app}\logs";  Permissions: users-modify
 
+[InstallDelete]
+; Guarantee a clean, reproducible deployment: remove the previous build's
+; code and Python packages so the new version fully replaces the old one.
+; (User data in {app}\data and logs in {app}\logs are preserved.)
+Type: filesandordirs; Name: "{app}\backend"
+Type: filesandordirs; Name: "{app}\bridge"
+Type: filesandordirs; Name: "{app}\frontend_build"
+Type: filesandordirs; Name: "{app}\python\Lib\site-packages"
+Type: filesandordirs; Name: "{app}\python\Scripts"
+Type: files;          Name: "{app}\backend\build_info.json"
+
 [Icons]
 Name: "{group}\Atlas Dashboard";    Filename: "{app}\scripts\open_dashboard.bat"; IconFilename: "{app}\icons\atlas.ico"; Tasks: startmenu
 Name: "{group}\Atlas Wizard";       Filename: "{app}\{#MyAppExeName}";            IconFilename: "{app}\icons\atlas.ico"; Tasks: startmenu
@@ -104,8 +121,11 @@ Filename: "{app}\scripts\install_deps.bat";  StatusMsg: "Installing Python depen
 ; 2) Install services if user accepted
 Filename: "{app}\scripts\install_services.bat"; StatusMsg: "Registering Atlas Windows Services..."; Tasks: installsvc; Flags: runhidden
 
-; 3) Launch the GUI wizard (collects MT5 credentials, writes .env, starts services)
-Filename: "{app}\{#MyAppExeName}"; Description: "Run Atlas setup wizard"; Flags: postinstall nowait skipifsilent
+; 3) Start the freshly installed build so the dashboard is live immediately.
+Filename: "{app}\scripts\start_atlas.bat"; StatusMsg: "Starting Atlas services..."; Tasks: installsvc; Flags: runhidden
+
+; 4) Launch the GUI wizard (collects MT5 credentials, writes .env, restarts services)
+Filename: "{app}\{#MyAppExeName}"; Description: "Run Atlas setup wizard (connect MetaTrader 5)"; Flags: postinstall nowait skipifsilent
 
 [UninstallRun]
 Filename: "{app}\scripts\uninstall_services.bat"; Flags: runhidden
@@ -116,6 +136,48 @@ Type: filesandordirs; Name: "{app}\logs"
 Type: filesandordirs; Name: "{app}\python\Lib\site-packages"
 
 [Code]
+// ---------------------------------------------------------------------------
+//  Stop + remove the Atlas services and any bundled python.exe left running,
+//  BEFORE Inno deletes/copies files. This is what makes every install a clean,
+//  reproducible deployment (fixes "dashboard still runs the previous version").
+// ---------------------------------------------------------------------------
+procedure StopAtlasServices();
+var
+  ResultCode: Integer;
+  Nssm: String;
+begin
+  // 1) Graceful stop via the Windows Service Control Manager.
+  Exec('net.exe', 'stop AtlasBackend', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('net.exe', 'stop AtlasBridge',  '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+
+  // 2) Remove the service definitions (NSSM if present, else sc.exe) so the
+  //    new build re-registers them cleanly.
+  Nssm := ExpandConstant('{app}\nssm.exe');
+  if FileExists(Nssm) then
+  begin
+    Exec(Nssm, 'stop AtlasBackend',   '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(Nssm, 'remove AtlasBackend confirm', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(Nssm, 'stop AtlasBridge',    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(Nssm, 'remove AtlasBridge confirm',  '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end
+  else
+  begin
+    Exec('sc.exe', 'delete AtlasBackend', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec('sc.exe', 'delete AtlasBridge',  '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
+
+  // 3) Kill any bundled python.exe still holding files in {app}\python so the
+  //    embedded runtime and site-packages can be replaced. We target ONLY the
+  //    Atlas-bundled interpreter path, never the user's system Python.
+  if DirExists(ExpandConstant('{app}\python')) then
+    Exec('taskkill.exe',
+         '/F /FI "IMAGENAME eq python.exe" /FI "MODULES eq ' + ExpandConstant('{app}\python\python311.dll') + '"',
+         '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+
+  // Give the OS a moment to release file handles.
+  Sleep(1500);
+end;
+
 function InitializeSetup(): Boolean;
 begin
   Result := True;
@@ -129,4 +191,12 @@ begin
              'Continue installation anyway?', mbConfirmation, MB_YESNO) = IDNO then
       Result := False;
   end;
+end;
+
+// Called right before files are installed (after the user clicks Install and
+// before [InstallDelete]/[Files]). Perfect place to release file locks.
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  StopAtlasServices();
+  Result := '';  // empty = proceed
 end;

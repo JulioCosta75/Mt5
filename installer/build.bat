@@ -11,6 +11,16 @@ echo.
 echo === Atlas installer builder ===
 echo.
 
+REM ---- Resolve version (single source of truth: backend\VERSION) ----
+set "ATLAS_VER="
+if exist "..\backend\VERSION" for /f "usebackq delims=" %%V in ("..\backend\VERSION") do set "ATLAS_VER=%%V"
+if not defined ATLAS_VER set "ATLAS_VER=0.3.0"
+set "GITSHA="
+for /f "delims=" %%G in ('git rev-parse --short HEAD 2^>nul') do set "GITSHA=%%G"
+if not defined GITSHA set "GITSHA=nogit"
+echo Building Atlas version %ATLAS_VER% (build %GITSHA%)
+echo.
+
 REM ---- Tooling checks ----------------------------------------
 where iscc >nul 2>nul
 if errorlevel 1 (
@@ -86,19 +96,23 @@ for /d %%D in (payload\backend\__pycache__ payload\bridge\__pycache__ payload\ba
 )
 echo OK
 
+REM ---- 3b) Stamp build_info.json (version + UTC build time + git sha) ----
+echo Stamping build_info.json ...
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$b=[ordered]@{version='%ATLAS_VER%';build='%GITSHA%';built_at=((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'));channel='release'}; ($b|ConvertTo-Json -Compress)|Set-Content -Encoding UTF8 -NoNewline 'payload\backend\build_info.json'" || exit /b 1
+echo OK
+
 REM ---- 4) Build frontend (or use prebuilt) -------------------
 echo.
-if exist payload\frontend_build\index.html (
-    echo [4/6] Reusing existing payload\frontend_build\ ^(delete it to rebuild^)
-) else (
-    echo [4/6] Building frontend ^(yarn build^)...
-    pushd ..\frontend
-    if exist node_modules ( echo node_modules ok ) else ( call yarn install --frozen-lockfile || call npm ci || exit /b 1 )
-    set "REACT_APP_BACKEND_URL="
-    call yarn build || call npm run build || exit /b 1
-    popd
-    xcopy /E /I /Y ..\frontend\build payload\frontend_build >nul
-)
+echo [4/6] Building frontend ^(clean rebuild^)...
+if exist payload\frontend_build rmdir /S /Q payload\frontend_build
+pushd ..\frontend
+if exist node_modules ( echo node_modules ok ) else ( call yarn install --frozen-lockfile || call npm ci || exit /b 1 )
+REM Same-origin: dashboard is served by the backend, so no external API base.
+set "REACT_APP_BACKEND_URL="
+call yarn build || call npm run build || exit /b 1
+popd
+xcopy /E /I /Y ..\frontend\build payload\frontend_build >nul
 echo OK
 
 REM ---- 5) Build the wizard (PyInstaller) ---------------------
@@ -120,7 +134,7 @@ echo OK
 REM ---- 6) Compile Inno Setup ---------------------------------
 echo.
 echo [6/6] Compiling Atlas_Setup.exe...
-iscc atlas_setup.iss || exit /b 1
+iscc "/DMyAppVersion=%ATLAS_VER%" atlas_setup.iss || exit /b 1
 
 echo.
 echo ============================================

@@ -13,7 +13,13 @@ import { StrategiesView, RiskView, ReportsView, AuditView } from "@/components/T
 
 const TABS = ["Overview", "Strategies", "Risk", "Reports", "Audit"];
 
-function Header({ refreshing, onRefresh, sessionId, activeTab, onTabChange }) {
+function Header({ refreshing, onRefresh, sessionId, activeTab, onTabChange, buildInfo }) {
+  const versionLabel = buildInfo && buildInfo.version ? `v${buildInfo.version}` : "v…";
+  const buildLabel = buildInfo && buildInfo.build && buildInfo.build !== "release"
+    ? ` · ${buildInfo.build}` : "";
+  const buildTitle = buildInfo
+    ? `Running build ${buildInfo.version}${buildInfo.build ? " (" + buildInfo.build + ")" : ""}${buildInfo.built_at ? " · built " + buildInfo.built_at : ""}${buildInfo.channel ? " · " + buildInfo.channel : ""}`
+    : "Fetching running build…";
   return (
     <header
       data-testid="app-header"
@@ -67,8 +73,13 @@ function Header({ refreshing, onRefresh, sessionId, activeTab, onTabChange }) {
           <span className={`pulse-dot ${refreshing ? "warn" : ""}`} />
           {refreshing ? "REFRESHING…" : "REFRESH FEED"}
         </button>
-        <span style={{ fontSize: 11, color: "var(--text-tertiary)" }} className="mono">
-          v0.1.0 · session-{sessionId}
+        <span
+          style={{ fontSize: 11, color: "var(--text-tertiary)" }}
+          className="mono"
+          data-testid="app-version"
+          title={buildTitle}
+        >
+          {versionLabel}{buildLabel} · session-{sessionId}
         </span>
       </div>
     </header>
@@ -117,6 +128,7 @@ export default function Dashboard() {
   const { kpis, accounts, selectedId, equity, drawdown, trades, alerts, refreshing, loading } = state;
   const [sessionId] = useState(() => Math.floor(Math.random() * 9000 + 1000));
   const [activeTab, setActiveTab] = useState("Overview");
+  const [buildInfo, setBuildInfo] = useState(null);
   const selectedIdRef = useRef(null);
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
 
@@ -145,6 +157,20 @@ export default function Dashboard() {
     return () => { cancelled = true; };
   }, [loadGlobals]);
 
+  // running build/version (verifies which deployment is live)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const v = await api.systemVersion();
+        if (!cancelled) setBuildInfo(v);
+      } catch (e) {
+        if (!cancelled) setBuildInfo(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     if (selectedId) loadAccountDetail(selectedId);
   }, [selectedId, loadAccountDetail]);
@@ -170,7 +196,7 @@ export default function Dashboard() {
 
   return (
     <div className="App" data-testid="dashboard">
-      <Header refreshing={refreshing} onRefresh={onRefresh} sessionId={sessionId} activeTab={activeTab} onTabChange={setActiveTab} />
+      <Header refreshing={refreshing} onRefresh={onRefresh} sessionId={sessionId} activeTab={activeTab} onTabChange={setActiveTab} buildInfo={buildInfo} />
       <KpiTicker kpis={kpis} />
 
       {loading ? (

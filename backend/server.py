@@ -16,6 +16,55 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # ------------------------------------------------------------
+# Build / version info — so the running deployment can be
+# verified from the Dashboard and health endpoint. This is the
+# single source of truth for "which build is running".
+#
+# Resolution order (first hit wins):
+#   1. Environment overrides ATLAS_VERSION / ATLAS_BUILD
+#      (set by the Windows installer service definition).
+#   2. build_info.json  — written by installer/build.bat at build
+#      time (version + UTC build timestamp + git short SHA).
+#   3. VERSION           — committed plain-text fallback.
+#   4. Hard-coded default.
+# ------------------------------------------------------------
+def _load_build_info() -> dict:
+    import json
+    info = {"version": "0.0.0-dev", "build": "local", "built_at": None, "channel": "dev"}
+    # 2) build_info.json (produced by the installer build step)
+    try:
+        bi_path = ROOT_DIR / "build_info.json"
+        if bi_path.exists():
+            data = json.loads(bi_path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                info.update({k: v for k, v in data.items() if v is not None})
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger("server").warning("Could not read build_info.json: %s", e)
+    # 3) VERSION file fallback (only if build_info.json didn't set a version)
+    if info["version"] in (None, "", "0.0.0-dev"):
+        try:
+            ver_path = ROOT_DIR / "VERSION"
+            if ver_path.exists():
+                v = ver_path.read_text(encoding="utf-8").strip()
+                if v:
+                    info["version"] = v
+                    if info.get("build") in (None, "", "local"):
+                        info["build"] = "release"
+                    if info.get("channel") == "dev":
+                        info["channel"] = "release"
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger("server").warning("Could not read VERSION file: %s", e)
+    # 1) Environment overrides (highest priority — set by the installer)
+    if os.environ.get("ATLAS_VERSION"):
+        info["version"] = os.environ["ATLAS_VERSION"].strip()
+    if os.environ.get("ATLAS_BUILD"):
+        info["build"] = os.environ["ATLAS_BUILD"].strip()
+    return info
+
+
+BUILD_INFO = _load_build_info()
+
+# ------------------------------------------------------------
 # Storage backend selection.
 #   ATLAS_STORE=mongo   (default, Linux/Emergent)
 #   ATLAS_STORE=sqlite  (Windows installer, no Mongo needed)
@@ -492,6 +541,8 @@ async def system_health():
     import httpx
     out = {
         "mode": "mt5" if MT5_MODE else "mock",
+        "version": BUILD_INFO["version"],
+        "build": BUILD_INFO,
         "server_time": datetime.now(timezone.utc).isoformat(),
         "store": {"backend": ATLAS_STORE, "ok": True},
         "bridge": None,
@@ -521,8 +572,16 @@ async def system_health():
                 })
             except (httpx.HTTPError, Exception) as e:  # noqa: BLE001
                 info["error"] = str(e)
-            out["bridge"] = info
     return out
+
+
+# ------------------------------------------------------------
+# /api/system/version — lightweight endpoint the Dashboard uses
+# to display the exact running build/version.
+# ------------------------------------------------------------
+@app.get("/api/system/version")
+async def system_version():
+    return BUILD_INFO
 
 
 # ------------------------------------------------------------
