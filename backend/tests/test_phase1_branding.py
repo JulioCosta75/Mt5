@@ -2,7 +2,7 @@
 import os
 import requests
 
-BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://windows-setup-fix.preview.emergentagent.com").rstrip("/")
+BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://clean-install-fix.preview.emergentagent.com").rstrip("/")
 API = f"{BASE}/api"
 
 

@@ -30,7 +30,7 @@ echo Installing backend dependencies ...
 
 echo Installing bridge dependencies (incl. MetaTrader5) ...
 "%PYTHON%" -m pip install --no-warn-script-location --disable-pip-version-check ^
-    MetaTrader5==5.0.45 "APScheduler>=3.10" || goto :err
+    "MetaTrader5>=5.0.4732" "APScheduler>=3.10" || goto :err
 
 echo All dependencies installed.
 endlocal

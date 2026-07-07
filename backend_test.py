@@ -9,7 +9,7 @@ import json
 from datetime import datetime
 
 # Base URL from frontend/.env
-BASE_URL = "https://windows-setup-fix.preview.emergentagent.com/api"
+BASE_URL = "https://clean-install-fix.preview.emergentagent.com/api"
 
 def print_section(title):
     print(f"\n{'='*80}")
