@@ -44,7 +44,7 @@ if not exist payload\python\python.exe (
       "(Get-Content payload\python\python311._pth) -replace '#import site','import site' | Set-Content payload\python\python311._pth"
     echo OK
 ) else (
-    echo [1/6] Python %PYVER% already in payload\python\ (skipping download)
+    echo [1/6] Python %PYVER% already in payload\python\ ^(skipping download^)
 )
 
 REM ---- 2) Provision NSSM (service manager) -------------------
@@ -67,7 +67,7 @@ if not exist payload\nssm.exe (
         echo OK
     )
 ) else (
-    echo [2/6] NSSM already in payload\nssm.exe (skipping)
+    echo [2/6] NSSM already in payload\nssm.exe ^(skipping^)
 )
 
 REM ---- 3) Copy backend + bridge sources ----------------------
@@ -89,9 +89,9 @@ echo OK
 REM ---- 4) Build frontend (or use prebuilt) -------------------
 echo.
 if exist payload\frontend_build\index.html (
-    echo [4/6] Reusing existing payload\frontend_build\ (delete it to rebuild)
+    echo [4/6] Reusing existing payload\frontend_build\ ^(delete it to rebuild^)
 ) else (
-    echo [4/6] Building frontend (yarn build)...
+    echo [4/6] Building frontend ^(yarn build^)...
     pushd ..\frontend
     if exist node_modules ( echo node_modules ok ) else ( call yarn install --frozen-lockfile || call npm ci || exit /b 1 )
     set "REACT_APP_BACKEND_URL="

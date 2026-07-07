@@ -61,7 +61,7 @@ if not defined NSSM (
 )
 if not defined NSSM (
     echo [ERROR] Could not locate or download nssm.exe.
-    echo         Please drop a Windows nssm.exe (64-bit) at:
+    echo         Please drop a Windows nssm.exe ^(64-bit^) at:
     echo         %INSTALLER_DIR%\nssm.exe
     exit /b 1
 )

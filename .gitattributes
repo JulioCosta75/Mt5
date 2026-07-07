@@ -1,0 +1,11 @@
+# Ensure Windows batch/command scripts always check out with CRLF line
+# endings, regardless of the contributor's platform or git config.
+# Windows cmd.exe can misbehave (labels/goto/blocks) with LF-only endings.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Inno Setup scripts are edited/compiled on Windows.
+*.iss text eol=crlf
+
+# Keep shell scripts LF for Linux.
+*.sh text eol=lf
