@@ -47,19 +47,27 @@ if not exist payload\python\python.exe (
     echo [1/6] Python %PYVER% already in payload\python\ (skipping download)
 )
 
-REM ---- 2) Download NSSM (service manager) --------------------
+REM ---- 2) Provision NSSM (service manager) -------------------
+REM  A 64-bit nssm.exe is committed next to build.bat so the build
+REM  (and a bare git clone) work offline. Fall back to download.
 if not exist payload\nssm.exe (
-    echo.
-    echo [2/6] Downloading NSSM 2.24...
-    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-      "Invoke-WebRequest 'https://nssm.cc/release/nssm-2.24.zip' -OutFile 'nssm.zip'" || exit /b 1
-    powershell -NoProfile -Command "Expand-Archive -Force 'nssm.zip' 'nssm_tmp'"
-    copy /Y nssm_tmp\nssm-2.24\win64\nssm.exe payload\nssm.exe
-    rmdir /S /Q nssm_tmp
-    del nssm.zip
-    echo OK
+    if exist nssm.exe (
+        echo [2/6] Using bundled nssm.exe
+        copy /Y nssm.exe payload\nssm.exe >nul
+        echo OK
+    ) else (
+        echo.
+        echo [2/6] Downloading NSSM 2.24...
+        powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+          "Invoke-WebRequest 'https://nssm.cc/release/nssm-2.24.zip' -OutFile 'nssm.zip'" || exit /b 1
+        powershell -NoProfile -Command "Expand-Archive -Force 'nssm.zip' 'nssm_tmp'"
+        copy /Y nssm_tmp\nssm-2.24\win64\nssm.exe payload\nssm.exe
+        rmdir /S /Q nssm_tmp
+        del nssm.zip
+        echo OK
+    )
 ) else (
-    echo [2/6] NSSM already in payload\nssm.exe (skipping download)
+    echo [2/6] NSSM already in payload\nssm.exe (skipping)
 )
 
 REM ---- 3) Copy backend + bridge sources ----------------------

@@ -36,10 +36,20 @@ if not (ATLAS_DIR / "scripts").exists():
     ATLAS_DIR = Path(sys.executable).resolve().parent
 
 SCRIPTS  = ATLAS_DIR / "scripts"
-BACKEND  = ATLAS_DIR / "backend"
-BRIDGE   = ATLAS_DIR / "bridge"
-DATA_DIR = ATLAS_DIR / "data"
-LOGS_DIR = ATLAS_DIR / "logs"
+# Support both layouts:
+#   * Production install (Atlas_Setup.exe): ATLAS_DIR\backend, ATLAS_DIR\bridge
+#   * Fresh git clone: ATLAS_DIR is the installer\ folder, so the sources live
+#     one level up as <repo>\backend and <repo>\mt5-bridge.
+if (ATLAS_DIR / "backend").exists():
+    ROOT_DIR = ATLAS_DIR
+    BACKEND  = ATLAS_DIR / "backend"
+    BRIDGE   = ATLAS_DIR / "bridge"
+else:
+    ROOT_DIR = ATLAS_DIR.parent
+    BACKEND  = ROOT_DIR / "backend"
+    BRIDGE   = ROOT_DIR / "mt5-bridge"
+DATA_DIR = ROOT_DIR / "data"
+LOGS_DIR = ROOT_DIR / "logs"
 
 MT5_DEFAULT_PATHS = [
     Path(r"C:\Program Files\MetaTrader 5\terminal64.exe"),

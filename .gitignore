@@ -89,3 +89,8 @@ android-sdk/
 credentials.json
 *.key
 .credentials
+
+# Allow committing example/template env files (must stay AFTER the .env rules
+# above so the negation wins). These contain placeholders only, no secrets.
+!**/.env.example
+!.env.example
