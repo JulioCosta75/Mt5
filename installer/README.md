@@ -19,13 +19,23 @@ You only need these once, where the installer is **compiled** (not where it is i
 
 | Tool | Why | Where |
 |------|-----|-------|
-| **Inno Setup 6** | Compiles `.iss` → `.exe` | https://jrsoftware.org/isdl.php |
-| **Python 3.11** (full) | Builds the wizard with PyInstaller | https://www.python.org/downloads/ |
+| **Inno Setup 6** | Compiles `.iss` → `.exe` | **auto-installed by `build.bat`** if missing (see note) |
 | **Node.js LTS + yarn** (or npm) | Builds the React frontend | https://nodejs.org |
-| PowerShell 5+ | Downloads payload deps | already in Windows |
+| PowerShell 5+ | Downloads payload deps + Inno Setup | already in Windows |
 
-After installing Inno Setup, ensure `ISCC.exe` is on `PATH` (the installer
-default is `C:\Program Files (x86)\Inno Setup 6\`).
+**Inno Setup is now automatic.** `build.bat` detects `ISCC.exe`; if it is not found it
+installs Inno Setup 6 for you — first via `winget install -e --id JRSoftware.InnoSetup`
+(if winget is present), otherwise by downloading the official installer from
+`https://jrsoftware.org/download.php/is.exe` and running it silently
+(`/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-`). No PATH setup is required.
+
+If you prefer to install it manually (or the machine has no internet), download from
+https://jrsoftware.org/isdl.php and install; `build.bat` will find it at the default
+path `C:\Program Files (x86)\Inno Setup 6\ISCC.exe`. You can also point the build at a
+specific copy with `set ISCC=C:\path\to\ISCC.exe` before running `build.bat`.
+
+> Note: the PyInstaller wizard step was removed — MT5 is now configured from the
+> Dashboard, so Python 3.11 is no longer required on the build machine.
 
 ---
 

@@ -22,13 +22,17 @@ echo Building Atlas version %ATLAS_VER% (build %GITSHA%)
 echo.
 
 REM ---- Tooling checks ----------------------------------------
-where iscc >nul 2>nul
-if errorlevel 1 (
-    echo [ERROR] Inno Setup 6 not found on PATH.
-    echo         Install from https://jrsoftware.org/isdl.php and add ISCC.exe to PATH,
-    echo         or set ISCC=path\to\ISCC.exe and rerun.
+REM Inno Setup 6 (ISCC.exe): detect, and if missing, install it automatically.
+set "ISCC_EXE="
+call :ensure_iscc
+if not defined ISCC_EXE (
+    echo [ERROR] Inno Setup 6 ^(ISCC.exe^) is not available and could not be
+    echo         installed automatically ^(no network / winget, or blocked^).
+    echo         Install it manually from https://jrsoftware.org/isdl.php
+    echo         then rerun build.bat, or set ISCC=full\path\to\ISCC.exe first.
     exit /b 1
 )
+echo Using Inno Setup compiler: %ISCC_EXE%
 
 where powershell >nul 2>nul || (echo [ERROR] PowerShell required. & exit /b 1)
 where node       >nul 2>nul || echo [WARN] node not found - frontend pre-build will be skipped. Use prebuilt payload\frontend_build\ instead.
@@ -121,7 +125,7 @@ if exist payload\wizard rmdir /S /Q payload\wizard
 REM ---- 5) Compile Inno Setup ---------------------------------
 echo.
 echo [5/5] Compiling Atlas_Setup.exe...
-iscc "/DMyAppVersion=%ATLAS_VER%" atlas_setup.iss || exit /b 1
+"%ISCC_EXE%" "/DMyAppVersion=%ATLAS_VER%" atlas_setup.iss || exit /b 1
 
 echo.
 echo ============================================
@@ -129,3 +133,63 @@ echo  Build complete: dist\Atlas_Setup.exe
 echo ============================================
 dir /B dist\Atlas_Setup.exe
 endlocal
+exit /b 0
+
+REM ============================================================
+REM  Helpers
+REM ============================================================
+
+:ensure_iscc
+REM Resolve ISCC_EXE. Order: explicit ISCC env > PATH > common paths >
+REM winget install > official silent download+install. Sets ISCC_EXE if found.
+if defined ISCC (
+    if exist "%ISCC%" (
+        set "ISCC_EXE=%ISCC%"
+        goto :eof
+    )
+)
+for /f "delims=" %%I in ('where iscc 2^>nul') do (
+    set "ISCC_EXE=%%I"
+    goto :eof
+)
+call :check_iscc "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
+if defined ISCC_EXE goto :eof
+call :check_iscc "%ProgramFiles%\Inno Setup 6\ISCC.exe"
+if defined ISCC_EXE goto :eof
+call :check_iscc "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe"
+if defined ISCC_EXE goto :eof
+
+echo.
+echo [setup] Inno Setup 6 not found - installing it automatically ...
+
+REM (a) Try winget if available (may be absent on Windows Server).
+where winget >nul 2>nul && (
+    echo [setup] Attempting: winget install -e --id JRSoftware.InnoSetup
+    winget install -e --id JRSoftware.InnoSetup --accept-source-agreements --accept-package-agreements --silent >nul 2>nul
+)
+call :check_iscc "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
+if defined ISCC_EXE goto :eof
+call :check_iscc "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe"
+if defined ISCC_EXE goto :eof
+
+REM (b) Download the official installer and run it silently.
+set "_IS_EXE=%TEMP%\innosetup_latest.exe"
+echo [setup] Downloading Inno Setup from jrsoftware.org ...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; try { Invoke-WebRequest 'https://jrsoftware.org/download.php/is.exe' -OutFile '%_IS_EXE%' -UseBasicParsing } catch { try { Invoke-WebRequest 'https://jrsoftware.org/download.php/innosetup-6.7.3.exe' -OutFile '%_IS_EXE%' -UseBasicParsing } catch { exit 1 } }"
+if not exist "%_IS_EXE%" (
+    echo [setup] Download failed.
+    goto :eof
+)
+echo [setup] Installing Inno Setup silently ...
+"%_IS_EXE%" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /NOICONS
+del "%_IS_EXE%" >nul 2>nul
+call :check_iscc "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
+if defined ISCC_EXE goto :eof
+call :check_iscc "%ProgramFiles%\Inno Setup 6\ISCC.exe"
+if defined ISCC_EXE goto :eof
+call :check_iscc "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe"
+goto :eof
+
+:check_iscc
+if exist %1 set "ISCC_EXE=%~1"
+goto :eof
