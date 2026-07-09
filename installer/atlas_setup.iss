@@ -72,6 +72,7 @@ Source: "payload\frontend_build\*";  DestDir: "{app}\frontend_build"; Flags: rec
 Source: "payload\nssm.exe";          DestDir: "{app}";                Flags: ignoreversion
 
 ; -- Service & operation scripts -----------------------------------------
+Source: "scripts\_detect_env.bat";         DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\install_services.bat";    DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\uninstall_services.bat";  DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\start_atlas.bat";         DestDir: "{app}\scripts"; Flags: ignoreversion
