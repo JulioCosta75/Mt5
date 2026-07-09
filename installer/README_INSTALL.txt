@@ -6,10 +6,21 @@ This installer has placed Atlas under the folder you selected
 
 Quick start
 -----------
-1. The Setup Wizard should open automatically. If it didn't, run:
-       <install folder>\Atlas Wizard.exe
-2. Follow the 5 pages: Welcome → MT5 detection → Credentials → Apply → Verify.
-3. When the health check shows "connected", click "Open Dashboard".
+1. During setup you were asked for your MetaTrader 5 account
+   (Login / Password / Server, and optionally the terminal path).
+   Those details were written to the local .env files and the Atlas
+   services were started automatically — no extra steps needed.
+2. The dashboard opens automatically at http://localhost:8001/.
+   Confirm the connection on the Health page (see below).
+3. To change your MT5 account later, either use the dashboard
+   Settings page, or re-run (as administrator):
+       <install folder>\scripts\configure_mt5.bat
+   then restart the services:
+       <install folder>\scripts\stop_atlas.bat
+       <install folder>\scripts\start_atlas.bat
+
+   (If you left the MT5 fields blank during setup, the dashboard still
+   runs; just configure MT5 from Settings or configure_mt5.bat.)
 
 What got installed
 ------------------
@@ -19,7 +30,6 @@ What got installed
 
 • Start menu entries under "Atlas":
     Atlas Dashboard           open the dashboard
-    Atlas Wizard              re-run the setup wizard
     Atlas Health Check        opens the diagnostics page
     Start Atlas / Stop Atlas  service control
 
@@ -65,8 +75,10 @@ Troubleshooting
      - If Backend = unreachable, run "Start Atlas".
 
 2. Health page says "Mode = mock"?
-     - The wizard didn't write the backend .env, or services started before it.
-     - Run "Atlas Wizard" again and click "Apply Now".
+     - The backend .env wasn't written, or the services started before it.
+     - Re-run  <install folder>\scripts\configure_mt5.bat  (as admin),
+       then  scripts\stop_atlas.bat  &&  scripts\start_atlas.bat
+     - Or configure MT5 from the dashboard Settings page.
 
 3. Bridge "unreachable"?
      - Ensure MetaTrader 5 is open and the account is logged in.

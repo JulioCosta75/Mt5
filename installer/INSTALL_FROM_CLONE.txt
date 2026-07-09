@@ -29,22 +29,31 @@ Steps
         - auto-detect Python and the bundled NSSM (installer\nssm.exe)
         - install the required Python packages
         - register the AtlasBridge and AtlasBackend Windows services
+        - ASK for your MetaTrader 5 account (Login / Password / Server,
+          and optionally the terminal path) and write the .env files
         - start them and open  http://localhost:8001/
 
      Prefer to do it by hand? From an *elevated* command prompt:
          cd C:\Mt5\installer\scripts
          install_services.bat
+         configure_mt5.bat
          start_atlas.bat
 
-Connect your MetaTrader 5 account
----------------------------------
-  1. copy  C:\Mt5\mt5-bridge\.env.example  ->  C:\Mt5\mt5-bridge\.env
-  2. fill in MT5_LOGIN / MT5_PASSWORD / MT5_SERVER and a BRIDGE_TOKEN
-  3. add the same values to the backend so it can reach the bridge -
-     create  C:\Mt5\backend\.env  with:
-         MT5_BRIDGE_URL=http://127.0.0.1:8002
-         MT5_BRIDGE_TOKEN=<the same BRIDGE_TOKEN>
-  4. restart:  scripts\stop_atlas.bat  &&  scripts\start_atlas.bat
+Connect / change your MetaTrader 5 account
+------------------------------------------
+  install.bat already prompts for your MT5 account and writes the .env
+  files for you. To change it later, either use the dashboard Settings
+  page, or re-run:
+      C:\Mt5\installer\scripts\configure_mt5.bat
+  then restart:
+      scripts\stop_atlas.bat  &&  scripts\start_atlas.bat
+
+  Prefer to edit files by hand?
+    1. copy  C:\Mt5\mt5-bridge\.env.example  ->  C:\Mt5\mt5-bridge\.env
+    2. fill in MT5_LOGIN / MT5_PASSWORD / MT5_SERVER and a BRIDGE_TOKEN
+    3. copy  C:\Mt5\backend\.env.example  ->  C:\Mt5\backend\.env  and set
+       MT5_BRIDGE_URL=http://127.0.0.1:8002  and the same MT5_BRIDGE_TOKEN
+    4. restart:  scripts\stop_atlas.bat  &&  scripts\start_atlas.bat
 
 NSSM is missing?
 ----------------

@@ -36,6 +36,23 @@ if errorlevel 1 (
 
 echo.
 echo ============================================================
+echo   Connect your MetaTrader 5 account
+echo ============================================================
+echo   Atlas needs your MT5 login details so the bridge can
+echo   connect to your account. They are stored locally only.
+echo.
+call "scripts\configure_mt5.bat"
+if errorlevel 1 (
+    echo.
+    echo [WARN] MT5 was not configured. The dashboard will still start,
+    echo        but the bridge stays offline until you configure it from
+    echo        the dashboard Settings page or by re-running:
+    echo            scripts\configure_mt5.bat
+    echo.
+)
+
+echo.
+echo ============================================================
 echo   Starting Atlas
 echo ============================================================
 call "scripts\start_atlas.bat"
@@ -47,10 +64,10 @@ echo   Dashboard : http://localhost:8001/
 echo   Health    : http://localhost:8001/healthcheck
 echo ============================================================
 echo.
-echo   To connect your MetaTrader 5 account, copy
-echo     mt5-bridge\.env.example  ->  mt5-bridge\.env
-echo   fill in your broker credentials, then run:
-echo     scripts\stop_atlas.bat  ^&^&  scripts\start_atlas.bat
+echo   Need to change your MT5 account later? Use the dashboard
+echo   Settings page, or re-run:
+echo       scripts\configure_mt5.bat
+echo   then:  scripts\stop_atlas.bat  ^&^&  scripts\start_atlas.bat
 echo.
 pause
 endlocal

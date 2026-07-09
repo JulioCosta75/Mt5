@@ -82,6 +82,8 @@ Source: "scripts\healthcheck.bat";         DestDir: "{app}\scripts"; Flags: igno
 Source: "scripts\bootstrap_pip.bat";       DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\install_deps.bat";        DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\apply_restart.bat";       DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "scripts\configure_atlas.py";     DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "scripts\configure_mt5.bat";       DestDir: "{app}\scripts"; Flags: ignoreversion
 
 ; -- Icons & misc ----------------------------------------------------------
 Source: "icons\atlas.ico";  DestDir: "{app}\icons";  Flags: ignoreversion
@@ -116,13 +118,18 @@ Name: "{commondesktop}\Atlas Dashboard"; Filename: "{app}\scripts\open_dashboard
 Filename: "{app}\scripts\bootstrap_pip.bat"; StatusMsg: "Setting up Python runtime..."; Flags: runhidden
 Filename: "{app}\scripts\install_deps.bat";  StatusMsg: "Installing Python dependencies (this may take a few minutes)..."; Flags: runhidden
 
-; 2) Install services if user accepted
+; 2) Write the .env files the services read. Uses the credentials entered
+;    on the wizard page (if any); otherwise, on a reinstall/upgrade, it
+;    restores the previously saved MT5 config so the bridge reconnects
+;    automatically. A blank first-time install is a harmless no-op.
+Filename: "{app}\python\python.exe"; Parameters: """{app}\scripts\configure_atlas.py"" --answers ""{tmp}\atlas_mt5_answers.json"" --non-interactive --backend-dir ""{app}\backend"" --bridge-dir ""{app}\bridge"" --data-dir ""{app}\data"""; WorkingDir: "{app}"; StatusMsg: "Saving MetaTrader 5 configuration..."; Flags: runhidden
+
+; 3) Install services if user accepted
 Filename: "{app}\scripts\install_services.bat"; StatusMsg: "Registering Atlas Windows Services..."; Tasks: installsvc; Flags: runhidden
 
-; 3) Start the freshly installed build so the dashboard is live immediately.
+; 4) Start the freshly installed build so the dashboard is live immediately.
+;    The bridge picks up the .env written in step 2 and connects to MT5.
 Filename: "{app}\scripts\start_atlas.bat"; StatusMsg: "Starting Atlas services..."; Tasks: installsvc; Flags: runhidden
-
-; 4) (MT5 is configured from the Dashboard after install — no wizard needed.)
 
 [UninstallRun]
 Filename: "{app}\scripts\uninstall_services.bat"; Flags: runhidden
@@ -133,6 +140,97 @@ Type: filesandordirs; Name: "{app}\logs"
 Type: filesandordirs; Name: "{app}\python\Lib\site-packages"
 
 [Code]
+var
+  MT5Page: TInputQueryWizardPage;
+  MT5Ready: Boolean;
+
+// Collect MT5 credentials on their own wizard page (after task selection).
+procedure InitializeWizard();
+begin
+  MT5Ready := False;
+  MT5Page := CreateInputQueryPage(wpSelectTasks,
+    'MetaTrader 5 Account',
+    'Connect Atlas to your MetaTrader 5 account',
+    'Enter your MT5 login details so Atlas can connect right after setup.' + #13#10 +
+    'They are stored locally on this computer only and are never sent' + #13#10 +
+    'anywhere by Atlas. Leave all fields blank to configure later from the' + #13#10 +
+    'dashboard Settings page.');
+  MT5Page.Add('MT5 Login (number):', False);
+  MT5Page.Add('MT5 Password:', True);
+  MT5Page.Add('MT5 Server / Broker (e.g. Darwinex-Live):', False);
+  MT5Page.Add('MT5 terminal path (optional; blank = auto-detect):', False);
+end;
+
+// Minimal JSON string escaper for the answers file.
+function JsonEscape(const S: String): String;
+var
+  I: Integer;
+  C: Char;
+  R: String;
+begin
+  R := '';
+  for I := 1 to Length(S) do
+  begin
+    C := S[I];
+    if (C = '\') or (C = '"') then
+      R := R + '\' + C
+    else if C = #13 then
+      R := R + '\r'
+    else if C = #10 then
+      R := R + '\n'
+    else
+      R := R + C;
+  end;
+  Result := R;
+end;
+
+// Validate the MT5 page and, when filled, write a temp answers file that
+// the [Run] step feeds to configure_atlas.py.
+function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  Login, Pass, Server, TermPath, Json, AnswersFile: String;
+begin
+  Result := True;
+  if (MT5Page <> nil) and (CurPageID = MT5Page.ID) then
+  begin
+    Login    := Trim(MT5Page.Values[0]);
+    Pass     := MT5Page.Values[1];
+    Server   := Trim(MT5Page.Values[2]);
+    TermPath := Trim(MT5Page.Values[3]);
+    MT5Ready := False;
+
+    if (Login = '') and (Pass = '') and (Server = '') then
+      Exit;  // user chose to configure later
+
+    if (Login = '') or (Pass = '') or (Server = '') then
+    begin
+      MsgBox('Please fill in MT5 Login, Password and Server, or clear all' + #13#10 +
+             'three fields to configure MetaTrader 5 later.', mbError, MB_OK);
+      Result := False;
+      Exit;
+    end;
+
+    if StrToIntDef(Login, -1) < 0 then
+    begin
+      MsgBox('MT5 Login must be a number.', mbError, MB_OK);
+      Result := False;
+      Exit;
+    end;
+
+    Json := '{"login":"' + JsonEscape(Login) +
+            '","password":"' + JsonEscape(Pass) +
+            '","server":"' + JsonEscape(Server) +
+            '","terminal_path":"' + JsonEscape(TermPath) +
+            '","bridge_port":8002}';
+    AnswersFile := ExpandConstant('{tmp}\atlas_mt5_answers.json');
+    if SaveStringToFile(AnswersFile, Json, False) then
+      MT5Ready := True
+    else
+      MsgBox('Could not save the MT5 configuration temporarily. You can set' + #13#10 +
+             'it up later from the dashboard Settings page.', mbInformation, MB_OK);
+  end;
+end;
+
 // ---------------------------------------------------------------------------
 //  Stop + remove the Atlas services and any bundled python.exe left running,
 //  BEFORE Inno deletes/copies files. This is what makes every install a clean,
@@ -177,8 +275,10 @@ end;
 
 function InitializeSetup(): Boolean;
 begin
-  // Zero-input install: no prompts. MetaTrader 5 is connected later from the
-  // Atlas Dashboard (Settings), so MT5 does not need to be present at install.
+  // MetaTrader 5 credentials are collected on a wizard page (see
+  // InitializeWizard) and written to the .env files before the services
+  // start, so Atlas connects to MT5 right after installation. Leaving the
+  // fields blank keeps the old behaviour (configure later from the dashboard).
   Result := True;
 end;
 
