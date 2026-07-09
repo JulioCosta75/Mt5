@@ -30,18 +30,26 @@ mt5_service = MT5Service(
     password=settings.mt5_password,
     server=settings.mt5_server,
     terminal_path=settings.mt5_terminal_path,
+    configured=settings.configured,
 )
 recorder = SnapshotRecorder(mt5_service, storage, settings.snapshot_interval_seconds)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    try:
-        mt5_service.initialize()
-    except MT5Error as e:
-        logger.error("MT5 initialize failed at startup: %s", e)
-        # Keep running so /health can report the failure; consumer can decide
-    recorder.start()
+    if not settings.configured:
+        logger.warning(
+            "Bridge starting in UNCONFIGURED mode — no MT5 account set. "
+            "The HTTP server and /health are available; configure MT5 from the "
+            "installer or the dashboard Settings page and restart to connect."
+        )
+    else:
+        try:
+            mt5_service.initialize()
+        except MT5Error as e:
+            logger.error("MT5 initialize failed at startup: %s", e)
+            # Keep running so /health can report the failure; consumer can decide
+        recorder.start()
     yield
     recorder.stop()
     mt5_service.shutdown()

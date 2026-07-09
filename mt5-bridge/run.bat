@@ -5,7 +5,8 @@ REM
 REM Pre-requisites:
 REM   1. Python 3.10-3.12 installed and on PATH
 REM   2. MT5 terminal installed, logged in, Algo Trading enabled
-REM   3. `.env` file present (copy from .env.example and edit)
+REM   3. `.env` file (optional) — copy from .env.example and edit. Without
+REM      it the bridge still starts in UNCONFIGURED mode and serves /health.
 REM -----------------------------------------------------------
 
 cd /d "%~dp0"
@@ -24,9 +25,10 @@ if not exist ".venv\.installed" (
 )
 
 if not exist ".env" (
-    echo .env not found. Copy .env.example to .env and edit it first.
-    pause
-    exit /b 1
+    echo [WARN] .env not found - starting in UNCONFIGURED mode.
+    echo        The bridge will serve /health and report "unconfigured"
+    echo        until you copy .env.example to .env and add your MT5 account
+    echo        ^(or configure it from the dashboard^), then restart.
 )
 
 echo Starting MT5 bridge on port from .env (default 8002)...

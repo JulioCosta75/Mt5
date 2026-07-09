@@ -18,11 +18,14 @@ from typing import Any
 
 try:
     import MetaTrader5 as mt5  # type: ignore
-except ImportError as e:  # pragma: no cover
-    raise RuntimeError(
-        "MetaTrader5 package is required. Install with `pip install MetaTrader5`. "
-        "Note: it only works on Windows."
-    ) from e
+    _MT5_AVAILABLE = True
+except Exception as _imp_err:  # noqa: BLE001  (ImportError on non-Windows, etc.)
+    # Don't crash the whole bridge just because the MetaTrader5 library isn't
+    # importable (e.g. not yet installed, or wrong platform). The bridge still
+    # boots and serves /health; connecting is only attempted once configured.
+    mt5 = None  # type: ignore
+    _MT5_AVAILABLE = False
+    _MT5_IMPORT_ERROR = str(_imp_err)
 
 logger = logging.getLogger(__name__)
 _lock = threading.Lock()
@@ -44,16 +47,33 @@ def _check(result, action: str):
 
 
 class MT5Service:
-    def __init__(self, login: int, password: str, server: str, terminal_path: str | None = None):
+    def __init__(self, login: int, password: str, server: str,
+                 terminal_path: str | None = None, configured: bool = True):
         self.login = login
         self.password = password
         self.server = server
         self.terminal_path = terminal_path
+        self.configured = configured
         self._initialized = False
         self._last_error: str | None = None
 
     # ---- lifecycle ----
     def initialize(self):
+        if not self.configured:
+            # No MT5 account set up yet — stay idle instead of crashing. The
+            # bridge keeps serving /health so the dashboard can report status.
+            self._initialized = False
+            self._last_error = "MT5 not configured"
+            logger.warning(
+                "MT5 credentials not configured — bridge running in "
+                "UNCONFIGURED mode. Set them from the installer or the "
+                "dashboard Settings page; the bridge will connect on restart."
+            )
+            return
+        if not _MT5_AVAILABLE:
+            self._initialized = False
+            self._last_error = f"MetaTrader5 library unavailable: {_MT5_IMPORT_ERROR}"
+            raise MT5Error(-1, self._last_error)
         with _lock:
             kwargs = {}
             if self.terminal_path:
@@ -81,11 +101,42 @@ class MT5Service:
 
     # ---- queries ----
     def health(self) -> dict:
+        if not self.configured:
+            # Unconfigured but alive: the whole point of graceful degradation.
+            return {
+                "status": "unconfigured",
+                "configured": False,
+                "terminal_connected": False,
+                "account_logged_in": False,
+                "trade_allowed": False,
+                "login": None,
+                "server": None,
+                "last_error": None,
+                "message": ("MetaTrader 5 account not configured yet. Set it up "
+                            "from the installer or the dashboard Settings page — "
+                            "the bridge will connect automatically on restart."),
+                "server_time": datetime.now(timezone.utc).isoformat(),
+            }
+        if not _MT5_AVAILABLE:
+            return {
+                "status": "degraded",
+                "configured": True,
+                "terminal_connected": False,
+                "account_logged_in": False,
+                "trade_allowed": False,
+                "login": self.login,
+                "server": self.server,
+                "last_error": f"MetaTrader5 library unavailable: {_MT5_IMPORT_ERROR}",
+                "message": ("The MetaTrader5 Python library is not available on "
+                            "this host. Reinstall Atlas or run install_deps."),
+                "server_time": datetime.now(timezone.utc).isoformat(),
+            }
         with _lock:
             term = mt5.terminal_info()
             acc = mt5.account_info() if self._initialized else None
         return {
             "status": "ok" if self._initialized and term and term.connected else "degraded",
+            "configured": True,
             "terminal_connected": bool(term and term.connected),
             "account_logged_in": bool(acc),
             "trade_allowed": bool(term and term.trade_allowed),
@@ -96,6 +147,8 @@ class MT5Service:
         }
 
     def account_info(self) -> dict:
+        if not self.configured:
+            raise MT5Error(-1, "MT5 not configured")
         with _lock:
             acc = _check(mt5.account_info(), "account_info")
             term = mt5.terminal_info()
