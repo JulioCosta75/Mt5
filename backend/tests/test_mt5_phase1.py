@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://atlas-installer-test.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://inno-setup-fix.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
 
 # Make /app/backend importable for the in-process tests

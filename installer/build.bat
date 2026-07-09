@@ -7,8 +7,16 @@ REM ============================================================
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
+REM ---- Build-script revision marker ------------------------------------
+REM  Bump BUILD_REV whenever build.bat changes so a running VPS can prove
+REM  (from its own console output) exactly which script it is executing.
+REM  If you DO NOT see this banner + the [setup] auto-install lines below,
+REM  you are running an OLD build.bat -> re-clone / checkout the correct branch.
+set "BUILD_REV=iscc-autoinstall-r2"
+
 echo.
 echo === Atlas installer builder ===
+echo === build.bat revision: %BUILD_REV% (Inno Setup 6 auto-install ENABLED) ===
 echo.
 
 REM ---- Resolve version (single source of truth: backend\VERSION) ----

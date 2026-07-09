@@ -8,7 +8,7 @@ import sys
 import json
 
 # Backend URL from frontend/.env
-BASE_URL = "https://atlas-installer-test.preview.emergentagent.com/api"
+BASE_URL = "https://inno-setup-fix.preview.emergentagent.com/api"
 
 def test_root():
     """Test GET /api/ -> 200 {status:'ok'}"""
