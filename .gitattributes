@@ -9,3 +9,9 @@
 
 # Keep shell scripts LF for Linux.
 *.sh text eol=lf
+
+# Binary assets: never apply text/EOL normalization (would corrupt them).
+*.ico binary
+*.png binary
+*.jpg binary
+*.exe binary
