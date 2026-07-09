@@ -9,7 +9,7 @@ import json
 from datetime import datetime
 
 # Base URL from frontend/.env
-BASE_URL = "https://atlas-professional.preview.emergentagent.com/api"
+BASE_URL = "https://atlas-installer-test.preview.emergentagent.com/api"
 
 def print_section(title):
     print(f"\n{'='*80}")
