@@ -322,3 +322,24 @@ class TestMT5ModeActivation:
         rl2 = r2.json()["risk_limits"]
         assert rl2["max_daily_loss_pct"] == 4.2
         assert rl2["max_open_positions"] == 11
+
+    def test_api_root(self, mt5_server):
+        r = _get(mt5_server, "/api/")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d.get("status") == "ok"
+        assert d.get("source") == "mt5"
+
+    def test_alerts_empty_feed(self, mt5_server):
+        r = _get(mt5_server, "/api/alerts")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["count"] == 0
+        assert d["alerts"] == []
+
+    def test_sim_tick_noop(self, mt5_server):
+        r = _post(mt5_server, "/api/sim/tick")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d.get("ok") is True
+        assert d.get("source") == "mt5"

@@ -64,7 +64,8 @@ echo.
 echo Installing service: AtlasBridge
 "%NSSM%" stop    AtlasBridge >nul 2>nul
 "%NSSM%" remove  AtlasBridge confirm >nul 2>nul
-"%NSSM%" install AtlasBridge "%PYTHON%" "bridge_server.py"
+REM Use the same uvicorn module pattern as AtlasBackend (reliable under NSSM).
+"%NSSM%" install AtlasBridge "%PYTHON%" "-m" "uvicorn" "bridge_server:app" "--host" "127.0.0.1" "--port" "8002"
 "%NSSM%" set AtlasBridge AppDirectory       "%BRIDGE_DIR%"
 "%NSSM%" set AtlasBridge AppStdout          "%LOGS_DIR%\bridge.out.log"
 "%NSSM%" set AtlasBridge AppStderr          "%LOGS_DIR%\bridge.err.log"

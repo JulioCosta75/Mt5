@@ -35,6 +35,10 @@ class RiskLimitsPayload(BaseModel):
     max_open_positions: Optional[int] = None
 
 
+class AckAlertPayload(BaseModel):
+    acknowledged: bool = True
+
+
 def build_router(cache) -> APIRouter:
     """Factory that wires the routes against the provided cache."""
     router = APIRouter(prefix="/api")
@@ -232,6 +236,29 @@ def build_router(cache) -> APIRouter:
         login = int(account_id.removeprefix("MT5-"))
         merged = await cache.update_risk_limits(login, payload.model_dump(exclude_none=True))
         return {"account_id": account_id, "risk_limits": merged}
+
+    @router.get("/")
+    async def root():
+        return {"service": "MT5 Quant Supervision API", "status": "ok", "source": "mt5"}
+
+    @router.get("/alerts")
+    async def list_alerts(severity: Optional[str] = None, unacknowledged_only: bool = False):
+        # Phase 2 — live alert engine; MT5 mode returns an empty feed for now.
+        items: list[dict] = []
+        if severity:
+            items = [a for a in items if a.get("severity") == severity.upper()]
+        if unacknowledged_only:
+            items = [a for a in items if not a.get("acknowledged")]
+        return {"count": len(items), "alerts": items}
+
+    @router.post("/alerts/{alert_id}/ack")
+    async def ack_alert(alert_id: str, payload: AckAlertPayload):
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    @router.post("/sim/tick")
+    async def tick():
+        # No-op in MT5 mode — equity updates come from the live bridge feed.
+        return {"ok": True, "server_time": await _server_time(), "source": "mt5"}
 
     @router.get("/kpis")
     async def kpis():
