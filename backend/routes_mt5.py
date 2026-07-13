@@ -14,13 +14,13 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from mt5_adapter import (
-    account_from_bridge,
     drawdown_from_equity,
     orders_passthrough,
     positions_passthrough,
     trades_from_deals,
 )
 from mt5_client import BridgeClient, clients
+from mt5_live import MT5LiveData
 
 logger = logging.getLogger("mt5-routes")
 
@@ -41,71 +41,22 @@ class AckAlertPayload(BaseModel):
 
 def build_router(cache) -> APIRouter:
     """Factory that wires the routes against the provided cache."""
+    live = MT5LiveData(cache)
     router = APIRouter(prefix="/api")
 
     async def _try_account(client: BridgeClient) -> dict | None:
-        try:
-            return await client.account()
-        except (httpx.HTTPError, httpx.HTTPStatusError) as e:
-            logger.warning("bridge %s account fetch failed: %s", client.endpoint.url, e)
-            return None
+        return await live._try_account(client)
 
     async def _resolve_login_to_client(login: int) -> BridgeClient | None:
-        # naive lookup: try every configured client until one matches login
         for c in clients():
             acc = await _try_account(c)
             if acc and int(acc.get("login", -1)) == login:
                 return c
         return None
 
-    async def _enriched_account(client: BridgeClient, bridge_account: dict) -> dict:
-        login = int(bridge_account["login"])
-        try:
-            positions = await client.positions()
-        except httpx.HTTPError:
-            positions = []
-        overrides = await cache.get_overrides(login)
-        anchor_balance = await cache.maybe_set_daily_anchor(login, bridge_account.get("balance", 0.0))
-
-        # equity/drawdown from cached series if available
-        eq_doc = await cache.get(f"equity:{login}")
-        series = (eq_doc or {}).get("payload", {}).get("series", []) or []
-        _, max_dd, current_dd = drawdown_from_equity(series)
-
-        acc = account_from_bridge(
-            bridge_account,
-            positions_count=len(positions),
-            risk_limits=overrides["risk_limits"],
-            kill_switch=overrides["kill_switch"],
-            max_dd=max_dd,
-            current_dd=current_dd,
-            daily_pnl_anchor=anchor_balance,
-        )
-        await cache.put(f"account:{login}", acc)
-        return acc
-
-    # ---- /api/accounts ----
     @router.get("/accounts")
     async def list_accounts():
-        out: list[dict] = []
-        any_reachable = False
-        for c in clients():
-            bridge_acc = await _try_account(c)
-            if bridge_acc:
-                any_reachable = True
-                out.append(await _enriched_account(c, bridge_acc))
-            # otherwise: try next bridge (don't break — others may still be up)
-        if not any_reachable:
-            # fall back to all cached snapshots
-            cached_keys = await cache.cache.find(
-                {"_id": {"$regex": r"^account:"}}, {"_id": 0}
-            ).to_list(50)
-            for d in cached_keys:
-                payload = d.get("payload")
-                if payload:
-                    payload["stale"] = True
-                    out.append(payload)
-        return out
+        return await live.list_accounts()
 
     @router.get("/accounts/{account_id}")
     async def get_account(account_id: str):
@@ -128,7 +79,7 @@ def build_router(cache) -> APIRouter:
                 p["stale"] = True
                 return p
             raise HTTPException(503, "bridge unreachable")
-        return await _enriched_account(client, bridge_acc)
+        return await live._enriched_account(client, bridge_acc)
 
     @router.get("/accounts/{account_id}/equity")
     async def equity(account_id: str, points: int = 200):
@@ -220,8 +171,6 @@ def build_router(cache) -> APIRouter:
     async def kill_switch(account_id: str, payload: KillSwitchPayload):
         login = int(account_id.removeprefix("MT5-"))
         await cache.set_kill_switch(login, payload.enabled)
-        # Phase 1: this is an *advisory* flag stored in Mongo. Closing live
-        # positions on MT5 is Phase 2 (requires order_send via bridge).
         cached = await cache.get(f"account:{login}")
         if cached:
             cached["payload"]["kill_switch"] = payload.enabled
@@ -243,7 +192,6 @@ def build_router(cache) -> APIRouter:
 
     @router.get("/alerts")
     async def list_alerts(severity: Optional[str] = None, unacknowledged_only: bool = False):
-        # Phase 2 — live alert engine; MT5 mode returns an empty feed for now.
         items: list[dict] = []
         if severity:
             items = [a for a in items if a.get("severity") == severity.upper()]
@@ -257,17 +205,16 @@ def build_router(cache) -> APIRouter:
 
     @router.post("/sim/tick")
     async def tick():
-        # No-op in MT5 mode — equity updates come from the live bridge feed.
         return {"ok": True, "server_time": await _server_time(), "source": "mt5"}
 
     @router.get("/kpis")
     async def kpis():
-        accs = await list_accounts()
+        accs = await live.list_accounts()
         total_equity = sum(a.get("equity", 0) for a in accs)
         total_balance = sum(a.get("balance", 0) for a in accs)
         daily_pnl = sum(a.get("daily_pnl", 0) for a in accs)
         open_positions = sum(a.get("open_positions", 0) for a in accs)
-        live = sum(1 for a in accs if a.get("status") == "LIVE")
+        live_count = sum(1 for a in accs if a.get("status") == "LIVE")
         avg_dd = round(sum(a.get("current_drawdown", 0) for a in accs) / max(len(accs), 1), 2) if accs else 0.0
         return {
             "total_equity": round(total_equity, 2),
@@ -275,10 +222,10 @@ def build_router(cache) -> APIRouter:
             "daily_pnl": round(daily_pnl, 2),
             "daily_pnl_pct": round(daily_pnl / total_equity * 100, 2) if total_equity else 0.0,
             "open_positions": open_positions,
-            "active_alerts": 0,           # Phase 2
+            "active_alerts": 0,
             "critical_alerts": 0,
             "accounts_total": len(accs),
-            "accounts_live": live,
+            "accounts_live": live_count,
             "avg_drawdown": avg_dd,
             "server_time": (await _server_time()),
             "source": "mt5",
@@ -294,6 +241,7 @@ def build_router(cache) -> APIRouter:
                 out.append({"url": c.endpoint.url, "status": "unreachable", "error": str(e)})
         return {"bridges": out, "configured": len(out)}
 
+    router._mt5_live = live  # type: ignore[attr-defined]
     return router
 
 

@@ -131,6 +131,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("Overview");
   const [buildInfo, setBuildInfo] = useState(null);
   const [mt5Status, setMt5Status] = useState(null);
+  const [systemHealth, setSystemHealth] = useState(null);
   const selectedIdRef = useRef(null);
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
 
@@ -175,6 +176,12 @@ export default function Dashboard() {
       } catch (e) {
         if (!cancelled) setMt5Status(null);
       }
+      try {
+        const h = await api.systemHealth();
+        if (!cancelled) setSystemHealth(h);
+      } catch (e) {
+        if (!cancelled) setSystemHealth(null);
+      }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -201,6 +208,9 @@ export default function Dashboard() {
   };
 
   const selectedAccount = accounts.find(a => a.id === selectedId);
+  const strategyCount = new Set(accounts.map((a) => a.strategy).filter(Boolean)).size;
+  const isMt5Mode = systemHealth?.mode === "mt5" || mt5Status?.mode === "mt5";
+  const bridgeConnected = Boolean(systemHealth?.bridge?.reachable && systemHealth?.bridge?.terminal_connected);
 
   return (
     <div className="App" data-testid="dashboard">
@@ -276,12 +286,29 @@ export default function Dashboard() {
                 <span className="pulse-dot" />
               </div>
               <div style={{ padding: 14, fontSize: 11, color: "var(--text-secondary)" }}>
-                <Row label="API Latency" value="42 ms" />
-                <Row label="MT5 Bridge" value={<span className="cell-pos">CONNECTED</span>} />
-                <Row label="Risk Engine" value={<span className="cell-pos">ACTIVE</span>} />
-                <Row label="Telegram Notif" value={<span className="cell-pos">ENABLED</span>} />
+                <Row label="API Latency" value={isMt5Mode ? "—" : "42 ms"} />
+                <Row
+                  label="MT5 Bridge"
+                  value={
+                    bridgeConnected
+                      ? <span className="cell-pos">CONNECTED</span>
+                      : <span className="cell-neg">{isMt5Mode ? "DISCONNECTED" : "N/A"}</span>
+                  }
+                />
+                <Row
+                  label="Risk Engine"
+                  value={
+                    isMt5Mode
+                      ? (accounts.length ? <span className="cell-pos">ACTIVE</span> : "No data")
+                      : <span className="cell-pos">ACTIVE</span>
+                  }
+                />
+                <Row label="Telegram Notif" value={isMt5Mode ? "N/A" : <span className="cell-pos">ENABLED</span>} />
                 <Row label="Last Heartbeat" value={kpis ? fmt.timeShort(kpis.server_time) : "—"} />
-                <Row label="Strategies Loaded" value={<span className="mono">6</span>} />
+                <Row
+                  label="Strategies Loaded"
+                  value={<span className="mono">{strategyCount}</span>}
+                />
               </div>
             </div>
           </aside>

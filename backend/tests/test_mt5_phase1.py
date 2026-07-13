@@ -343,3 +343,21 @@ class TestMT5ModeActivation:
         d = r.json()
         assert d.get("ok") is True
         assert d.get("source") == "mt5"
+
+    def test_supervision_snapshot_uses_mt5_feed_not_mock(self, mt5_server):
+        kpis = _get(mt5_server, "/api/kpis").json()
+        snap = _get(mt5_server, "/api/supervision/snapshot").json()
+        assert snap["mode"] == "mt5"
+        assert snap["accounts"]["total"] != 8
+        assert snap["alerts"]["active"] == 0
+        assert snap["alerts"]["critical"] == 0
+        assert snap["kpis"]["total_equity"] == kpis["total_equity"]
+        assert snap["accounts"]["total"] == kpis["accounts_total"]
+        assert "ACC-" not in str(snap)
+
+    def test_supervision_report_metrics_match_live_kpis(self, mt5_server):
+        kpis = _get(mt5_server, "/api/kpis").json()
+        report = _post(mt5_server, "/api/atlas/report", json={"source": "pytest-mt5"}).json()
+        assert report["metrics"]["total_equity"] == kpis["total_equity"]
+        assert report["metrics"]["accounts_live"] == kpis["accounts_live"]
+        assert report["metrics"]["active_alerts"] == 0
