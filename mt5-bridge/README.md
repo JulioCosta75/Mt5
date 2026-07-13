@@ -186,5 +186,6 @@ MT5_BRIDGE_TOKENS=token1,token2
 | `MT5 error [-10005]` no startup | Terminal MT5 não está aberto | Abra o terminal MT5 |
 | `MT5 error [-10004]` | Login/password/server errados | Reveja `.env` |
 | `MT5 error [-10027]` | Algo trading desativado | Ative em Tools → Options → Expert Advisors |
+| `MT5 error [-10003]` | `terminal64.exe` não encontrado / path em falta | Deixe o MT5 **a correr** antes de iniciar o Atlas (auto-detecção) ou defina `MT5_TERMINAL_PATH` com barras `/` (ex.: `C:/Program Files/Darwinex MT5/terminal64.exe`) |
 | `/health` mostra `last_error="initialize failed"` | DLL do MT5 não acessível | Defina `MT5_TERMINAL_PATH` para o `terminal64.exe` correto |
 | Equity history vazia | Sem deals nos últimos 90 dias | Diminua `days` ou aguarde snapshots ao vivo |

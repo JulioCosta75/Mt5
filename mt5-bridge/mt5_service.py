@@ -13,8 +13,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+import time
 from datetime import datetime, timezone, timedelta
 from typing import Any
+
+from mt5_terminal import resolve_terminal_path
 
 try:
     import MetaTrader5 as mt5  # type: ignore
@@ -56,6 +59,74 @@ class MT5Service:
         self.configured = configured
         self._initialized = False
         self._last_error: str | None = None
+        self._resolved_terminal_path: str | None = None
+        self._last_init_attempt: float = 0.0
+
+    def _format_init_error(self, err: tuple | object, candidates: list[str]) -> str:
+        msg = err[1] if isinstance(err, tuple) and len(err) > 1 else str(err)
+        detail = f"initialize failed: {err}"
+        if candidates:
+            detail += f"; tried: {', '.join(candidates[:4])}"
+            if len(candidates) > 4:
+                detail += f" (+{len(candidates) - 4} more)"
+        if self._resolved_terminal_path:
+            detail += f"; resolved_path={self._resolved_terminal_path}"
+        return detail
+
+    def _try_initialize(self, *, force: bool = False) -> bool:
+        """Connect (or reconnect) to MT5. Returns True when initialized."""
+        if not self.configured:
+            self._initialized = False
+            self._last_error = "MT5 not configured"
+            return False
+        if self._initialized:
+            return True
+        if not _MT5_AVAILABLE:
+            self._last_error = f"MetaTrader5 library unavailable: {_MT5_IMPORT_ERROR}"
+            return False
+
+        now = time.monotonic()
+        if not force and now - self._last_init_attempt < 15:
+            return False
+        self._last_init_attempt = now
+
+        path, candidates = resolve_terminal_path(self.terminal_path)
+        self._resolved_terminal_path = path
+        if not path:
+            self._last_error = (
+                "MetaTrader 5 x64 not found — set MT5_TERMINAL_PATH to your "
+                "terminal64.exe (e.g. C:/Program Files/MetaTrader 5/terminal64.exe) "
+                "or start MetaTrader 5 before Atlas."
+            )
+            return False
+
+        with _lock:
+            try:
+                mt5.shutdown()
+            except Exception:  # noqa: BLE001
+                pass
+            ok = mt5.initialize(path=path)
+            if not ok:
+                err = mt5.last_error()
+                self._last_error = self._format_init_error(err, candidates)
+                self._initialized = False
+                return False
+            ok = mt5.login(self.login, password=self.password, server=self.server)
+            if not ok:
+                err = mt5.last_error()
+                mt5.shutdown()
+                self._last_error = f"login failed: {err}"
+                self._initialized = False
+                return False
+            self._initialized = True
+            self._last_error = None
+            logger.info(
+                "MT5 connected: login=%s server=%s terminal=%s",
+                self.login,
+                self.server,
+                path,
+            )
+            return True
 
     # ---- lifecycle ----
     def initialize(self):
@@ -74,24 +145,12 @@ class MT5Service:
             self._initialized = False
             self._last_error = f"MetaTrader5 library unavailable: {_MT5_IMPORT_ERROR}"
             raise MT5Error(-1, self._last_error)
-        with _lock:
-            kwargs = {}
-            if self.terminal_path:
-                kwargs["path"] = self.terminal_path
-            ok = mt5.initialize(**kwargs)
-            if not ok:
-                err = mt5.last_error()
-                self._last_error = f"initialize failed: {err}"
-                raise MT5Error(err[0] if isinstance(err, tuple) else -1, str(err))
-            ok = mt5.login(self.login, password=self.password, server=self.server)
-            if not ok:
-                err = mt5.last_error()
-                mt5.shutdown()
-                self._last_error = f"login failed: {err}"
-                raise MT5Error(err[0] if isinstance(err, tuple) else -1, str(err))
-            self._initialized = True
-            self._last_error = None
-            logger.info("MT5 connected: login=%s server=%s", self.login, self.server)
+        if not self._try_initialize(force=True):
+            code = -10003
+            err = self._last_error or "initialize failed"
+            if isinstance(err, str) and "login failed" in err.lower():
+                code = -10004
+            raise MT5Error(code, err)
 
     def shutdown(self):
         with _lock:
@@ -131,8 +190,10 @@ class MT5Service:
                             "this host. Reinstall Atlas or run install_deps."),
                 "server_time": datetime.now(timezone.utc).isoformat(),
             }
+        if not self._initialized:
+            self._try_initialize()
         with _lock:
-            term = mt5.terminal_info()
+            term = mt5.terminal_info() if self._initialized else None
             acc = mt5.account_info() if self._initialized else None
         return {
             "status": "ok" if self._initialized and term and term.connected else "degraded",
@@ -142,6 +203,7 @@ class MT5Service:
             "trade_allowed": bool(term and term.trade_allowed),
             "login": self.login,
             "server": self.server,
+            "terminal_path": self._resolved_terminal_path,
             "last_error": self._last_error,
             "server_time": datetime.now(timezone.utc).isoformat(),
         }
@@ -149,6 +211,8 @@ class MT5Service:
     def account_info(self) -> dict:
         if not self.configured:
             raise MT5Error(-1, "MT5 not configured")
+        if not self._initialized and not self._try_initialize(force=True):
+            raise MT5Error(-10003, self._last_error or "MT5 not initialized")
         with _lock:
             acc = _check(mt5.account_info(), "account_info")
             term = mt5.terminal_info()
