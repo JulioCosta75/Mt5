@@ -28,8 +28,11 @@ Decision Support is **out of scope** for this foundation (Phase 4+).
 │ phase3_knowledge_engine/                                     │
 │                                                              │
 │  domain/          Pure entities, rules, state machine        │
+│                   ports/        Repository & source contracts│
 │  application/     KnowledgeEngineService use-cases           │
+│                   StateTransitionService (sole FSM entry)    │
 │  infrastructure/  SQLite knowledge.db repositories           │
+│  adapters/        Ingestion stubs (EvidenceSourcePort)       │
 │  api/contract.py  Future REST DTOs (not mounted)             │
 └─────────────────────────────────────────────────────────────┘
 ```

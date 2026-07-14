@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -17,9 +16,6 @@ from phase3_knowledge_engine.domain.entities import (
     KnowledgeRecord,
     MarketContext,
 )
-from phase3_knowledge_engine.domain.validation_states import ValidationState
-from phase3_knowledge_engine.domain.rules import DomainRuleViolation
-from phase3_knowledge_engine.domain.validation_states import can_transition
 
 
 def _utcnow() -> datetime:
@@ -52,6 +48,45 @@ class KnowledgeRepository:
         ddl = schema_file.read_text(encoding="utf-8")
         with self._connect() as cx:
             cx.executescript(ddl)
+        self._run_migrations()
+
+    def _schema_version(self) -> int:
+        with self._connect() as cx:
+            row = cx.execute(
+                "SELECT value FROM schema_meta WHERE key = 'schema_version'",
+            ).fetchone()
+        return int(row["value"]) if row else 1
+
+    def _run_migrations(self) -> None:
+        if self._schema_version() >= 2:
+            return
+        with self._connect() as cx:
+            columns = {
+                r[1] for r in cx.execute("PRAGMA table_info(evidence_items)").fetchall()
+            }
+            if "source_system" not in columns:
+                cx.execute(
+                    "ALTER TABLE evidence_items ADD COLUMN "
+                    "source_system TEXT NOT NULL DEFAULT 'manual'"
+                )
+            if "external_id" not in columns:
+                cx.execute(
+                    "ALTER TABLE evidence_items ADD COLUMN external_id TEXT"
+                )
+            if "ingestion_batch_id" not in columns:
+                cx.execute(
+                    "ALTER TABLE evidence_items ADD COLUMN ingestion_batch_id TEXT"
+                )
+            cx.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_evidence_source_external
+                ON evidence_items(source_system, external_id)
+                WHERE external_id IS NOT NULL
+                """
+            )
+            cx.execute(
+                "UPDATE schema_meta SET value = '2' WHERE key = 'schema_version'"
+            )
 
     # ---- EA profiles ---------------------------------------------------------
     def save_ea_profile(self, profile: EAKnowledgeProfile) -> EAKnowledgeProfile:
@@ -131,8 +166,9 @@ class KnowledgeRepository:
                     id, ea_profile_id, evidence_type, occurred_at, symbol,
                     session, market_regime, volatility, spread, pnl, drawdown,
                     entry_reason, exit_reason, ea_version, account_type, test_type,
-                    raw_payload_json, context_id, created_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    raw_payload_json, context_id, source_system, external_id,
+                    ingestion_batch_id, created_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     str(item.id), str(item.ea_profile_id), item.evidence_type,
@@ -140,10 +176,44 @@ class KnowledgeRepository:
                     item.market_regime, item.volatility, item.spread,
                     item.pnl, item.drawdown, item.entry_reason, item.exit_reason,
                     item.ea_version, item.account_type, item.test_type,
-                    json.dumps(item.raw_payload), context_id, _iso(_utcnow()),
+                    json.dumps(item.raw_payload), context_id, item.source_system,
+                    item.external_id, item.ingestion_batch_id, _iso(_utcnow()),
                 ),
             )
         return item
+
+    def get_evidence(self, evidence_id: UUID) -> EvidenceItem | None:
+        with self._connect() as cx:
+            row = cx.execute(
+                "SELECT * FROM evidence_items WHERE id = ?", (str(evidence_id),),
+            ).fetchone()
+        if not row:
+            return None
+        return self._row_to_evidence(row)
+
+    def _row_to_evidence(self, row: sqlite3.Row) -> EvidenceItem:
+        return EvidenceItem(
+            id=UUID(row["id"]),
+            ea_profile_id=UUID(row["ea_profile_id"]),
+            evidence_type=row["evidence_type"],
+            occurred_at=datetime.fromisoformat(row["occurred_at"]),
+            symbol=row["symbol"],
+            session=row["session"],
+            market_regime=row["market_regime"],
+            volatility=row["volatility"],
+            spread=row["spread"],
+            pnl=row["pnl"],
+            drawdown=row["drawdown"],
+            entry_reason=row["entry_reason"],
+            exit_reason=row["exit_reason"],
+            ea_version=row["ea_version"],
+            account_type=row["account_type"],
+            test_type=row["test_type"],
+            raw_payload=json.loads(row["raw_payload_json"]),
+            source_system=row["source_system"],
+            external_id=row["external_id"],
+            ingestion_batch_id=row["ingestion_batch_id"],
+        )
 
     def _save_context(self, ctx: MarketContext) -> UUID:
         cid = _uuid()
@@ -318,39 +388,3 @@ class KnowledgeRepository:
                 ),
             )
         return impact
-
-    def transition_state(
-        self,
-        record_id: UUID,
-        to_state: ValidationState,
-        *,
-        actor: str,
-        justification: str,
-        evidence_ids: list[UUID] | None = None,
-        human_review_recorded: bool = False,
-    ) -> KnowledgeRecord:
-        record = self.get_knowledge_record(record_id)
-        if not record:
-            raise DomainRuleViolation(f"Knowledge record {record_id} not found.")
-        from_state = ValidationState(record.validation_state)
-        if not can_transition(from_state, to_state, human_review_recorded=human_review_recorded):
-            raise DomainRuleViolation(
-                f"Illegal transition {from_state.value} -> {to_state.value} "
-                f"(human_review_recorded={human_review_recorded})."
-            )
-        record.validation_state = to_state.value
-        if human_review_recorded:
-            record.last_reviewed_at = _utcnow()
-            record.reviewed_by = actor
-        self.save_knowledge_record(record)
-        self.append_audit(AuditTrailEntry(
-            id=_uuid(),
-            knowledge_record_id=record_id,
-            from_state=from_state.value,
-            to_state=to_state.value,
-            transitioned_at=_utcnow(),
-            actor=actor,
-            justification=justification,
-            evidence_ids=evidence_ids or [],
-        ))
-        return record

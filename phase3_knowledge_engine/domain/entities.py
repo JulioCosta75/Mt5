@@ -9,6 +9,7 @@ from uuid import UUID
 
 
 EvidenceType = Literal["trade", "backtest_run", "incident", "metric_snapshot"]
+SourceSystem = Literal["manual", "mt5_bridge", "backtest_export", "metric_feed", "api", "stub"]
 AccountType = Literal["demo", "live"]
 TestType = Literal["forward", "backtest", "paper"]
 EAStatus = Literal["active", "restricted", "stopped", "testing"]
@@ -51,6 +52,10 @@ class EvidenceItem:
     test_type: TestType | None = None
     raw_payload: dict[str, Any] = field(default_factory=dict)
     context: MarketContext | None = None
+    # Provenance — defaults preserve pre-integration behaviour (manual entry).
+    source_system: SourceSystem = "manual"
+    external_id: str | None = None
+    ingestion_batch_id: str | None = None
 
 
 @dataclass

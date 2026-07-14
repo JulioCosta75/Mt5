@@ -11,7 +11,7 @@ DDL source: `phase3_knowledge_engine/infrastructure/schema.sql`
 | `schema_meta` | Schema version tracking |
 | `ea_profiles` | EA knowledge dossiers |
 | `market_contexts` | Contextual envelopes |
-| `evidence_items` | Trades, backtests, incidents |
+| `evidence_items` | Trades, backtests, incidents (with provenance) |
 | `knowledge_records` | Statements in validation lifecycle |
 | `audit_trail` | Immutable transition history |
 | `evidence_impacts` | How new evidence affected knowledge |
@@ -21,6 +21,7 @@ DDL source: `phase3_knowledge_engine/infrastructure/schema.sql`
 ## Key indexes
 
 - `evidence_items(ea_profile_id)`
+- `evidence_items(source_system, external_id)` — unique when `external_id` set (dedup)
 - `knowledge_records(ea_profile_id, validation_state)`
 - `audit_trail(knowledge_record_id)`
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
+from phase3_knowledge_engine.application.state_transition_service import StateTransitionService
 from phase3_knowledge_engine.config import MIN_OBSERVATIONS_FOR_PATTERN
 from phase3_knowledge_engine.domain.confidence import compute_confidence
 from phase3_knowledge_engine.domain.entities import (
@@ -15,6 +16,7 @@ from phase3_knowledge_engine.domain.entities import (
     KnowledgeRecord,
     MarketContext,
 )
+from phase3_knowledge_engine.domain.ports.repository import KnowledgeRepositoryPort
 from phase3_knowledge_engine.domain.rules import (
     DomainRuleViolation,
     assert_can_promote_to_knowledge,
@@ -24,14 +26,14 @@ from phase3_knowledge_engine.domain.rules import (
     assert_single_observation_not_knowledge,
 )
 from phase3_knowledge_engine.domain.validation_states import ValidationState
-from phase3_knowledge_engine.infrastructure.repositories import KnowledgeRepository
 
 
 class KnowledgeEngineService:
     """Phase 3 use-cases. Not wired to Phase 2 runtime."""
 
-    def __init__(self, repository: KnowledgeRepository):
+    def __init__(self, repository: KnowledgeRepositoryPort):
         self.repo = repository
+        self._transitions = StateTransitionService(repository)
 
     def register_ea_profile(self, profile: EAKnowledgeProfile) -> EAKnowledgeProfile:
         return self.repo.save_ea_profile(profile)
@@ -93,7 +95,7 @@ class KnowledgeEngineService:
             record.sample_size = similar_observation_count
             record.evidence_count = similar_observation_count
             self.repo.save_knowledge_record(record)
-        return self.repo.transition_state(
+        return self._transitions.transition(
             record_id,
             ValidationState.REPEATED_PATTERN,
             actor=actor,
@@ -123,7 +125,7 @@ class KnowledgeEngineService:
         )
         record.statement = statement
         self.repo.save_knowledge_record(record)
-        return self.repo.transition_state(
+        return self._transitions.transition(
             record_id,
             ValidationState.HYPOTHESIS,
             actor=actor,
@@ -145,7 +147,7 @@ class KnowledgeEngineService:
             record.evidence_count = len(evidence_ids)
             record.sample_size = len(evidence_ids)
             self.repo.save_knowledge_record(record)
-        return self.repo.transition_state(
+        return self._transitions.transition(
             record_id,
             ValidationState.EVIDENCE_UNDER_REVIEW,
             actor=actor,
@@ -196,7 +198,7 @@ class KnowledgeEngineService:
         )
         self.repo.save_knowledge_record(record)
 
-        return self.repo.transition_state(
+        return self._transitions.transition(
             record_id,
             to_state,
             actor=actor,
@@ -220,7 +222,7 @@ class KnowledgeEngineService:
         if not record:
             raise DomainRuleViolation("Knowledge record not found.")
         if record.validation_state == ValidationState.KNOWLEDGE.value and impact in ("weaken", "review", "invalidate"):
-            self.repo.transition_state(
+            self._transitions.transition(
                 knowledge_record_id,
                 ValidationState.EVIDENCE_UNDER_REVIEW,
                 actor=actor,

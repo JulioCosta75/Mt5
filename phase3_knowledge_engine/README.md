@@ -26,8 +26,11 @@ Forge Factory Lab principle (codified in `domain/rules.py`):
 phase3_knowledge_engine/
 ├── config.py              # feature flag OFF by default
 ├── domain/                # pure rules, entities, state machine
+│   └── ports/             # repository & evidence-source contracts
 ├── application/           # use-cases (orchestration)
+│   └── state_transition_service.py  # sole FSM entry point
 ├── infrastructure/        # SQLite knowledge.db
+├── adapters/ingestion/    # EvidenceSourcePort stubs (no MT5 yet)
 ├── api/contract.py        # future REST contract (NOT mounted)
 └── tests/                 # unit + lifecycle tests
 
