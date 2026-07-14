@@ -60,6 +60,12 @@ Environment variables (optional):
 | `PHASE3_KNOWLEDGE_ENGINE_ENABLED` | `false` | Master integration gate |
 | `PHASE3_KNOWLEDGE_DB_PATH` | `knowledge.db` | SQLite path |
 | `PHASE3_MIN_OBSERVATIONS_FOR_PATTERN` | `2` | RepeatedPattern threshold |
+| `PHASE3_MIN_EVIDENCE_FOR_KNOWLEDGE` | `10` | Minimum evidence count for Knowledge promotion (Rule 6) |
+| `PHASE3_MIN_SAMPLE_FOR_KNOWLEDGE` | `30` | Minimum sample size for Knowledge promotion (Rule 6) |
+
+Knowledge promotion thresholds are defined in `config.py` and consumed by
+`domain/rules.py` and `application/services.py`. Adjust via environment
+variables at process start; human review and other Rule 6 criteria are unchanged.
 
 ## Status
 

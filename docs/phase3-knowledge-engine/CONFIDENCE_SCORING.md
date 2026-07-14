@@ -29,14 +29,17 @@ Thresholds do **not** auto-promote. `KnowledgeEngineService.apply_human_review_t
 
 ## Knowledge promotion criteria (Rule 6)
 
-Independent of confidence:
+Independent of confidence (thresholds from `phase3_knowledge_engine/config.py`):
 
 - Documented relevance for future decisions
-- `evidence_count >= 10`
-- `sample_size >= 30`
+- `evidence_count >= MIN_EVIDENCE_FOR_KNOWLEDGE` (default **10**, env `PHASE3_MIN_EVIDENCE_FOR_KNOWLEDGE`)
+- `sample_size >= MIN_SAMPLE_FOR_KNOWLEDGE` (default **30**, env `PHASE3_MIN_SAMPLE_FOR_KNOWLEDGE`)
 - Context documented
 - Material contradictions resolved
 - Recorded human reviewer
+
+To adjust thresholds in a future deployment, set the environment variables before
+starting the Phase 3 process. No domain code changes are required.
 
 ## What confidence must not do
 

@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from phase3_knowledge_engine.config import MIN_OBSERVATIONS_FOR_PATTERN
+from phase3_knowledge_engine.config import (
+    MIN_EVIDENCE_FOR_KNOWLEDGE,
+    MIN_OBSERVATIONS_FOR_PATTERN,
+    MIN_SAMPLE_FOR_KNOWLEDGE,
+)
 from phase3_knowledge_engine.domain.validation_states import ValidationState
 
 KNOWLEDGE_PRINCIPLE = (
@@ -99,10 +103,16 @@ def assert_can_promote_to_knowledge(
     human_review_recorded: bool,
     reviewer: str | None,
     material_contradictions_resolved: bool,
-    min_evidence: int = 10,
-    min_sample: int = 30,
+    min_evidence: int | None = None,
+    min_sample: int | None = None,
 ) -> None:
     """Rule 6: Knowledge promotion criteria."""
+    evidence_threshold = (
+        min_evidence if min_evidence is not None else MIN_EVIDENCE_FOR_KNOWLEDGE
+    )
+    sample_threshold = (
+        min_sample if min_sample is not None else MIN_SAMPLE_FOR_KNOWLEDGE
+    )
     assert_human_review_for_promotion(
         ValidationState.KNOWLEDGE,
         human_review_recorded=human_review_recorded,
@@ -112,13 +122,13 @@ def assert_can_promote_to_knowledge(
         raise DomainRuleViolation(
             "Knowledge promotion requires documented relevance for future decisions."
         )
-    if evidence_count < min_evidence:
+    if evidence_count < evidence_threshold:
         raise DomainRuleViolation(
-            f"Insufficient evidence for Knowledge (need >={min_evidence}, got {evidence_count})."
+            f"Insufficient evidence for Knowledge (need >={evidence_threshold}, got {evidence_count})."
         )
-    if sample_size < min_sample:
+    if sample_size < sample_threshold:
         raise DomainRuleViolation(
-            f"Insufficient sample size for Knowledge (need >={min_sample}, got {sample_size})."
+            f"Insufficient sample size for Knowledge (need >={sample_threshold}, got {sample_size})."
         )
     if not context_documented:
         raise DomainRuleViolation("Knowledge promotion requires documented context.")

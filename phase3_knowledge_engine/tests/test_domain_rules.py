@@ -61,6 +61,15 @@ class TestHypothesisExplicit:
 
 
 class TestKnowledgePromotion:
+    def test_default_thresholds_match_config(self):
+        from phase3_knowledge_engine.config import (
+            MIN_EVIDENCE_FOR_KNOWLEDGE,
+            MIN_SAMPLE_FOR_KNOWLEDGE,
+        )
+
+        assert MIN_EVIDENCE_FOR_KNOWLEDGE == 10
+        assert MIN_SAMPLE_FOR_KNOWLEDGE == 30
+
     def test_requires_all_criteria(self):
         assert_can_promote_to_knowledge(
             relevance_for_decisions="Position sizing for London session",
@@ -71,6 +80,30 @@ class TestKnowledgePromotion:
             reviewer="analyst@forge",
             material_contradictions_resolved=True,
         )
+
+    def test_blocks_at_default_evidence_boundary(self):
+        with pytest.raises(DomainRuleViolation, match="Insufficient evidence"):
+            assert_can_promote_to_knowledge(
+                relevance_for_decisions="Position sizing for London session",
+                evidence_count=9,
+                sample_size=30,
+                context_documented=True,
+                human_review_recorded=True,
+                reviewer="analyst@forge",
+                material_contradictions_resolved=True,
+            )
+
+    def test_blocks_at_default_sample_boundary(self):
+        with pytest.raises(DomainRuleViolation, match="Insufficient sample size"):
+            assert_can_promote_to_knowledge(
+                relevance_for_decisions="Position sizing for London session",
+                evidence_count=10,
+                sample_size=29,
+                context_documented=True,
+                human_review_recorded=True,
+                reviewer="analyst@forge",
+                material_contradictions_resolved=True,
+            )
 
     def test_blocks_without_relevance(self):
         with pytest.raises(DomainRuleViolation, match="relevance"):

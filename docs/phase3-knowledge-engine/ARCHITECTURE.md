@@ -82,6 +82,20 @@ PHASE3_KNOWLEDGE_ENGINE_ENABLED = False  # config.py
 
 Phase 2 code must not read this flag until integration gate.
 
+## Configuration (`phase3_knowledge_engine/config.py`)
+
+All tunable Phase 3 thresholds live in `config.py` and may be overridden via
+environment variables at process start:
+
+| Variable | Default | Used by |
+|----------|---------|---------|
+| `PHASE3_MIN_OBSERVATIONS_FOR_PATTERN` | `2` | RepeatedPattern promotion |
+| `PHASE3_MIN_EVIDENCE_FOR_KNOWLEDGE` | `10` | Knowledge promotion (Rule 6) |
+| `PHASE3_MIN_SAMPLE_FOR_KNOWLEDGE` | `30` | Knowledge promotion (Rule 6) |
+
+`domain/rules.py` and `application/services.py` read these values at runtime.
+Changing thresholds does not alter validation flow or human-review requirements.
+
 ## Persistence
 
 | Store | File | Owner |

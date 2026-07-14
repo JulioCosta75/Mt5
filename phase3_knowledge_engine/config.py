@@ -20,3 +20,15 @@ DEFAULT_KNOWLEDGE_DB_PATH: str = os.environ.get(
 MIN_OBSERVATIONS_FOR_PATTERN: int = int(
     os.environ.get("PHASE3_MIN_OBSERVATIONS_FOR_PATTERN", "2")
 )
+
+# Minimum evidence count required to promote KnowledgeCandidate → Knowledge.
+# Configurable via environment; human review and other Rule 6 criteria still apply.
+MIN_EVIDENCE_FOR_KNOWLEDGE: int = int(
+    os.environ.get("PHASE3_MIN_EVIDENCE_FOR_KNOWLEDGE", "10")
+)
+
+# Minimum sample size required to promote KnowledgeCandidate → Knowledge.
+# Configurable via environment; human review and other Rule 6 criteria still apply.
+MIN_SAMPLE_FOR_KNOWLEDGE: int = int(
+    os.environ.get("PHASE3_MIN_SAMPLE_FOR_KNOWLEDGE", "30")
+)

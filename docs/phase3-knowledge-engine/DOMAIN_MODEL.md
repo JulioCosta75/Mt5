@@ -66,3 +66,8 @@ KNOWLEDGE_PRINCIPLE = (
 ```
 
 Defined in `phase3_knowledge_engine/domain/rules.py`.
+
+Knowledge promotion numeric thresholds (`MIN_EVIDENCE_FOR_KNOWLEDGE`,
+`MIN_SAMPLE_FOR_KNOWLEDGE`) are defined in `phase3_knowledge_engine/config.py`
+and overrideable via `PHASE3_MIN_EVIDENCE_FOR_KNOWLEDGE` and
+`PHASE3_MIN_SAMPLE_FOR_KNOWLEDGE` environment variables.
