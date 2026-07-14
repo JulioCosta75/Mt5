@@ -56,6 +56,20 @@ Atlas upgrades are clean and reproducible — no manual commands:
      the new build. Your data (\data) and logs (\logs) are preserved.
   3. Open the Dashboard and confirm the version number in the header changed.
 
+Uninstall / clean reinstall
+---------------------------
+Use Add/Remove Programs → Atlas → Uninstall. The uninstaller stops the
+Windows services and terminates Atlas Python processes *before* deleting
+files, so C:\Program Files\Atlas should be removed completely.
+
+If a previous uninstall left the folder behind (services were still running),
+run as Administrator from an existing copy of the scripts folder:
+    scripts\release_atlas_locks.bat
+then delete the Atlas folder manually, or re-run Atlas_Setup.exe.
+
+Close the dashboard browser tab before uninstalling — an open page does not
+block removal, but AtlasBridge/AtlasBackend services must be stopped.
+
 Logs
 ----
 <install folder>\logs\backend.out.log

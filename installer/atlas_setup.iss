@@ -82,6 +82,7 @@ Source: "scripts\healthcheck.bat";         DestDir: "{app}\scripts"; Flags: igno
 Source: "scripts\bootstrap_pip.bat";       DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\install_deps.bat";        DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\apply_restart.bat";       DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "scripts\release_atlas_locks.bat"; DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\configure_atlas.py";     DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\configure_mt5.bat";       DestDir: "{app}\scripts"; Flags: ignoreversion
 
@@ -131,13 +132,17 @@ Filename: "{app}\scripts\install_services.bat"; StatusMsg: "Registering Atlas Wi
 ;    The bridge picks up the .env written in step 2 and connects to MT5.
 Filename: "{app}\scripts\start_atlas.bat"; StatusMsg: "Starting Atlas services..."; Tasks: installsvc; Flags: runhidden
 
-[UninstallRun]
-Filename: "{app}\scripts\uninstall_services.bat"; Flags: runhidden
+; [UninstallRun] intentionally omitted — service shutdown must happen in
+; InitializeUninstall (before Inno deletes files).  See release_atlas_locks.bat.
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\data"
 Type: filesandordirs; Name: "{app}\logs"
 Type: filesandordirs; Name: "{app}\python\Lib\site-packages"
+Type: filesandordirs; Name: "{app}\backend"
+Type: filesandordirs; Name: "{app}\bridge"
+Type: filesandordirs; Name: "{app}\frontend_build"
+Type: filesandordirs; Name: "{app}\python"
 
 [Code]
 var
@@ -239,38 +244,43 @@ end;
 procedure StopAtlasServices();
 var
   ResultCode: Integer;
-  Nssm: String;
+  ReleaseBat: String;
 begin
-  // 1) Graceful stop via the Windows Service Control Manager.
+  ReleaseBat := ExpandConstant('{app}\scripts\release_atlas_locks.bat');
+  if FileExists(ReleaseBat) then
+  begin
+    Exec(ReleaseBat, '', ExpandConstant('{app}\scripts'), SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exit;
+  end;
+
+  // Fallback for upgrades from older builds that do not yet ship the helper.
   Exec('net.exe', 'stop AtlasBackend', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec('net.exe', 'stop AtlasBridge',  '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-
-  // 2) Remove the service definitions (NSSM if present, else sc.exe) so the
-  //    new build re-registers them cleanly.
-  Nssm := ExpandConstant('{app}\nssm.exe');
-  if FileExists(Nssm) then
+  if FileExists(ExpandConstant('{app}\nssm.exe')) then
   begin
-    Exec(Nssm, 'stop AtlasBackend',   '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Exec(Nssm, 'remove AtlasBackend confirm', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Exec(Nssm, 'stop AtlasBridge',    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Exec(Nssm, 'remove AtlasBridge confirm',  '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(ExpandConstant('{app}\nssm.exe'), 'stop AtlasBackend', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(ExpandConstant('{app}\nssm.exe'), 'remove AtlasBackend confirm', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(ExpandConstant('{app}\nssm.exe'), 'stop AtlasBridge', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(ExpandConstant('{app}\nssm.exe'), 'remove AtlasBridge confirm', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end
   else
   begin
     Exec('sc.exe', 'delete AtlasBackend', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Exec('sc.exe', 'delete AtlasBridge',  '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end;
-
-  // 3) Kill any bundled python.exe still holding files in {app}\python so the
-  //    embedded runtime and site-packages can be replaced. We target ONLY the
-  //    Atlas-bundled interpreter path, never the user's system Python.
   if DirExists(ExpandConstant('{app}\python')) then
     Exec('taskkill.exe',
          '/F /FI "IMAGENAME eq python.exe" /FI "MODULES eq ' + ExpandConstant('{app}\python\python311.dll') + '"',
          '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(2000);
+end;
 
-  // Give the OS a moment to release file handles.
-  Sleep(1500);
+function InitializeUninstall(): Boolean;
+begin
+  // CRITICAL: Inno deletes files *before* [UninstallRun].  Services and the
+  // bundled python.exe MUST be stopped here or {app} cannot be removed.
+  StopAtlasServices();
+  Result := True;
 end;
 
 function InitializeSetup(): Boolean;
