@@ -64,8 +64,14 @@ files, so C:\Program Files\Atlas should be removed completely.
 
 If a previous uninstall left the folder behind (services were still running),
 run as Administrator from an existing copy of the scripts folder:
+    scripts\diagnose_atlas_locks.bat
     scripts\release_atlas_locks.bat
 then delete the Atlas folder manually, or re-run Atlas_Setup.exe.
+
+diagnose_atlas_locks.bat prints the exact PID and process name holding a lock
+(commonly cmd.exe from apply_restart.bat with its working directory set to
+backend\). release_atlas_locks.bat stops services, kills those processes,
+and verifies the backend folder can be released.
 
 Close the dashboard browser tab before uninstalling — an open page does not
 block removal, but AtlasBridge/AtlasBackend services must be stopped.
