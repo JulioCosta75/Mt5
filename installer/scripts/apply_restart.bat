@@ -7,6 +7,10 @@ REM  itself because this runs in its own process.
 REM ============================================================
 setlocal
 
+REM Never inherit AtlasBackend's AppDirectory (backend\) as CWD — that
+REM leaves an empty backend folder locked after services stop.
+cd /d "%~dp0"
+
 REM Give the backend a moment to finish sending its HTTP response.
 timeout /t 2 >nul
 

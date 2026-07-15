@@ -243,7 +243,8 @@ def _restart_services() -> None:
     restart_bat = scripts / "apply_restart.bat"
     if restart_bat.exists():
         subprocess.Popen(
-            ["cmd", "/c", "start", "", str(restart_bat)],
+            ["cmd.exe", "/c", str(restart_bat)],
+            cwd=str(scripts),
             creationflags=getattr(subprocess, "DETACHED_PROCESS", 0)
             | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
             close_fds=True,

@@ -83,6 +83,8 @@ Source: "scripts\bootstrap_pip.bat";       DestDir: "{app}\scripts"; Flags: igno
 Source: "scripts\install_deps.bat";        DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\apply_restart.bat";       DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\release_atlas_locks.bat"; DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "scripts\diagnose_atlas_locks.bat"; DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "scripts\diagnose_atlas_locks.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\configure_atlas.py";     DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\configure_mt5.bat";       DestDir: "{app}\scripts"; Flags: ignoreversion
 
