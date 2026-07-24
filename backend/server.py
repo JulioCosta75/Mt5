@@ -301,75 +301,22 @@ def _find_account(account_id: str) -> dict:
 # Aggregates KPIs, account health, risk and alerts into a single
 # supervisor-oriented view with an overall OK / WARNING / ALERT status.
 # ------------------------------------------------------------
-def _supervision_snapshot() -> dict:
-    total_equity = sum(a["equity"] for a in ACCOUNTS)
-    total_balance = sum(a["balance"] for a in ACCOUNTS)
-    daily_pnl = sum(a["daily_pnl"] for a in ACCOUNTS)
-    open_positions = sum(a["open_positions"] for a in ACCOUNTS)
+from supervision_snapshot import build_supervision_snapshot
 
-    live = sum(1 for a in ACCOUNTS if a["status"] == "LIVE")
-    paused = sum(1 for a in ACCOUNTS if a["status"] == "PAUSED")
-    error = sum(1 for a in ACCOUNTS if a["status"] == "ERROR")
 
-    active_alerts = sum(1 for a in ALERTS if not a["acknowledged"])
-    critical = sum(1 for a in ALERTS if a["severity"] == "CRITICAL" and not a["acknowledged"])
-    warning = sum(1 for a in ALERTS if a["severity"] == "WARNING" and not a["acknowledged"])
+def _supervision_snapshot_mock() -> dict:
+    return build_supervision_snapshot(ACCOUNTS, ALERTS, mode="mock", bridge_ok=None)
 
-    n = max(len(ACCOUNTS), 1)
-    avg_dd = round(sum(a["current_drawdown"] for a in ACCOUNTS) / n, 2)
-    worst_dd = round(min((a["current_drawdown"] for a in ACCOUNTS), default=0.0), 2)
-    accounts_over_limit = sum(
-        1 for a in ACCOUNTS
-        if abs(a["current_drawdown"]) >= float(a["risk_limits"]["max_daily_loss_pct"])
-    )
 
-    if error > 0 or critical > 0:
-        status = "ALERT"
-    elif paused > 0 or warning > 0 or accounts_over_limit > 0:
-        status = "WARNING"
-    else:
-        status = "OK"
+_mt5_live = None
 
-    services = {
-        "backend_ok": True,
-        "store_ok": True,
-        "bridge_ok": True if MT5_MODE else None,
-        "dashboard_ok": True,
-    }
 
-    if status == "OK":
-        message = "All Forge Factory Lab core services are online and healthy."
-    elif status == "WARNING":
-        message = (
-            f"Degraded: {warning} warning alert(s), {paused} paused account(s), "
-            f"{accounts_over_limit} account(s) near risk limits."
-        )
-    else:
-        message = f"ALERT: {critical} critical alert(s), {error} account(s) in ERROR state."
-
-    return {
-        "supervisor": "Sr. Atlas",
-        "ecosystem": "Forge Factory Lab",
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "mode": "mt5" if MT5_MODE else "mock",
-        "status": status,
-        "kpis": {
-            "total_equity": round(total_equity, 2),
-            "total_balance": round(total_balance, 2),
-            "daily_pnl": round(daily_pnl, 2),
-            "daily_pnl_pct": round(daily_pnl / total_equity * 100, 2) if total_equity else 0.0,
-            "open_positions": open_positions,
-        },
-        "accounts": {"total": len(ACCOUNTS), "live": live, "paused": paused, "error": error},
-        "risk": {
-            "avg_drawdown": avg_dd,
-            "worst_drawdown": worst_dd,
-            "accounts_over_limit": accounts_over_limit,
-        },
-        "alerts": {"active": active_alerts, "critical": critical, "warning": warning},
-        "services": services,
-        "message": message,
-    }
+async def _supervision_snapshot() -> dict:
+    if MT5_MODE and _mt5_live is not None:
+        accs = await _mt5_live.list_accounts()
+        bridge_ok = await _mt5_live.bridge_reachable()
+        return build_supervision_snapshot(accs, [], mode="mt5", bridge_ok=bridge_ok)
+    return _supervision_snapshot_mock()
 
 
 # ------------------------------------------------------------
@@ -519,12 +466,14 @@ async def tick():
 
 if MT5_MODE:
     from routes_mt5 import build_router as build_mt5_router
+    from mt5_live import MT5LiveData
     if ATLAS_STORE == "sqlite":
         from mt5_cache_sqlite import MT5CacheSQLite as MT5Cache
         _cache = MT5Cache(os.environ.get("ATLAS_SQLITE_PATH", str(ROOT_DIR / "data" / "atlas.db")))
     else:
         from mt5_cache import MT5Cache
         _cache = MT5Cache(mongo_db)
+    _mt5_live = MT5LiveData(_cache)
     app.include_router(build_mt5_router(_cache))
     logging.getLogger("server").info("MT5 mode ENABLED — store=%s", ATLAS_STORE)
 else:
@@ -572,6 +521,7 @@ async def system_health():
                 })
             except (httpx.HTTPError, Exception) as e:  # noqa: BLE001
                 info["error"] = str(e)
+            out["bridge"] = info
     return out
 
 
@@ -663,12 +613,12 @@ async def delete_mt5_config():
 # ------------------------------------------------------------
 @app.get("/api/supervision/snapshot")
 async def supervision_snapshot():
-    return _supervision_snapshot()
+    return await _supervision_snapshot()
 
 
 @app.post("/api/atlas/report")
 async def create_atlas_report(payload: AtlasReportIn):
-    snap = _supervision_snapshot()
+    snap = await _supervision_snapshot()
     report = {
         "supervisor": payload.supervisor,
         "ecosystem": payload.ecosystem,
@@ -704,7 +654,7 @@ async def list_atlas_reports(limit: int = 50, status: Optional[str] = None):
 # background scheduler and the on-demand endpoint below.
 # ------------------------------------------------------------
 async def _capture_snapshot_report(source: str = "auto") -> dict:
-    snap = _supervision_snapshot()
+    snap = await _supervision_snapshot()
     report = {
         "supervisor": snap["supervisor"],
         "ecosystem": snap["ecosystem"],

@@ -1,17 +1,16 @@
 @echo off
 REM ============================================================
-REM  Removes the Atlas Windows services.
+REM  Removes the Atlas Windows services and releases file locks.
+REM  Called from the Inno Setup uninstaller ([UninstallRun]) and
+REM  available for manual cleanup.
 REM ============================================================
 setlocal
 
-call "%~dp0_detect_env.bat" >nul 2>nul
-if not defined NSSM (
-    for %%I in ("%~dp0..\nssm.exe") do set "NSSM=%%~fI"
+call "%~dp0release_atlas_locks.bat"
+if errorlevel 1 (
+    echo [WARN] release_atlas_locks.bat reported an error — continuing.
 )
 
-"%NSSM%" stop   AtlasBackend >nul 2>nul
-"%NSSM%" remove AtlasBackend confirm
-"%NSSM%" stop   AtlasBridge  >nul 2>nul
-"%NSSM%" remove AtlasBridge  confirm
 echo Atlas services removed.
 endlocal
+exit /b 0

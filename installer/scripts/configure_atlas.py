@@ -218,16 +218,40 @@ def prompt_answers(existing: dict) -> dict:
 # ---------------------------------------------------------------------------
 # Writing config
 # ---------------------------------------------------------------------------
+def auto_terminal_path(bridge_dir: Path) -> str:
+    """Detect terminal64.exe on Windows (running process preferred)."""
+    helper = bridge_dir / "mt5_terminal.py"
+    if not helper.is_file():
+        return ""
+    try:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("atlas_mt5_terminal", helper)
+        if not spec or not spec.loader:
+            return ""
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        path, _ = mod.resolve_terminal_path(None)
+        return path or ""
+    except Exception:
+        return ""
+
+
 def write_bridge_env(paths: dict, cfg: dict) -> Path:
     bridge = paths["bridge"]
     bridge.mkdir(parents=True, exist_ok=True)
+    terminal_path = str(cfg.get("terminal_path", "") or "").strip()
+    if not terminal_path:
+        terminal_path = auto_terminal_path(bridge)
+        if terminal_path:
+            cfg["terminal_path"] = terminal_path
     lines = [
         f"MT5_LOGIN={cfg['login']}",
         f"MT5_PASSWORD={cfg['password']}",
         f"MT5_SERVER={cfg['server']}",
     ]
-    if cfg.get("terminal_path"):
-        lines.append(f"MT5_TERMINAL_PATH={cfg['terminal_path']}")
+    if terminal_path:
+        lines.append(f"MT5_TERMINAL_PATH={terminal_path}")
     lines += [
         f"BRIDGE_TOKEN={cfg['bridge_token']}",
         f"BRIDGE_HOST={cfg.get('bridge_host', '127.0.0.1')}",

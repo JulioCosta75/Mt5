@@ -134,6 +134,10 @@ def save_config(payload: dict) -> dict:
         "bridge_token": token,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
+    if not cfg["terminal_path"] and os.name == "nt":
+        detected = _auto_terminal_path()
+        if detected:
+            cfg["terminal_path"] = detected
     _save(cfg)
     return cfg
 
@@ -164,6 +168,25 @@ def _bridge_dir() -> Path:
     return INSTALL_ROOT / "mt5-bridge"
 
 
+def _auto_terminal_path() -> str:
+    bridge = _bridge_dir()
+    helper = bridge / "mt5_terminal.py"
+    if not helper.is_file():
+        return ""
+    try:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("atlas_mt5_terminal", helper)
+        if not spec or not spec.loader:
+            return ""
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        path, _ = mod.resolve_terminal_path(None)
+        return path or ""
+    except Exception:
+        return ""
+
+
 def _write_bridge_env(cfg: dict, disabled: bool = False) -> None:
     bridge = _bridge_dir()
     bridge.mkdir(parents=True, exist_ok=True)
@@ -171,13 +194,18 @@ def _write_bridge_env(cfg: dict, disabled: bool = False) -> None:
     if disabled:
         content = "# MT5 connection cleared from the Atlas dashboard.\n"
     else:
+        terminal_path = str(cfg.get("terminal_path", "") or "").strip()
+        if not terminal_path:
+            terminal_path = _auto_terminal_path()
+            if terminal_path:
+                cfg["terminal_path"] = terminal_path
         lines = [
             f"MT5_LOGIN={cfg['login']}",
             f"MT5_PASSWORD={cfg['password']}",
             f"MT5_SERVER={cfg['server']}",
         ]
-        if cfg.get("terminal_path"):
-            lines.append(f"MT5_TERMINAL_PATH={cfg['terminal_path']}")
+        if terminal_path:
+            lines.append(f"MT5_TERMINAL_PATH={terminal_path}")
         lines += [
             f"BRIDGE_TOKEN={cfg['bridge_token']}",
             f"BRIDGE_HOST={cfg.get('bridge_host', '127.0.0.1')}",
@@ -215,7 +243,8 @@ def _restart_services() -> None:
     restart_bat = scripts / "apply_restart.bat"
     if restart_bat.exists():
         subprocess.Popen(
-            ["cmd", "/c", "start", "", str(restart_bat)],
+            ["cmd.exe", "/c", str(restart_bat)],
+            cwd=str(scripts),
             creationflags=getattr(subprocess, "DETACHED_PROCESS", 0)
             | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
             close_fds=True,

@@ -322,3 +322,42 @@ class TestMT5ModeActivation:
         rl2 = r2.json()["risk_limits"]
         assert rl2["max_daily_loss_pct"] == 4.2
         assert rl2["max_open_positions"] == 11
+
+    def test_api_root(self, mt5_server):
+        r = _get(mt5_server, "/api/")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d.get("status") == "ok"
+        assert d.get("source") == "mt5"
+
+    def test_alerts_empty_feed(self, mt5_server):
+        r = _get(mt5_server, "/api/alerts")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["count"] == 0
+        assert d["alerts"] == []
+
+    def test_sim_tick_noop(self, mt5_server):
+        r = _post(mt5_server, "/api/sim/tick")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d.get("ok") is True
+        assert d.get("source") == "mt5"
+
+    def test_supervision_snapshot_uses_mt5_feed_not_mock(self, mt5_server):
+        kpis = _get(mt5_server, "/api/kpis").json()
+        snap = _get(mt5_server, "/api/supervision/snapshot").json()
+        assert snap["mode"] == "mt5"
+        assert snap["accounts"]["total"] != 8
+        assert snap["alerts"]["active"] == 0
+        assert snap["alerts"]["critical"] == 0
+        assert snap["kpis"]["total_equity"] == kpis["total_equity"]
+        assert snap["accounts"]["total"] == kpis["accounts_total"]
+        assert "ACC-" not in str(snap)
+
+    def test_supervision_report_metrics_match_live_kpis(self, mt5_server):
+        kpis = _get(mt5_server, "/api/kpis").json()
+        report = _post(mt5_server, "/api/atlas/report", json={"source": "pytest-mt5"}).json()
+        assert report["metrics"]["total_equity"] == kpis["total_equity"]
+        assert report["metrics"]["accounts_live"] == kpis["accounts_live"]
+        assert report["metrics"]["active_alerts"] == 0
