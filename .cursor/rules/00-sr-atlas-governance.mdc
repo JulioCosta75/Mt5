@@ -1,0 +1,33 @@
+---
+description: Mandatory Sr. Atlas repository governance and Production Phase 2 protection
+alwaysApply: true
+---
+
+# Sr. Atlas governance (always apply)
+
+`AGENTS.md` at the repository root is the **canonical** rule set for Forge Factory Lab / Sr. Atlas.
+
+## Before planning or modifying anything
+
+1. Read and follow the root `AGENTS.md` in full.
+2. If `AGENTS.md` is missing or unreadable, **stop** and report. Do not proceed.
+3. If this rule and `AGENTS.md` conflict, resolve in favor of the **stricter** safety requirement.
+
+## Mandatory protections (summary)
+
+- Never commit directly to `main`. Never force-push or delete `main`.
+- Never merge or deploy without **explicit founder authorization**.
+- Production Phase 2 baseline and safety tag are protected and immutable:
+  - tag: `sr-atlas-v0.3.0-phase2-baseline-20260727`
+  - baseline commit: `33b3424e31b6bc12534e70b79911d69d95bb4033`
+  - baseline tree: `fda716dbb76e2725643697d91d88af0afb58790d`
+- Phase 3 Knowledge Engine remains isolated; default flag **OFF**:
+  `PHASE3_KNOWLEDGE_ENGINE_ENABLED=false`
+- Never claim a test passed unless it was executed and the result observed.
+- Never commit or print secrets (passwords, tokens, keys, MT5 credentials, populated `.env`).
+- Unrelated cleanup, formatting, modernization, or dependency changes are prohibited.
+- Separate **VERIFIED**, **INFERENCE**, and **NOT VERIFIED** in every report.
+
+## Stop conditions
+
+Stop and report when founder authorization is absent or ambiguous, when evidence is insufficient, when Phase 2 protections would be weakened, or when Phase 3 would be enabled or integrated without separate authorization.
