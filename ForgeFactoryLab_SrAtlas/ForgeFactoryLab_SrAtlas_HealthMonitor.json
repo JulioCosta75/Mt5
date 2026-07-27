@@ -1,0 +1,326 @@
+{
+  "name": "Forge Factory Lab — Sr. Atlas Health Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🛰️ Sr. Atlas — Forge Factory Lab\n### Health Monitor & Supervisor (Phase 2)\n\n**Philosophy:** Knowledge, validation and truth come before automation.\n\n**Flow:**\n1. Trigger (Manual or Schedule)\n2. Poll the 3 core services in parallel\n3. Merge the responses\n4. Build the structured **Sr. Atlas** report\n5. Decide: OPERATIONAL vs ALERT / DEGRADED\n\nSr. Atlas is the intelligent orchestrator. n8n executes the automations.",
+        "height": 320,
+        "width": 380,
+        "color": 4
+      },
+      "id": "note-overview-0001",
+      "name": "Sticky — Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-260, 60]
+    },
+    {
+      "parameters": {
+        "content": "### 🔐 Future AI — API Key Handling\n\n**Never hardcode the key.**\n\nThis disabled HTTP node already reads the key from an environment variable:\n\n`Authorization: Bearer {{$env.SR_ATLAS_AI_API_KEY}}`\n\n**Where to set it (Windows Server 2022):**\n1. Stop n8n.\n2. In the n8n startup environment (PowerShell / .env / service), add:\n   `SR_ATLAS_AI_API_KEY=your_real_key_here`\n3. Restart n8n.\n\n**Preferred alternative — n8n Credentials:**\nCredentials → New → *Header Auth* (or provider credential) → paste key there, then switch this node's `Authentication` to that credential. Keys stored in Credentials are encrypted at rest.\n\nEnable this node only when the AI endpoint is ready.",
+        "height": 420,
+        "width": 380,
+        "color": 3
+      },
+      "id": "note-aikey-0002",
+      "name": "Sticky — AI Key Safety",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [900, 520]
+    },
+    {
+      "parameters": {},
+      "id": "trigger-manual-0003",
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [180, 300]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "trigger-schedule-0004",
+      "name": "Schedule Trigger (Disabled)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [180, 520],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "url": "http://127.0.0.1:8001/api/system/health",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          },
+          "timeout": 8000
+        }
+      },
+      "id": "http-backend-0005",
+      "name": "Atlas Backend Health",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [520, 120],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "http://127.0.0.1:8002/health",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          },
+          "timeout": 8000
+        }
+      },
+      "id": "http-bridge-0006",
+      "name": "MT5 Bridge Health",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [520, 320],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "http://127.0.0.1:8001/",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          },
+          "timeout": 8000
+        }
+      },
+      "id": "http-dashboard-0007",
+      "name": "Atlas Dashboard Health",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [520, 520],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "id": "merge-health-0008",
+      "name": "Merge Health Responses",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [800, 320]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ────────────────────────────────────────────────────────────\n// Sr. Atlas — Forge Factory Lab | Structured Report Builder\n// Reads each health node by name so a single failed service\n// never breaks the supervisor. Truth before automation.\n// ────────────────────────────────────────────────────────────\n\nconst check = (nodeName) => {\n  try {\n    const item = $(nodeName).first();\n    if (!item || !item.json) return false;\n    const j = item.json;\n    // continueRegularOutput puts an 'error' key when the request failed\n    if (j.error !== undefined && j.error !== null) return false;\n    const code = j.statusCode;\n    if (typeof code === 'number') return code >= 200 && code < 400;\n    // No status code but a body came back → service is reachable\n    return Object.keys(j).length > 0;\n  } catch (e) {\n    return false;\n  }\n};\n\nconst backend_ok   = check('Atlas Backend Health');\nconst bridge_ok    = check('MT5 Bridge Health');\nconst dashboard_ok = check('Atlas Dashboard Health');\n\nconst all_ok = backend_ok && bridge_ok && dashboard_ok;\n\nconst down = [];\nif (!backend_ok)   down.push('Atlas Backend (8001)');\nif (!bridge_ok)    down.push('MT5 Bridge (8002)');\nif (!dashboard_ok) down.push('Atlas Dashboard (8001)');\n\nconst message = all_ok\n  ? 'All Forge Factory Lab core services are online and healthy.'\n  : `Degraded system — not responding: ${down.join(', ')}.`;\n\nconst report = {\n  supervisor: 'Sr. Atlas',\n  ecosystem: 'Forge Factory Lab',\n  status: all_ok ? 'OK' : 'ALERT',\n  backend_ok,\n  bridge_ok,\n  dashboard_ok,\n  timestamp: new Date().toISOString(),\n  message,\n};\n\n// all_ok is kept as a helper flag for the IF node below\nreturn [{ json: { ...report, all_ok } }];\n"
+      },
+      "id": "code-report-0009",
+      "name": "Sr. Atlas Report Builder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1040, 320]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-allok-0001",
+              "leftValue": "={{ $json.all_ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-healthy-0010",
+      "name": "All Core Services Healthy?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1300, 320]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "asg-op-0001",
+              "name": "branch",
+              "value": "SYSTEM OPERATIONAL",
+              "type": "string"
+            },
+            {
+              "id": "asg-op-0002",
+              "name": "action_required",
+              "value": "false",
+              "type": "boolean"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "set-operational-0011",
+      "name": "System Operational",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1560, 180]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "asg-al-0001",
+              "name": "branch",
+              "value": "SYSTEM ALERT / DEGRADED",
+              "type": "string"
+            },
+            {
+              "id": "asg-al-0002",
+              "name": "action_required",
+              "value": "true",
+              "type": "boolean"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "set-alert-0012",
+      "name": "System Alert / Degraded",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1560, 460]
+    },
+    {
+      "parameters": {},
+      "id": "noop-notify-0013",
+      "name": "Notify Operator (Placeholder)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1820, 460]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SR_ATLAS_AI_URL || 'https://api.openai.com/v1/chat/completions' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SR_ATLAS_AI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  supervisor: 'Sr. Atlas',\n  ecosystem: 'Forge Factory Lab',\n  task: 'Analyse the Forge Factory Lab operational context and return risk assessment + recommended actions.',\n  context: {\n    health_report: $json,\n    trading_account_status: null,\n    open_positions: null,\n    pending_orders: null,\n    equity: null,\n    balance: null,\n    margin: null,\n    drawdown: null,\n    trading_permissions: null,\n    alerts: null,\n    economic_calendar: null,\n    market_news: null,\n    specialised_eas: null\n  }\n}) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "http-ai-0014",
+      "name": "Future AI Analysis (Disabled)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1040, 560],
+      "disabled": true
+    }
+  ],
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [
+        [
+          { "node": "Atlas Backend Health", "type": "main", "index": 0 },
+          { "node": "MT5 Bridge Health", "type": "main", "index": 0 },
+          { "node": "Atlas Dashboard Health", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Schedule Trigger (Disabled)": {
+      "main": [
+        [
+          { "node": "Atlas Backend Health", "type": "main", "index": 0 },
+          { "node": "MT5 Bridge Health", "type": "main", "index": 0 },
+          { "node": "Atlas Dashboard Health", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Atlas Backend Health": {
+      "main": [
+        [ { "node": "Merge Health Responses", "type": "main", "index": 0 } ]
+      ]
+    },
+    "MT5 Bridge Health": {
+      "main": [
+        [ { "node": "Merge Health Responses", "type": "main", "index": 1 } ]
+      ]
+    },
+    "Atlas Dashboard Health": {
+      "main": [
+        [ { "node": "Merge Health Responses", "type": "main", "index": 2 } ]
+      ]
+    },
+    "Merge Health Responses": {
+      "main": [
+        [ { "node": "Sr. Atlas Report Builder", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Sr. Atlas Report Builder": {
+      "main": [
+        [
+          { "node": "All Core Services Healthy?", "type": "main", "index": 0 },
+          { "node": "Future AI Analysis (Disabled)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "All Core Services Healthy?": {
+      "main": [
+        [ { "node": "System Operational", "type": "main", "index": 0 } ],
+        [ { "node": "System Alert / Degraded", "type": "main", "index": 0 } ]
+      ]
+    },
+    "System Alert / Degraded": {
+      "main": [
+        [ { "node": "Notify Operator (Placeholder)", "type": "main", "index": 0 } ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "active": false,
+  "tags": [
+    { "name": "Forge Factory Lab" },
+    { "name": "Sr. Atlas" }
+  ]
+}
