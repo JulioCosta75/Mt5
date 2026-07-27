@@ -16,7 +16,7 @@ function statusColor(status) {
 /* ------------------------------------------------------------------ */
 /* STRATEGIES                                                          */
 /* ------------------------------------------------------------------ */
-export function StrategiesView({ accounts }) {
+export function StrategiesView({ accounts, isSample = false }) {
   const groups = {};
   accounts.forEach((a) => {
     const key = a.strategy || "Unassigned";
@@ -36,7 +36,10 @@ export function StrategiesView({ accounts }) {
   return (
     <div className="panel" data-testid="strategies-panel">
       <div className="panel-header">
-        <span className="panel-title">Strategies · {rows.length}</span>
+        <span className="panel-title">
+          Strategies · {rows.length}
+          {isSample ? <span className="kbd" style={{ marginLeft: 8 }} data-testid="strategies-sample-label">SAMPLE DATA</span> : null}
+        </span>
         <span className="kbd">grouped by strategy</span>
       </div>
       <div className="scroll-area" style={{ overflow: "auto" }}>
@@ -77,12 +80,12 @@ export function StrategiesView({ accounts }) {
 /* ------------------------------------------------------------------ */
 /* RISK                                                                */
 /* ------------------------------------------------------------------ */
-export function RiskView({ accounts, selectedId, onSelect, selectedAccount, onUpdate }) {
+export function RiskView({ accounts, selectedId, onSelect, selectedAccount, onUpdate, isSample = false }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <AccountsTable accounts={accounts} selectedId={selectedId} onSelect={onSelect} />
+      <AccountsTable accounts={accounts} selectedId={selectedId} onSelect={onSelect} isSample={isSample} />
       {selectedAccount ? (
-        <RiskPanel key={selectedAccount.id} account={selectedAccount} onUpdate={onUpdate} />
+        <RiskPanel key={selectedAccount.id} account={selectedAccount} onUpdate={onUpdate} isSample={isSample} />
       ) : (
         <div className="panel" data-testid="risk-empty">
           <div style={{ padding: 24, textAlign: "center", color: "var(--text-tertiary)", fontSize: 12 }}>
@@ -175,7 +178,7 @@ export function ReportsView() {
 /* ------------------------------------------------------------------ */
 /* AUDIT                                                               */
 /* ------------------------------------------------------------------ */
-export function AuditView({ alerts, onAck }) {
+export function AuditView({ alerts, onAck, isSample = false }) {
   const [reports, setReports] = useState([]);
 
   useEffect(() => {
@@ -190,7 +193,10 @@ export function AuditView({ alerts, onAck }) {
     <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 360px", gap: 14 }}>
       <div className="panel" data-testid="audit-panel">
         <div className="panel-header">
-          <span className="panel-title">Audit Trail · Sr. Atlas Reports ({reports.length})</span>
+          <span className="panel-title">
+            Audit Trail · Sr. Atlas Reports ({reports.length})
+            {isSample ? <span className="kbd" style={{ marginLeft: 8 }} data-testid="audit-sample-label">SAMPLE DATA</span> : null}
+          </span>
         </div>
         <div className="scroll-area" style={{ overflow: "auto" }}>
           <table data-testid="audit-table">
@@ -219,7 +225,7 @@ export function AuditView({ alerts, onAck }) {
         </div>
       </div>
       <aside style={{ minWidth: 0 }}>
-        <AlertsPanel alerts={alerts} onAck={onAck} />
+        <AlertsPanel alerts={alerts} onAck={onAck} isSample={isSample} />
       </aside>
     </div>
   );

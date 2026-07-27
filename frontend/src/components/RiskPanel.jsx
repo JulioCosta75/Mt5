@@ -14,7 +14,7 @@ function Stat({ label, value, mono = true, cls = "" }) {
   );
 }
 
-export default function RiskPanel({ account, onUpdate }) {
+export default function RiskPanel({ account, onUpdate, isSample = false }) {
   const [limits, setLimits] = useState(account.risk_limits);
   const [saving, setSaving] = useState(false);
   const [killing, setKilling] = useState(false);
@@ -42,7 +42,10 @@ export default function RiskPanel({ account, onUpdate }) {
   return (
     <div className="panel" data-testid="risk-panel">
       <div className="panel-header">
-        <span className="panel-title">Risk · {account.id} · {account.login}</span>
+        <span className="panel-title">
+          Risk · {account.id} · {account.login}
+          {isSample ? <span className="kbd" style={{ marginLeft: 8 }} data-testid="risk-sample-label">SAMPLE DATA</span> : null}
+        </span>
         <button
           className={`btn ${account.kill_switch ? "success" : "danger"}`}
           onClick={toggleKill}

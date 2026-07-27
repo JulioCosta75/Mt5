@@ -1,12 +1,15 @@
 import React from "react";
 import { fmt } from "@/lib/api";
+import { SIMULATED_ALERTS_TITLE } from "@/lib/sampleMode";
 
-export default function AlertsPanel({ alerts, onAck }) {
+export default function AlertsPanel({ alerts, onAck, isSample = false }) {
   const unack = alerts.filter(a => !a.acknowledged);
   return (
     <div className="panel" data-testid="alerts-panel">
       <div className="panel-header">
-        <span className="panel-title">Alerts</span>
+        <span className="panel-title" data-testid="alerts-panel-title">
+          {isSample ? SIMULATED_ALERTS_TITLE : "Alerts"}
+        </span>
         <span style={{ fontSize: 11 }}>
           <span className="cell-neg mono">{alerts.filter(a => a.severity === "CRITICAL" && !a.acknowledged).length}</span>
           <span style={{ color: "var(--text-tertiary)", margin: "0 6px" }}>·</span>
@@ -32,14 +35,16 @@ export default function AlertsPanel({ alerts, onAck }) {
                 <span style={{
                   fontSize: 9.5, fontWeight: 700, letterSpacing: "0.1em",
                   color: a.severity === "CRITICAL" ? "var(--sig-neg)" : a.severity === "WARNING" ? "var(--sig-warn)" : "var(--sig-info)",
-                }}>{a.severity}</span>
+                }}>
+                  {isSample ? `SIM · ${a.severity}` : a.severity}
+                </span>
                 <span className="mono" style={{ fontSize: 10, color: "var(--text-tertiary)" }}>{a.account_id}</span>
                 <span className="mono" style={{ fontSize: 10, color: "var(--text-tertiary)", marginLeft: "auto" }}>
                   {fmt.relative(a.timestamp)}
                 </span>
               </div>
               <div style={{ fontSize: 12, color: "var(--text-primary)", lineHeight: 1.4 }}>
-                {a.message}
+                {isSample ? `[SAMPLE] ${a.message}` : a.message}
               </div>
             </div>
             {!a.acknowledged && (
