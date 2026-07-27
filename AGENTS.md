@@ -78,6 +78,7 @@ Require explicit founder authorization before:
 - integrating Phase 3 with Phase 2;
 - altering tests solely to make a failure disappear;
 - deleting compatibility paths, branches, tags, data, reports, or recovery assets;
+- changing, weakening, bypassing, renaming, replacing, or deleting `AGENTS.md` or any file under `.cursor/rules/`; every governance amendment requires explicit founder authorization and independent review before merge;
 - merging or deploying.
 
 If authorization is absent or ambiguous, stop and ask.

@@ -27,6 +27,7 @@ alwaysApply: true
 - Never commit or print secrets (passwords, tokens, keys, MT5 credentials, populated `.env`).
 - Unrelated cleanup, formatting, modernization, or dependency changes are prohibited.
 - Separate **VERIFIED**, **INFERENCE**, and **NOT VERIFIED** in every report.
+- Governance files are self-protected: changing, weakening, bypassing, renaming, replacing, or deleting `AGENTS.md` or any file under `.cursor/rules/` requires explicit founder authorization and independent review before merge.
 
 ## Stop conditions
 
