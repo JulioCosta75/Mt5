@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -253,12 +253,19 @@ class KnowledgeRepository:
         return int(row["c"])
 
     # ---- Knowledge records ---------------------------------------------------
-    def save_knowledge_record(self, record: KnowledgeRecord) -> KnowledgeRecord:
+    def save_knowledge_record(
+        self,
+        record: KnowledgeRecord,
+        *,
+        _connection: sqlite3.Connection | None = None,
+    ) -> KnowledgeRecord:
         now = _utcnow()
         if record.created_at is None:
             record.created_at = now
         record.updated_at = now
-        with self._connection() as cx:
+        with (
+            nullcontext(_connection) if _connection is not None else self._connection()
+        ) as cx:
             cx.execute(
                 """
                 INSERT INTO knowledge_records (
@@ -344,8 +351,25 @@ class KnowledgeRepository:
         )
 
     # ---- Audit trail ---------------------------------------------------------
-    def append_audit(self, entry: AuditTrailEntry) -> AuditTrailEntry:
+    def save_transition_with_audit(
+        self,
+        record: KnowledgeRecord,
+        entry: AuditTrailEntry,
+    ) -> KnowledgeRecord:
         with self._connection() as cx:
+            self.save_knowledge_record(record, _connection=cx)
+            self.append_audit(entry, _connection=cx)
+        return record
+
+    def append_audit(
+        self,
+        entry: AuditTrailEntry,
+        *,
+        _connection: sqlite3.Connection | None = None,
+    ) -> AuditTrailEntry:
+        with (
+            nullcontext(_connection) if _connection is not None else self._connection()
+        ) as cx:
             cx.execute(
                 """
                 INSERT INTO audit_trail (
