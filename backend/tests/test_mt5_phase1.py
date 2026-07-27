@@ -20,8 +20,8 @@ import requests
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://mt5-bridge-setup.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
 
-# Make /app/backend importable for the in-process tests
-BACKEND_DIR = Path("/app/backend").resolve()
+# Make backend importable for the in-process tests (Emergent: /app/backend, local: repo).
+BACKEND_DIR = Path(__file__).resolve().parent.parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
@@ -208,10 +208,12 @@ class _MT5Server:
         env = os.environ.copy()
         env["MT5_BRIDGE_URL"] = "http://127.0.0.1:9999"
         env["MT5_BRIDGE_TOKEN"] = "test-token"
+        env.setdefault("ATLAS_STORE", "sqlite")
+        env.setdefault("ATLAS_SQLITE_PATH", "/tmp/atlas_mt5_test.db")
         env.pop("MT5_BRIDGE_URLS", None)
         env.pop("MT5_BRIDGE_TOKENS", None)
         self.proc = subprocess.Popen(
-            ["uvicorn", "server:app", "--host", "127.0.0.1",
+            [sys.executable, "-m", "uvicorn", "server:app", "--host", "127.0.0.1",
              "--port", str(self.port), "--log-level", "warning"],
             cwd=str(BACKEND_DIR), env=env,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -229,7 +231,7 @@ class _MT5Server:
         out = b""
         if self.proc and self.proc.stdout:
             try:
-                self.proc.stdout.close()
+                out = self.proc.stdout.read(8000)
             except Exception:
                 pass
         raise RuntimeError(f"MT5 mode server failed to start within 25s: {out!r}")
