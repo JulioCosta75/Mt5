@@ -1,0 +1,18 @@
+{
+  "knowledge_record_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "ea_profile_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "validation_state": "hypothesis",
+  "statement": "London Scalper performs better during the London session than during New York on XAUUSD when spread remains below 25 points.",
+  "evidence_count": 2,
+  "sample_size": 2,
+  "confidence_score": 0.18,
+  "supporting_evidence_ids": [
+    "c3d4e5f6-a7b8-9012-cdef-123456789012",
+    "d4e5f6a7-b8c9-0123-def0-234567890123"
+  ],
+  "created_from": "repeated_pattern",
+  "explicit_human_act": true,
+  "actor": "analyst@forge",
+  "justification": "Two comparable London observations showed consistent positive expectancy; hypothesis stated explicitly for review.",
+  "note": "A single trade or observation must never auto-generate a hypothesis."
+}

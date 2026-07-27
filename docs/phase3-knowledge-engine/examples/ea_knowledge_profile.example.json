@@ -1,0 +1,29 @@
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "ea_key": "london-scalper",
+  "name": "London Scalper",
+  "version": "2.1.0",
+  "purpose": "Capture London open momentum on XAUUSD with strict spread filter",
+  "entry_rules": "Break of Asian range high; spread must be below 25 points",
+  "exit_rules": "Fixed RR 1:1.5 or hard session close at 12:00 UTC",
+  "risk_rules": {
+    "max_daily_loss_pct": 2.0,
+    "max_open_positions": 1,
+    "lot_sizing": "fixed_fractional"
+  },
+  "permitted_symbols": ["XAUUSD"],
+  "permitted_sessions": ["London"],
+  "market_conditions": {
+    "preferred_regime": "trending",
+    "min_atr_points": 80
+  },
+  "status": "testing",
+  "known_strengths": [
+    "Consistent execution during London open volatility"
+  ],
+  "known_weaknesses": [
+    "Underperforms during low-volatility Asian overlap"
+  ],
+  "open_hypotheses": [],
+  "validated_conclusions": []
+}
