@@ -75,20 +75,68 @@ class MT5Service:
             self._last_error = f"MetaTrader5 library unavailable: {_MT5_IMPORT_ERROR}"
             raise MT5Error(-1, self._last_error)
         with _lock:
-            kwargs = {}
+            # Do not pass login/password/server into initialize(): on some
+            # broker-branded terminals (e.g. Pepperstone) that triggers IPC
+            # timeout (-10005). Path + timeout only; rely on the terminal's
+            # saved session when possible.
+            kwargs: dict[str, Any] = {"timeout": 120_000}
             if self.terminal_path:
                 kwargs["path"] = self.terminal_path
             ok = mt5.initialize(**kwargs)
             if not ok:
                 err = mt5.last_error()
-                self._last_error = f"initialize failed: {err}"
-                raise MT5Error(err[0] if isinstance(err, tuple) else -1, str(err))
-            ok = mt5.login(self.login, password=self.password, server=self.server)
+                code = err[0] if isinstance(err, tuple) else -1
+                if code == -10005:
+                    self._last_error = (
+                        "initialize failed: IPC timeout (-10005). "
+                        "Close MetaTrader 5 completely, then restart the bridge "
+                        "so it can launch the terminal. Attaching to an "
+                        "already-running terminal is unreliable on this install."
+                    )
+                else:
+                    self._last_error = f"initialize failed: {err}"
+                raise MT5Error(code, self._last_error)
+
+            # Prefer the terminal's already-logged-in session. A separate
+            # mt5.login() after initialize also causes -10005 on affected
+            # installs even when initialize itself succeeded.
+            acc = mt5.account_info()
+            if acc is not None and int(acc.login) == int(self.login):
+                self._initialized = True
+                self._last_error = None
+                logger.info(
+                    "MT5 connected via terminal session: login=%s server=%s",
+                    acc.login,
+                    getattr(acc, "server", self.server),
+                )
+                return
+
+            if acc is not None:
+                logger.warning(
+                    "Terminal session login=%s differs from configured login=%s; "
+                    "attempting mt5.login()",
+                    acc.login,
+                    self.login,
+                )
+
+            ok = mt5.login(
+                self.login, password=self.password, server=self.server
+            )
             if not ok:
                 err = mt5.last_error()
+                code = err[0] if isinstance(err, tuple) else -1
                 mt5.shutdown()
-                self._last_error = f"login failed: {err}"
-                raise MT5Error(err[0] if isinstance(err, tuple) else -1, str(err))
+                if code == -10005:
+                    self._last_error = (
+                        "login failed: IPC timeout (-10005). "
+                        "Ensure MetaTrader 5 is closed before starting the bridge, "
+                        "and that the terminal's saved session matches MT5_LOGIN="
+                        f"{self.login}. Calling mt5.login() after initialize is "
+                        "unreliable on this install."
+                    )
+                else:
+                    self._last_error = f"login failed: {err}"
+                raise MT5Error(code, self._last_error)
             self._initialized = True
             self._last_error = None
             logger.info("MT5 connected: login=%s server=%s", self.login, self.server)
