@@ -699,6 +699,7 @@ async def system_health():
                     "server": h.get("server"),
                     "last_error": h.get("last_error"),
                     "trade_allowed": h.get("trade_allowed"),
+                    "message": h.get("message"),
                 })
             except (httpx.HTTPError, Exception) as e:  # noqa: BLE001
                 info["error"] = str(e)

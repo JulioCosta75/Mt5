@@ -1,6 +1,6 @@
 """FastAPI server exposing MT5 data over HTTP/JSON.
 
-Runs on a Windows host with the MT5 terminal installed and a logged-in account.
+Runs on a Windows host with the MT5 terminal installed; logs in via .env credentials.
 Protected by a static bearer token (BRIDGE_TOKEN env var). Designed to be
 consumed by the Linux backend at /app/backend.
 """

@@ -81,8 +81,11 @@ Troubleshooting
      - Or configure MT5 from the dashboard Settings page.
 
 3. Bridge "unreachable"?
-     - Ensure MetaTrader 5 is open and the account is logged in.
-     - Ensure "Allow algorithmic trading" is enabled
+     - Close any open MetaTrader 5 window, then restart Atlas so the bridge
+       can launch the terminal and log in with the saved credentials.
+     - Confirm login / password / server in the installer or Settings.
+     - If health reports trade_allowed=false, enable
+       "Allow algorithmic trading"
        (MT5 Tools → Options → Expert Advisors).
      - Check <install folder>\logs\bridge.err.log for the exact error code.
 

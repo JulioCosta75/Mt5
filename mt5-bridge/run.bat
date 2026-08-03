@@ -4,9 +4,10 @@ REM MT5 Bridge launcher (Windows)
 REM
 REM Pre-requisites:
 REM   1. Python 3.10-3.12 installed and on PATH
-REM   2. MT5 terminal installed, logged in, Algo Trading enabled
+REM   2. MT5 terminal installed (bridge launches it and logs in via .env)
 REM   3. `.env` file (optional) — copy from .env.example and edit. Without
 REM      it the bridge still starts in UNCONFIGURED mode and serves /health.
+REM   4. After connect: enable Algo Trading if /health reports trade_allowed=false
 REM -----------------------------------------------------------
 
 cd /d "%~dp0"
