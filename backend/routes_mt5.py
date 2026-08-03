@@ -35,6 +35,10 @@ class RiskLimitsPayload(BaseModel):
     max_open_positions: Optional[int] = None
 
 
+class AckAlertPayload(BaseModel):
+    acknowledged: bool = True
+
+
 def build_router(cache) -> APIRouter:
     """Factory that wires the routes against the provided cache."""
     router = APIRouter(prefix="/api")
@@ -256,6 +260,20 @@ def build_router(cache) -> APIRouter:
             "server_time": (await _server_time()),
             "source": "mt5",
         }
+
+    @router.get("/alerts")
+    async def list_alerts(
+        severity: Optional[str] = None,
+        unacknowledged_only: bool = False,
+    ):
+        # Live path: no mock alert catalogue. Empty until Phase 2 alert engine.
+        # Query params kept for contract parity with the mock router.
+        del severity, unacknowledged_only
+        return {"count": 0, "alerts": []}
+
+    @router.post("/alerts/{alert_id}/ack")
+    async def ack_alert(alert_id: str, payload: AckAlertPayload):
+        raise HTTPException(status_code=404, detail=f"Alert not found: {alert_id}")
 
     @router.get("/bridge/health")
     async def bridge_health():

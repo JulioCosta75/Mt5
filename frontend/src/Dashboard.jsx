@@ -138,8 +138,13 @@ export default function Dashboard() {
 
   const isSample = isSamplePresentation(mt5Status, healthMode);
   const loadGlobals = useCallback(async () => {
-    const [k, a, al] = await Promise.all([api.kpis(), api.accounts(), api.alerts()]);
-    dispatch({ type: "SET_GLOBALS", kpis: k, accounts: a, alerts: al.alerts || [] });
+    const settled = await Promise.allSettled([api.kpis(), api.accounts(), api.alerts()]);
+    const kpis = settled[0].status === "fulfilled" ? settled[0].value : null;
+    const accountsRaw = settled[1].status === "fulfilled" ? settled[1].value : [];
+    const accounts = Array.isArray(accountsRaw) ? accountsRaw : [];
+    const alertsPayload = settled[2].status === "fulfilled" ? settled[2].value : null;
+    const alerts = Array.isArray(alertsPayload?.alerts) ? alertsPayload.alerts : [];
+    dispatch({ type: "SET_GLOBALS", kpis, accounts, alerts });
   }, []);
 
   const loadAccountDetail = useCallback(async (id) => {
@@ -152,12 +157,15 @@ export default function Dashboard() {
     dispatch({ type: "SET_DETAIL", equity: eq.series || [], drawdown: dd, trades: tr.trades || [] });
   }, []);
 
-  // initial load
+  // initial load — always leave the connecting state, even if one feed fails
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      await loadGlobals();
-      if (!cancelled) dispatch({ type: "LOADING", value: false });
+      try {
+        await loadGlobals();
+      } finally {
+        if (!cancelled) dispatch({ type: "LOADING", value: false });
+      }
     })();
     return () => { cancelled = true; };
   }, [loadGlobals]);
