@@ -330,12 +330,18 @@ def _supervision_snapshot_from_accounts(
         >= float((a.get("risk_limits") or {}).get("max_daily_loss_pct", 5.0))
     )
 
+    # Account/alert severity first — ALERT must keep priority over bridge failure.
     if error > 0 or critical > 0:
         status = "ALERT"
     elif paused > 0 or warning > 0 or accounts_over_limit > 0:
         status = "WARNING"
     else:
         status = "OK"
+
+    bridge_down = bridge_ok is False
+    # Historical real cache is not mock; still never report OK while the bridge is down.
+    if bridge_down and status == "OK":
+        status = "WARNING"
 
     services = {
         "backend_ok": True,
@@ -344,9 +350,34 @@ def _supervision_snapshot_from_accounts(
         "dashboard_ok": True,
     }
 
-    if not accounts and MT5_MODE:
-        status = "WARNING"
-        message = "MT5 mode is active but no live account data is available from the bridge yet."
+    if bridge_down:
+        if accounts:
+            cache_note = (
+                "MT5 bridge is unavailable; displayed data comes from cache "
+                "and may be outdated."
+            )
+        else:
+            cache_note = (
+                "MT5 bridge is unavailable and no cached account data is available."
+            )
+        if status == "ALERT":
+            message = (
+                f"ALERT: {critical} critical alert(s), {error} account(s) in ERROR state. "
+                f"{cache_note}"
+            )
+        elif paused > 0 or warning > 0 or accounts_over_limit > 0:
+            message = (
+                f"Degraded: {warning} warning alert(s), {paused} paused account(s), "
+                f"{accounts_over_limit} account(s) near risk limits. {cache_note}"
+            )
+        else:
+            message = cache_note
+    elif not accounts and MT5_MODE:
+        if status == "OK":
+            status = "WARNING"
+        message = (
+            "MT5 mode is active but no live account data is available from the bridge yet."
+        )
     elif status == "OK":
         message = "All Forge Factory Lab core services are online and healthy."
     elif status == "WARNING":
