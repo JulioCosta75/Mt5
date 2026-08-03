@@ -101,21 +101,38 @@ echo.
 echo [3/6] Staging backend + bridge sources...
 if exist payload\backend rmdir /S /Q payload\backend
 if exist payload\bridge  rmdir /S /Q payload\bridge
-xcopy /E /I /Y ..\backend       payload\backend  >nul
-xcopy /E /I /Y ..\mt5-bridge    payload\bridge   >nul
-REM Exclude existing .env (user-specific); keep .env.example
+REM Robocopy: code + requirements only — exclude dev junk (.venv, dbs, test logs).
+robocopy ..\backend payload\backend /E /NFL /NDL /NJH /NJS /nc /ns /np ^
+  /XD .venv __pycache__ .pytest_cache tests data .git ^
+  /XF .env *.db *.pyc .installed
+if errorlevel 8 (
+    echo [ERROR] robocopy backend failed with errorlevel %ERRORLEVEL%
+    exit /b 1
+)
+robocopy ..\mt5-bridge payload\bridge /E /NFL /NDL /NJH /NJS /nc /ns /np ^
+  /XD .venv __pycache__ .pytest_cache .git ^
+  /XF .env *.db *.pyc .installed _e2e* _login* *_evidence.txt
+if errorlevel 8 (
+    echo [ERROR] robocopy bridge failed with errorlevel %ERRORLEVEL%
+    exit /b 1
+)
+REM Belt-and-braces: remove anything that still slipped through
+if exist payload\bridge\.venv rmdir /S /Q payload\bridge\.venv
+if exist payload\backend\.venv rmdir /S /Q payload\backend\.venv
+if exist payload\backend\tests rmdir /S /Q payload\backend\tests
+del /Q payload\bridge\_e2e*.txt 2>nul
+del /Q payload\bridge\_login*.txt 2>nul
+del /Q payload\bridge\*_evidence.txt 2>nul
+del /Q payload\bridge\*.db 2>nul
+del /Q payload\backend\*.db 2>nul
 if exist payload\backend\.env del payload\backend\.env
 if exist payload\bridge\.env  del payload\bridge\.env
-REM Drop heavy/unneeded dirs
-for /d %%D in (payload\backend\__pycache__ payload\bridge\__pycache__ payload\backend\tests) do (
-    if exist "%%D" rmdir /S /Q "%%D"
-)
 echo OK
 
 REM ---- 3b) Stamp build_info.json (version + UTC build time + git sha) ----
 echo Stamping build_info.json ...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$b=[ordered]@{version='%ATLAS_VER%';build='%GITSHA%';built_at=((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'));channel='release'}; ($b|ConvertTo-Json -Compress)|Set-Content -Encoding UTF8 -NoNewline 'payload\backend\build_info.json'" || exit /b 1
+  "$b=[ordered]@{version='%ATLAS_VER%';build='%GITSHA%';built_at=((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'));channel='release'}; $j=($b|ConvertTo-Json -Compress); [System.IO.File]::WriteAllText((Join-Path (Get-Location) 'payload\backend\build_info.json'), $j, (New-Object System.Text.UTF8Encoding $false))" || exit /b 1
 echo OK
 
 REM ---- 4) Build frontend (or use prebuilt) -------------------

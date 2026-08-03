@@ -145,7 +145,12 @@ var
   MT5Ready: Boolean;
 
 // Collect MT5 credentials on their own wizard page (after task selection).
+// Optional CLI overrides (used by automated installs / answers file):
+//   /MT5LOGIN= /MT5PASSWORD= /MT5SERVER= /MT5PATH=
+//   /ANSWERS=C:\path\to\answers.json  (copied to the same temp file the page writes)
 procedure InitializeWizard();
+var
+  AnswersSrc, AnswersDst: String;
 begin
   MT5Ready := False;
   MT5Page := CreateInputQueryPage(wpSelectTasks,
@@ -159,6 +164,25 @@ begin
   MT5Page.Add('MT5 Password:', True);
   MT5Page.Add('MT5 Server / Broker (e.g. Darwinex-Live):', False);
   MT5Page.Add('MT5 terminal path (optional; blank = auto-detect):', False);
+
+  // Prefill from command-line so scripted installs exercise the same page path.
+  // When /ANSWERS= is supplied, copy it and do NOT prefill — otherwise
+  // NextButtonClick would rewrite the temp file and can truncate paths that
+  // contain spaces (e.g. C:\Program Files\...).
+  AnswersSrc := ExpandConstant('{param:ANSWERS|}');
+  if (AnswersSrc <> '') and FileExists(AnswersSrc) then
+  begin
+    AnswersDst := ExpandConstant('{tmp}\atlas_mt5_answers.json');
+    if CopyFile(AnswersSrc, AnswersDst, False) then
+      MT5Ready := True;
+  end
+  else
+  begin
+    MT5Page.Values[0] := ExpandConstant('{param:MT5LOGIN|}');
+    MT5Page.Values[1] := ExpandConstant('{param:MT5PASSWORD|}');
+    MT5Page.Values[2] := ExpandConstant('{param:MT5SERVER|}');
+    MT5Page.Values[3] := ExpandConstant('{param:MT5PATH|}');
+  end;
 end;
 
 // Minimal JSON string escaper for the answers file.
@@ -200,7 +224,10 @@ begin
     MT5Ready := False;
 
     if (Login = '') and (Pass = '') and (Server = '') then
-      Exit;  // user chose to configure later
+    begin
+      // Blank page: keep a pre-supplied /ANSWERS= file if InitializeWizard copied one.
+      Exit;
+    end;
 
     if (Login = '') or (Pass = '') or (Server = '') then
     begin

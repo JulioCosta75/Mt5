@@ -703,6 +703,7 @@ async def system_health():
                 })
             except (httpx.HTTPError, Exception) as e:  # noqa: BLE001
                 info["error"] = str(e)
+            out["bridge"] = info
     return out
 
 
