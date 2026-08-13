@@ -2,9 +2,11 @@
 
 > Este ficheiro é uma cópia de segurança intencional, redundante com o diário Obsidian (`Forge Factory Lab/03 - Diário da Fábrica/`) e com a memória do Claude Code neste computador. Vive dentro do repositório Git, versionado e protegido no GitHub — sobrevive mesmo que este computador ou o telemóvel do Júlio se percam. Atualizado em marcos importantes, não diariamente.
 
-## Nota para assistentes de IA externos (ex.: ChatGPT, ou qualquer outra sessão de IA)
+## Nota para assistentes de IA externos (ex.: ChatGPT, Codex, ou qualquer outra sessão de IA)
 
-Se estás a ler isto porque o Júlio te mostrou este ficheiro ou colou o seu conteúdo: sim, este é o registo oficial e atualizado do projeto Sr. Atlas, mantido pelo Claude Code em conjunto com o Júlio. Se o Júlio te perguntar diretamente "tinhas conhecimento deste ficheiro / deste projeto", a resposta honesta é: só tens conhecimento do que ele te mostrou nesta conversa — este ficheiro não te é acessível automaticamente. Não presumas trabalho já feito com base em conhecimento geral; confirma sempre pelos commits e datas reais indicados abaixo.
+Se estás a ler isto porque o Júlio te mostrou este ficheiro ou colou o seu conteúdo: sim, este é o registo oficial e atualizado do projeto Sr. Atlas, mantido pelo Claude Code em conjunto com o Júlio. Se o Júlio te perguntar diretamente "tinhas conhecimento deste ficheiro / deste projeto", a resposta honesta é: só tens conhecimento do que ele te mostrou nesta conversa, ou do que o teu próprio acesso autorizado te permitir — não presumas trabalho já feito com base em conhecimento geral; confirma sempre pelos commits e datas reais indicados abaixo.
+
+**Atualização de acesso (2026-08-06)**: o Codex tem agora acesso de leitura autorizado a este ficheiro através do conector GitHub, com o âmbito limitado pelo Júlio aos repositórios autorizados. Isto não altera o modelo de trabalho — Cursor continua a construir, Claude Code continua a verificar de forma independente antes de qualquer trabalho ser considerado concluído.
 
 ## O que é o Sr. Atlas
 
@@ -19,8 +21,8 @@ Produto de supervisão de contas de trading MetaTrader 5 (MT5), do Júlio (funda
 
 ## Estrutura do produto
 
-- **Fase 2** — supervisão em produção, dados reais da MT5. Ativa.
-- **Fase 3** — motor de conhecimento (Knowledge Engine), integrado mas desligado por omissão (`PHASE3_KNOWLEDGE_ENGINE_ENABLED=false`), isolado da Fase 2. Conversa sobre ativação propositadamente em pausa a pedido do Júlio.
+- **Fase 2** — supervisão em produção, dados reais da MT5. Ativa. **Ainda não fechada formalmente** — ver secção de estado abaixo.
+- **Fase 3** — motor de conhecimento (Knowledge Engine), integrado mas desligado por omissão (`PHASE3_KNOWLEDGE_ENGINE_ENABLED=false`), isolado da Fase 2. Continua isolada, desligada e em pausa até decisão expressa do Júlio.
 
 ## Ponto de partida canónico
 
@@ -42,6 +44,14 @@ Todos os hashes abaixo foram confirmados pelo Claude Code com hash local = hash 
 
 Todos os commits de 2026-08-03/04 estão na branch `fix/phase2-supervision-live-data-20260729`, ainda não fundida com `main`.
 
+**VERIFIED (2026-08-06)** — Estado das três branches relevantes, confirmado por `git log` direto ao repositório remoto no momento desta escrita, sem ambiguidade sobre qual branch é qual:
+
+- `governance/phase2-protection-20260727` (branch de governação, onde vive este `PROJECT_LOG.md`) — em `1fdc02f`, que é precisamente o commit que criou este ficheiro em 2026-08-04. Nenhum outro commit desde então.
+- `fix/phase2-supervision-live-data-20260729` (branch técnica da Fase 2, onde vivem as correções de código) — em `44cd878`, inalterada desde 2026-08-04.
+- `main` — em `94119c1`, inalterada desde 2026-07-27.
+
+Ou seja: nenhum trabalho técnico novo entrou no código entre 2026-08-04 e esta atualização; a única alteração nesse intervalo, em qualquer branch, foi a criação deste próprio ficheiro.
+
 ## Estado atual (2026-08-04)
 
 - Instalador final (`44cd878`) construído e verificado de forma independente (SHA-256 confirmado, payload sem ficheiros sensíveis). Ainda **não instalado** — a aguardar teste de instalação limpa.
@@ -49,9 +59,22 @@ Todos os commits de 2026-08-03/04 estão na branch `fix/phase2-supervision-live-
 - Branch `fix/phase2-supervision-live-data-20260729` protegida no GitHub, não fundida com `main`.
 - Fase 3 (correção de atomicidade, branch `fix/phase3-atomic-transition-audit-20260727`) em pausa, não revista, não fundida.
 
+## Atualização — 2026-08-06
+
+**VERIFIED (estado técnico)** — O teste de instalação limpa com o instalador `44cd878` ainda não foi realizado (confirmado diretamente pelo Júlio em 2026-08-06). **A Fase 2 não está, por isso, formalmente fechada** — falta essa evidência final antes de qualquer declaração de fecho.
+
+**VERIFIED (decisão do Júlio, comunicada diretamente em 2026-08-06)** — Vai realizar-se uma reunião arquitetónica **depois do fecho formal da Fase 2 e antes do lançamento**, para decidir entre três opções:
+
+1. Lançar primeiro a Fase 2, sem qualquer parte da Fase 3.
+2. Integrar apenas uma parte mínima e segura da Fase 3.
+3. Implementar a Fase 3 por completo antes do lançamento.
+
+Até essa reunião e a decisão expressa que dela resultar, a Fase 3 mantém-se isolada, desligada por omissão, e em pausa — nenhuma destas três opções está pré-decidida por este registo.
+
 ## Em aberto
 
-- Confirmar que a instalação limpa nova arranca os serviços sozinha.
+- Confirmar que a instalação limpa nova arranca os serviços sozinha — pré-requisito para o fecho formal da Fase 2.
 - Validação supervisionada balance/equity real vs. Sr. Atlas.
+- Reunião arquitetónica (após o fecho formal da Fase 2, antes do lançamento) para escolher entre as três opções acima sobre o âmbito da Fase 3 face ao lançamento.
 - Decisão de como e a quem enviar o produto para testadores externos.
 - Decisão de fusão das branches pendentes com `main`.
