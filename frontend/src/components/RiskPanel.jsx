@@ -17,15 +17,6 @@ function Stat({ label, value, mono = true, cls = "" }) {
 export default function RiskPanel({ account, onUpdate, isSample = false }) {
   const [limits, setLimits] = useState(account.risk_limits);
   const [saving, setSaving] = useState(false);
-  const [killing, setKilling] = useState(false);
-
-  const toggleKill = async () => {
-    setKilling(true);
-    try {
-      await api.killSwitch(account.id, !account.kill_switch);
-      onUpdate();
-    } finally { setKilling(false); }
-  };
 
   const saveLimits = async () => {
     setSaving(true);
@@ -46,14 +37,6 @@ export default function RiskPanel({ account, onUpdate, isSample = false }) {
           Risk · {account.id} · {account.login}
           {isSample ? <span className="kbd" style={{ marginLeft: 8 }} data-testid="risk-sample-label">SAMPLE DATA</span> : null}
         </span>
-        <button
-          className={`btn ${account.kill_switch ? "success" : "danger"}`}
-          onClick={toggleKill}
-          disabled={killing}
-          data-testid="kill-switch-button"
-        >
-          {killing ? "…" : account.kill_switch ? "RESUME TRADING" : "KILL SWITCH"}
-        </button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", borderBottom: "1px solid var(--bd-default)" }}>
         <Stat label="Equity" value={fmt.money(account.equity)} data-testid="account-equity-value" />

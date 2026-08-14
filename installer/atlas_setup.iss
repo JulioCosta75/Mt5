@@ -1,6 +1,8 @@
 ; ===========================================================================
 ;  Atlas — MT5 Supervisor — Inno Setup script
-;  Output:  Atlas_Setup.exe   (single-file installer for Windows VPS)
+;  Output:  Atlas_Setup.exe   (per-user installer — no Administrator)
+;  Install root: %LOCALAPPDATA%\Atlas
+;  Runtime: tray launcher (no Windows services / NSSM)
 ;  Build:   Run build.bat (downloads payload deps + invokes ISCC.exe)
 ; ===========================================================================
 #define MyAppName      "Atlas"
@@ -9,8 +11,7 @@
 #endif
 #define MyAppPublisher "Quant.Supervise"
 #define MyAppURL       "https://quant.supervise"
-#define MyAppExeName   "Atlas Wizard.exe"
-#define InstallRoot    "{autopf}\Atlas"
+#define InstallRoot    "{localappdata}\Atlas"
 
 [Setup]
 AppId={{B8A21F36-3D72-4F1B-9F2A-1A8E2C0D77E1}
@@ -31,11 +32,11 @@ SetupIconFile=icons\atlas.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
-PrivilegesRequired=admin
-; -- Close the Atlas Wizard if it is running so its files can be replaced.
+; Per-user install — no UAC / Administrator prompt.
+PrivilegesRequired=lowest
+UsePreviousAppDir=no
 CloseApplications=yes
 RestartApplications=no
-; -- Always deploy on top of a clean tree (see [InstallDelete]).
 ArchitecturesInstallIn64BitMode=x64compatible
 DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\icons\atlas.ico
@@ -50,9 +51,9 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "pt"; MessagesFile: "compiler:Languages\Portuguese.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "Create a desktop shortcut for the Atlas dashboard"; GroupDescription: "Shortcuts:"
+Name: "desktopicon"; Description: "Create a desktop shortcut for Atlas"; GroupDescription: "Shortcuts:"
 Name: "startmenu";   Description: "Create Start Menu shortcuts"; GroupDescription: "Shortcuts:"
-Name: "installsvc";  Description: "Install Atlas as Windows Services (auto-start on boot)"; GroupDescription: "Services:"; Flags: checkedonce
+Name: "startup";     Description: "Start Atlas when I sign in to Windows"; GroupDescription: "Startup:"; Flags: unchecked
 Name: "openbrowser"; Description: "Open the dashboard in the browser after install"; GroupDescription: "Post-install:"; Flags: checkedonce
 
 [Files]
@@ -68,13 +69,10 @@ Source: "payload\bridge\*";          DestDir: "{app}\bridge";         Flags: rec
 ; -- Frontend (pre-built React) -------------------------------------------
 Source: "payload\frontend_build\*";  DestDir: "{app}\frontend_build"; Flags: recursesubdirs ignoreversion
 
-; -- NSSM service manager (single .exe) ----------------------------------
-Source: "payload\nssm.exe";          DestDir: "{app}";                Flags: ignoreversion
-
-; -- Service & operation scripts -----------------------------------------
+; -- Operation scripts (tray launcher — no NSSM / Windows services) ------
 Source: "scripts\_detect_env.bat";         DestDir: "{app}\scripts"; Flags: ignoreversion
-Source: "scripts\install_services.bat";    DestDir: "{app}\scripts"; Flags: ignoreversion
-Source: "scripts\uninstall_services.bat";  DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "scripts\atlas_launcher.py";       DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "scripts\start_atlas_app.bat";     DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\start_atlas.bat";         DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\stop_atlas.bat";          DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\open_dashboard.bat";      DestDir: "{app}\scripts"; Flags: ignoreversion
@@ -82,7 +80,7 @@ Source: "scripts\healthcheck.bat";         DestDir: "{app}\scripts"; Flags: igno
 Source: "scripts\bootstrap_pip.bat";       DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\install_deps.bat";        DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\apply_restart.bat";       DestDir: "{app}\scripts"; Flags: ignoreversion
-Source: "scripts\configure_atlas.py";     DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "scripts\configure_atlas.py";      DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "scripts\configure_mt5.bat";       DestDir: "{app}\scripts"; Flags: ignoreversion
 
 ; -- Icons & misc ----------------------------------------------------------
@@ -91,48 +89,45 @@ Source: "LICENSE.txt";      DestDir: "{app}";        Flags: ignoreversion
 Source: "README_INSTALL.txt"; DestDir: "{app}";      Flags: ignoreversion
 
 [Dirs]
-Name: "{app}\data";  Permissions: users-modify
-Name: "{app}\logs";  Permissions: users-modify
+Name: "{app}\data"
+Name: "{app}\logs"
 
 [InstallDelete]
-; Guarantee a clean, reproducible deployment: remove the previous build's
-; code and Python packages so the new version fully replaces the old one.
-; (User data in {app}\data and logs in {app}\logs are preserved.)
+; Clean code tree on upgrade (preserve {app}\data and {app}\logs).
 Type: filesandordirs; Name: "{app}\backend"
 Type: filesandordirs; Name: "{app}\bridge"
 Type: filesandordirs; Name: "{app}\frontend_build"
 Type: filesandordirs; Name: "{app}\python\Lib\site-packages"
 Type: filesandordirs; Name: "{app}\python\Scripts"
 Type: files;          Name: "{app}\backend\build_info.json"
+; Drop legacy Windows-service leftovers from older builds.
+Type: files; Name: "{app}\nssm.exe"
+Type: files; Name: "{app}\scripts\install_services.bat"
+Type: files; Name: "{app}\scripts\uninstall_services.bat"
 
 [Icons]
-Name: "{group}\Atlas Dashboard";    Filename: "{app}\scripts\open_dashboard.bat"; IconFilename: "{app}\icons\atlas.ico"; Tasks: startmenu
-Name: "{group}\Atlas Health Check"; Filename: "{app}\scripts\healthcheck.bat";    IconFilename: "{app}\icons\atlas.ico"; Tasks: startmenu
-Name: "{group}\Stop Atlas";         Filename: "{app}\scripts\stop_atlas.bat";     IconFilename: "{app}\icons\atlas.ico"; Tasks: startmenu
-Name: "{group}\Start Atlas";        Filename: "{app}\scripts\start_atlas.bat";    IconFilename: "{app}\icons\atlas.ico"; Tasks: startmenu
+Name: "{group}\Atlas";              Filename: "{app}\scripts\start_atlas_app.bat"; IconFilename: "{app}\icons\atlas.ico"; Tasks: startmenu
+Name: "{group}\Atlas Dashboard";    Filename: "{app}\scripts\open_dashboard.bat";  IconFilename: "{app}\icons\atlas.ico"; Tasks: startmenu
+Name: "{group}\Atlas Health Check"; Filename: "{app}\scripts\healthcheck.bat";     IconFilename: "{app}\icons\atlas.ico"; Tasks: startmenu
+Name: "{group}\Stop Atlas";         Filename: "{app}\scripts\stop_atlas.bat";      IconFilename: "{app}\icons\atlas.ico"; Tasks: startmenu
 Name: "{group}\Uninstall Atlas";    Filename: "{uninstallexe}"; Tasks: startmenu
-Name: "{commondesktop}\Atlas Dashboard"; Filename: "{app}\scripts\open_dashboard.bat"; IconFilename: "{app}\icons\atlas.ico"; Tasks: desktopicon
+Name: "{userdesktop}\Atlas";        Filename: "{app}\scripts\start_atlas_app.bat"; IconFilename: "{app}\icons\atlas.ico"; Tasks: desktopicon
+; Optional sign-in auto-start (user Startup folder — not a Windows service).
+Name: "{userstartup}\Atlas";        Filename: "{app}\scripts\start_atlas_app.bat"; IconFilename: "{app}\icons\atlas.ico"; Tasks: startup
 
 [Run]
 ; 1) Install pip into embedded Python and pip-install backend + bridge deps
 Filename: "{app}\scripts\bootstrap_pip.bat"; StatusMsg: "Setting up Python runtime..."; Flags: runhidden
 Filename: "{app}\scripts\install_deps.bat";  StatusMsg: "Installing Python dependencies (this may take a few minutes)..."; Flags: runhidden
 
-; 2) Write the .env files the services read. Uses the credentials entered
-;    on the wizard page (if any); otherwise, on a reinstall/upgrade, it
-;    restores the previously saved MT5 config so the bridge reconnects
-;    automatically. A blank first-time install is a harmless no-op.
+; 2) Write .env from the wizard answers (or restore previous config).
 Filename: "{app}\python\python.exe"; Parameters: """{app}\scripts\configure_atlas.py"" --answers ""{tmp}\atlas_mt5_answers.json"" --non-interactive --backend-dir ""{app}\backend"" --bridge-dir ""{app}\bridge"" --data-dir ""{app}\data"""; WorkingDir: "{app}"; StatusMsg: "Saving MetaTrader 5 configuration..."; Flags: runhidden
 
-; 3) Install services if user accepted
-Filename: "{app}\scripts\install_services.bat"; StatusMsg: "Registering Atlas Windows Services..."; Tasks: installsvc; Flags: runhidden
+; 3) Start Atlas as a normal tray application (no Windows services).
+Filename: "{app}\scripts\start_atlas_app.bat"; StatusMsg: "Starting Atlas..."; Flags: nowait
 
-; 4) Start the freshly installed build so the dashboard is live immediately.
-;    The bridge picks up the .env written in step 2 and connects to MT5.
-Filename: "{app}\scripts\start_atlas.bat"; StatusMsg: "Starting Atlas services..."; Tasks: installsvc; Flags: runhidden
-
-[UninstallRun]
-Filename: "{app}\scripts\uninstall_services.bat"; Flags: runhidden
+; 4) Optional: open the dashboard URL (launcher also opens once when healthy).
+Filename: "{app}\scripts\open_dashboard.bat"; StatusMsg: "Opening dashboard..."; Tasks: openbrowser; Flags: nowait skipifsilent
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\data"
@@ -144,10 +139,6 @@ var
   MT5Page: TInputQueryWizardPage;
   MT5Ready: Boolean;
 
-// Collect MT5 credentials on their own wizard page (after task selection).
-// Optional CLI overrides (used by automated installs / answers file):
-//   /MT5LOGIN= /MT5PASSWORD= /MT5SERVER= /MT5PATH=
-//   /ANSWERS=C:\path\to\answers.json  (copied to the same temp file the page writes)
 procedure InitializeWizard();
 var
   AnswersSrc, AnswersDst: String;
@@ -165,10 +156,6 @@ begin
   MT5Page.Add('MT5 Server / Broker (e.g. Darwinex-Live):', False);
   MT5Page.Add('MT5 terminal path (optional; blank = auto-detect):', False);
 
-  // Prefill from command-line so scripted installs exercise the same page path.
-  // When /ANSWERS= is supplied, copy it and do NOT prefill — otherwise
-  // NextButtonClick would rewrite the temp file and can truncate paths that
-  // contain spaces (e.g. C:\Program Files\...).
   AnswersSrc := ExpandConstant('{param:ANSWERS|}');
   if (AnswersSrc <> '') and FileExists(AnswersSrc) then
   begin
@@ -185,7 +172,6 @@ begin
   end;
 end;
 
-// Minimal JSON string escaper for the answers file.
 function JsonEscape(const S: String): String;
 var
   I: Integer;
@@ -208,8 +194,6 @@ begin
   Result := R;
 end;
 
-// Validate the MT5 page and, when filled, write a temp answers file that
-// the [Run] step feeds to configure_atlas.py.
 function NextButtonClick(CurPageID: Integer): Boolean;
 var
   Login, Pass, Server, TermPath, Json, AnswersFile: String;
@@ -225,7 +209,6 @@ begin
 
     if (Login = '') and (Pass = '') and (Server = '') then
     begin
-      // Blank page: keep a pre-supplied /ANSWERS= file if InitializeWizard copied one.
       Exit;
     end;
 
@@ -258,29 +241,25 @@ begin
   end;
 end;
 
-// ---------------------------------------------------------------------------
-//  Stop + remove the Atlas services and any bundled python.exe left running,
-//  BEFORE Inno deletes/copies files. This is what makes every install a clean,
-//  reproducible deployment (fixes "dashboard still runs the previous version").
-// ---------------------------------------------------------------------------
-procedure StopAtlasServices();
+procedure StopAtlasAt(const Root: String);
 var
   ResultCode: Integer;
   Nssm: String;
+  PyDll: String;
 begin
-  // 1) Graceful stop via the Windows Service Control Manager.
+  if Root = '' then Exit;
+  if not DirExists(Root) then Exit;
+
+  // Legacy Windows services (older Atlas builds) — best-effort cleanup.
   Exec('net.exe', 'stop AtlasBackend', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec('net.exe', 'stop AtlasBridge',  '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-
-  // 2) Remove the service definitions (NSSM if present, else sc.exe) so the
-  //    new build re-registers them cleanly.
-  Nssm := ExpandConstant('{app}\nssm.exe');
+  Nssm := Root + '\nssm.exe';
   if FileExists(Nssm) then
   begin
-    Exec(Nssm, 'stop AtlasBackend',   '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(Nssm, 'stop AtlasBackend', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Exec(Nssm, 'remove AtlasBackend confirm', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Exec(Nssm, 'stop AtlasBridge',    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Exec(Nssm, 'remove AtlasBridge confirm',  '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(Nssm, 'stop AtlasBridge', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(Nssm, 'remove AtlasBridge confirm', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end
   else
   begin
@@ -288,31 +267,46 @@ begin
     Exec('sc.exe', 'delete AtlasBridge',  '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end;
 
-  // 3) Kill any bundled python.exe still holding files in {app}\python so the
-  //    embedded runtime and site-packages can be replaced. We target ONLY the
-  //    Atlas-bundled interpreter path, never the user's system Python.
-  if DirExists(ExpandConstant('{app}\python')) then
+  // Kill tray launcher / bundled python holding files under this root.
+  PyDll := Root + '\python\python311.dll';
+  if FileExists(PyDll) then
+  begin
     Exec('taskkill.exe',
-         '/F /FI "IMAGENAME eq python.exe" /FI "MODULES eq ' + ExpandConstant('{app}\python\python311.dll') + '"',
+         '/F /FI "IMAGENAME eq python.exe" /FI "MODULES eq ' + PyDll + '"',
          '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec('taskkill.exe',
+         '/F /FI "IMAGENAME eq pythonw.exe" /FI "MODULES eq ' + PyDll + '"',
+         '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
+end;
 
-  // Give the OS a moment to release file handles.
+procedure StopAtlasProcesses();
+begin
+  // Current (per-user) install root.
+  StopAtlasAt(ExpandConstant('{app}'));
+  // Legacy Program Files installs from the NSSM era.
+  StopAtlasAt(ExpandConstant('{commonpf64}\Atlas'));
+  StopAtlasAt(ExpandConstant('{commonpf}\Atlas'));
+  StopAtlasAt(ExpandConstant('{pf}\Atlas'));
   Sleep(1500);
 end;
 
 function InitializeSetup(): Boolean;
 begin
-  // MetaTrader 5 credentials are collected on a wizard page (see
-  // InitializeWizard) and written to the .env files before the services
-  // start, so Atlas connects to MT5 right after installation. Leaving the
-  // fields blank keeps the old behaviour (configure later from the dashboard).
   Result := True;
 end;
 
-// Called right before files are installed (after the user clicks Install and
-// before [InstallDelete]/[Files]). Perfect place to release file locks.
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
-  StopAtlasServices();
-  Result := '';  // empty = proceed
+  StopAtlasProcesses();
+  Result := '';
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  // Stop tray app before files are removed.
+  StopAtlasProcesses();
+  // Remove optional Startup shortcut if present.
+  DeleteFile(ExpandConstant('{userstartup}\Atlas.lnk'));
+  Result := True;
 end;

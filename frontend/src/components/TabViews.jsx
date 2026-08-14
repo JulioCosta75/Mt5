@@ -287,7 +287,7 @@ export function RiskView({ accounts, selectedId, onSelect, selectedAccount, onUp
       ) : (
         <div className="panel" data-testid="risk-empty">
           <div style={{ padding: 24, textAlign: "center", color: "var(--text-tertiary)", fontSize: 12 }}>
-            Select an account to manage its risk limits and kill switch.
+            Select an account to manage its risk limits.
           </div>
         </div>
       )}

@@ -1,60 +1,70 @@
 Atlas — MT5 Supervisor
 ======================
 
-This installer has placed Atlas under the folder you selected
-(default: C:\Program Files\Atlas).
+This installer places Atlas under your user profile:
+
+    %LOCALAPPDATA%\Atlas
+    (typically C:\Users\<you>\AppData\Local\Atlas)
+
+No Administrator rights are required. Atlas runs as a normal tray
+application (system tray icon), not as a Windows service.
 
 Quick start
 -----------
 1. During setup you were asked for your MetaTrader 5 account
    (Login / Password / Server, and optionally the terminal path).
-   Those details were written to the local .env files and the Atlas
-   services were started automatically — no extra steps needed.
-2. The dashboard opens automatically at http://localhost:8001/.
-   Confirm the connection on the Health page (see below).
-3. To change your MT5 account later, either use the dashboard
-   Settings page, or re-run (as administrator):
+   Those details were written to the local .env files.
+2. Atlas starts as a tray app. Look for the Atlas icon near the clock.
+   Right-click: Open Dashboard / Restart Atlas / Quit Atlas.
+3. The dashboard is at http://127.0.0.1:8001/
+4. To change your MT5 account later, use the dashboard Settings page
+   ("Save & Connect") — Atlas restarts itself automatically.
+   Or re-run:
        <install folder>\scripts\configure_mt5.bat
-   then restart the services:
        <install folder>\scripts\stop_atlas.bat
-       <install folder>\scripts\start_atlas.bat
+       <install folder>\scripts\start_atlas_app.bat
 
-   (If you left the MT5 fields blank during setup, the dashboard still
-   runs; just configure MT5 from Settings or configure_mt5.bat.)
+Optional: start when you sign in to Windows
+-------------------------------------------
+If you ticked "Start Atlas when I sign in to Windows" during setup,
+a shortcut was added to your Startup folder. You can remove it any
+time from that folder or by reinstalling without the option.
 
 What got installed
 ------------------
-• Two Windows services that auto-start with Windows:
-    AtlasBridge   — talks to MT5 via the MetaTrader5 Python lib (port 8002)
-    AtlasBackend  — API + dashboard server (port 8001)
+• Tray launcher that starts:
+    Bridge  — talks to MT5 (port 8002)
+    Backend — API + dashboard (port 8001)
 
-• Start menu entries under "Atlas":
-    Atlas Dashboard           open the dashboard
-    Atlas Health Check        opens the diagnostics page
-    Start Atlas / Stop Atlas  service control
+• Start menu / desktop shortcuts (if selected):
+    Atlas                 start the tray app
+    Atlas Dashboard       open http://127.0.0.1:8001/
+    Atlas Health Check    diagnostics page
+    Stop Atlas            quit the tray app and children
 
 URLs
 ----
-Dashboard:    http://localhost:8001/
-Health page:  http://localhost:8001/healthcheck
-API root:     http://localhost:8001/api/
+Dashboard:    http://127.0.0.1:8001/
+Health page:  http://127.0.0.1:8001/healthcheck
+API root:     http://127.0.0.1:8001/api/
 
 Checking which version is running
 ---------------------------------
-The running build is shown in two places, so you can always confirm an
-install/upgrade actually took effect:
   • Dashboard header (top-right), e.g.  v0.3.0
-  • Health page footer  (http://localhost:8001/healthcheck)
-  • API:  http://localhost:8001/api/system/version
+  • Health page footer
+  • API:  http://127.0.0.1:8001/api/system/version
 
-Upgrading to a new version
---------------------------
-Atlas upgrades are clean and reproducible — no manual commands:
-  1. Run the new Atlas_Setup.exe (or first uninstall via Add/Remove Programs).
-  2. The installer automatically STOPS both Atlas services, REPLACES all old
-     program files and Python packages, re-registers the services and STARTS
-     the new build. Your data (\data) and logs (\logs) are preserved.
-  3. Open the Dashboard and confirm the version number in the header changed.
+Upgrading
+---------
+  1. Run the new Atlas_Setup.exe (no Administrator needed).
+  2. The installer stops any running Atlas processes, replaces program
+     files, and starts the tray app again. Your data (\data) and logs
+     (\logs) are preserved.
+  3. Confirm the version in the dashboard header.
+
+  If you previously installed under Program Files with Windows services,
+  uninstall that old copy (or let the new installer stop those legacy
+  services) so only the LocalAppData install remains.
 
 Logs
 ----
@@ -62,41 +72,24 @@ Logs
 <install folder>\logs\backend.err.log
 <install folder>\logs\bridge.out.log
 <install folder>\logs\bridge.err.log
+<install folder>\logs\launcher.log
 
 Data
 ----
 SQLite databases are kept under <install folder>\data\
-You can back up this folder to preserve overrides and equity snapshots.
 
 Troubleshooting
 ---------------
 1. Dashboard not loading?
-     - Run "Atlas Health Check" from the Start menu.
-     - If Backend = unreachable, run "Start Atlas".
+     - Confirm the Atlas tray icon is present.
+     - Run "Atlas" / start_atlas_app.bat from the Start menu.
+     - Run "Atlas Health Check".
 
 2. Health page says "Mode = mock"?
-     - The backend .env wasn't written, or the services started before it.
-     - Re-run  <install folder>\scripts\configure_mt5.bat  (as admin),
-       then  scripts\stop_atlas.bat  &&  scripts\start_atlas.bat
-     - Or configure MT5 from the dashboard Settings page.
+     - Configure MT5 from Settings → Save & Connect, or run
+       scripts\configure_mt5.bat then start_atlas_app.bat again.
 
-3. Bridge "unreachable"?
-     - Close any open MetaTrader 5 window, then restart Atlas so the bridge
-       can launch the terminal and log in with the saved credentials.
-     - Confirm login / password / server in the installer or Settings.
-     - If health reports trade_allowed=false, enable
-       "Allow algorithmic trading"
-       (MT5 Tools → Options → Expert Advisors).
-     - Check <install folder>\logs\bridge.err.log for the exact error code.
-
-4. Want remote access?
-     - By default, both services listen on 127.0.0.1 only.
-     - To expose the dashboard on the LAN/internet, edit
-       <install folder>\scripts\install_services.bat:
-       change "--host 127.0.0.1" to "--host 0.0.0.0", then re-run that script
-       as administrator.
-     - Open inbound TCP 8001 in the Windows Firewall.
-
-Support
--------
-Atlas is provided as-is. See LICENSE.txt.
+3. Upgrading from an old "Windows Services" install?
+     - Prefer uninstalling the old Program Files copy first.
+     - The new installer also attempts to stop/remove legacy
+       AtlasBridge / AtlasBackend services if they still exist.

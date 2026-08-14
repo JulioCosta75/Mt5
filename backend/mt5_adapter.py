@@ -61,9 +61,9 @@ def account_from_bridge(bridge_account: dict, positions_count: int,
 
     connected = bool(bridge_account.get("connected"))
     trade_allowed = bool(bridge_account.get("trade_allowed"))
-    if kill_switch:
-        status = "PAUSED"
-    elif not connected:
+    # Atlas is observation-only: kill_switch is retained in the payload for
+    # API compatibility but must never change LIVE/PAUSED presentation.
+    if not connected:
         status = "ERROR"
     elif not trade_allowed:
         status = "PAUSED"
