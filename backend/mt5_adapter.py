@@ -11,7 +11,7 @@ The frontend reads account objects with these keys:
 We map them from the bridge as follows:
     id            <- f"MT5-{login}"
     broker        <- mt5.broker (company) or mt5.server
-    strategy      <- "Live MT5" until we group by magic number (Phase 2)
+    strategy      <- "Live MT5" (account-level; EA breakdown is /api/eas)
     currency      <- mt5.currency
     leverage      <- mt5.leverage
     balance/equity/margin -> direct
@@ -26,7 +26,15 @@ We map them from the bridge as follows:
 """
 from __future__ import annotations
 
+import re
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
+
+COMMENT_CONSISTENCY_THRESHOLD = 0.60
+_JUNK_COMMENT_RE = re.compile(
+    r"^(?:from\s*#?\d+|to\s*#?\d+|#[0-9]+|\d+)$",
+    re.IGNORECASE,
+)
 
 
 # ---- account ----
@@ -104,8 +112,149 @@ def drawdown_from_equity(series: list[dict]) -> tuple[list[dict], float, float]:
     return out, round(max_dd, 2), current_dd
 
 
+# ---- EA naming / grouping -------------------------------------------------
+def comment_is_usable(comment: object) -> bool:
+    """True when an MT5 comment is usable as a friendly EA name."""
+    if comment is None:
+        return False
+    text = str(comment).strip()
+    if not text:
+        return False
+    if _JUNK_COMMENT_RE.match(text):
+        return False
+    return True
+
+
+def resolve_ea_label(
+    magic: int,
+    comments: list[object],
+    override: str | None = None,
+) -> tuple[str, str]:
+    """Return (label, source) using the founder-approved naming rule.
+
+    Priority: manual override → consistent comment (≥60%) → ``EA {magic}``
+    → magic 0 = ``Manual / sem EA``.
+    """
+    if override is not None:
+        cleaned = str(override).strip()
+        if cleaned:
+            return cleaned, "manual"
+
+    magic_i = int(magic or 0)
+    if magic_i == 0:
+        return "Manual / sem EA", "manual_zero"
+
+    usable = [str(c).strip() for c in comments if comment_is_usable(c)]
+    if usable:
+        top, count = Counter(usable).most_common(1)[0]
+        if (count / len(usable)) >= COMMENT_CONSISTENCY_THRESHOLD:
+            return top, "comment"
+
+    return f"EA {magic_i}", "fallback"
+
+
+def _deal_net_pnl(deal: dict) -> float:
+    return (
+        float(deal.get("profit", 0) or 0)
+        + float(deal.get("swap", 0) or 0)
+        + float(deal.get("commission", 0) or 0)
+    )
+
+
+def _drawdown_from_pnl_curve(pnls_chrono: list[float]) -> tuple[float, float]:
+    """Approximate max/current drawdown % from a cumulative realized-PnL curve."""
+    if not pnls_chrono:
+        return 0.0, 0.0
+    equity = 0.0
+    peak = 0.0
+    max_dd = 0.0
+    for pnl in pnls_chrono:
+        equity += float(pnl)
+        peak = max(peak, equity)
+        if peak > 0:
+            dd = (equity - peak) / peak * 100.0
+            max_dd = min(max_dd, dd)
+    current_dd = ((equity - peak) / peak * 100.0) if peak > 0 else 0.0
+    return round(max_dd, 2), round(current_dd, 2)
+
+
+def eas_from_bridge(
+    *,
+    account_id: str,
+    login: int,
+    positions: list[dict],
+    deals: list[dict],
+    label_overrides: dict[int, str] | None = None,
+) -> list[dict]:
+    """Build per-magic EA rows from live positions + history deals."""
+    overrides = {int(k): str(v) for k, v in (label_overrides or {}).items()}
+
+    by_magic_comments: dict[int, list[str]] = defaultdict(list)
+    by_magic_pos: dict[int, list[dict]] = defaultdict(list)
+    by_magic_deals: dict[int, list[dict]] = defaultdict(list)
+
+    for p in positions or []:
+        magic = int(p.get("magic", 0) or 0)
+        by_magic_pos[magic].append(p)
+        if p.get("comment") is not None:
+            by_magic_comments[magic].append(p.get("comment"))
+
+    for d in deals or []:
+        magic = int(d.get("magic", 0) or 0)
+        by_magic_deals[magic].append(d)
+        if d.get("comment") is not None:
+            by_magic_comments[magic].append(d.get("comment"))
+
+    magics = sorted(set(by_magic_pos) | set(by_magic_deals) | set(overrides))
+    rows: list[dict] = []
+    for magic in magics:
+        if (
+            magic not in by_magic_pos
+            and magic not in by_magic_deals
+            and magic not in overrides
+        ):
+            continue
+
+        label, source = resolve_ea_label(
+            magic, by_magic_comments.get(magic, []), overrides.get(magic)
+        )
+        poss = by_magic_pos.get(magic, [])
+        deals_m = by_magic_deals.get(magic, [])
+        floating = sum(
+            float(p.get("profit", 0) or 0) + float(p.get("swap", 0) or 0) for p in poss
+        )
+        closed = trades_from_deals(deals_m, label_overrides=overrides)
+        realized = sum(float(t.get("pnl", 0) or 0) for t in closed)
+        wins = sum(1 for t in closed if float(t.get("pnl", 0) or 0) > 0)
+        win_rate = round((wins / len(closed) * 100.0), 1) if closed else 0.0
+
+        chrono = sorted(deals_m, key=lambda x: x.get("time") or "")
+        max_dd, cur_dd = _drawdown_from_pnl_curve([_deal_net_pnl(d) for d in chrono])
+
+        rows.append({
+            "id": f"{account_id}:magic-{magic}",
+            "account_id": account_id,
+            "login": int(login),
+            "magic": magic,
+            "label": label,
+            "label_source": source,
+            "open_positions": len(poss),
+            "floating_pnl": round(floating, 2),
+            "realized_pnl": round(realized, 2),
+            "net_pnl": round(realized + floating, 2),
+            "trade_count": len(closed),
+            "win_rate": win_rate,
+            "max_drawdown": max_dd,
+            "current_drawdown": cur_dd,
+            "symbols": sorted({str(p.get("symbol")) for p in poss if p.get("symbol")}),
+        })
+
+    rows.sort(key=lambda r: (r["open_positions"] == 0, -abs(r["net_pnl"]), r["magic"]))
+    return rows
+
+
 # ---- trades ----
-def trades_from_deals(deals: list[dict]) -> list[dict]:
+def trades_from_deals(deals: list[dict], label_overrides: dict[int, str] | None = None) -> list[dict]:
     """Map MT5 deals into the frontend trade-row schema.
 
     MT5 deals are per-leg (entry OR exit). The frontend table treats each
@@ -117,6 +266,7 @@ def trades_from_deals(deals: list[dict]) -> list[dict]:
     This is a usable approximation for MVP; a Phase 1.2 task is to do exact
     position-pairing for entry/exit times.
     """
+    overrides = {int(k): str(v) for k, v in (label_overrides or {}).items()}
     # group by position_id so we can pair entry+exit
     by_pos: dict[int, list[dict]] = {}
     for d in deals:
@@ -129,7 +279,7 @@ def trades_from_deals(deals: list[dict]) -> list[dict]:
             continue
         legs.sort(key=lambda x: x["time"])
         entry, *_, exit_ = legs
-        pnl = sum(float(leg.get("profit", 0)) + float(leg.get("swap", 0)) + float(leg.get("commission", 0)) for leg in legs)
+        pnl = sum(_deal_net_pnl(leg) for leg in legs)
         try:
             t_open = datetime.fromisoformat(entry["time"])
             t_close = datetime.fromisoformat(exit_["time"])
@@ -137,6 +287,9 @@ def trades_from_deals(deals: list[dict]) -> list[dict]:
         except Exception:  # noqa: BLE001
             t_open = t_close = datetime.now(timezone.utc)
             duration_min = 0
+        magic = int(entry.get("magic", 0) or 0)
+        comments = [leg.get("comment") for leg in legs]
+        label, _src = resolve_ea_label(magic, comments, overrides.get(magic))
         rows.append({
             "id": f"DEAL-{exit_['ticket']}",
             "symbol": exit_["symbol"],
@@ -147,7 +300,9 @@ def trades_from_deals(deals: list[dict]) -> list[dict]:
             "close_time": t_close.isoformat(),
             "open_price": float(entry["price"]),
             "close_price": float(exit_["price"]),
-            "strategy": f"magic-{entry.get('magic', 0)}" if entry.get("magic") else "Live MT5",
+            "magic": magic,
+            "comment": entry.get("comment") or exit_.get("comment") or "",
+            "strategy": label,
             "duration_min": duration_min,
         })
     rows.sort(key=lambda r: r["close_time"], reverse=True)
