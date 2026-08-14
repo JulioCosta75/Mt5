@@ -116,3 +116,24 @@ def test_launcher_builds_expected_commands(tmp_path, monkeypatch):
     assert "uvicorn" in children[1].spec.args
     assert children[1].spec.env["SERVE_FRONTEND"] == "true"
     assert children[1].spec.env["ATLAS_STORE"] == "sqlite"
+
+
+def test_open_dashboard_once_per_session(tmp_path, monkeypatch):
+    root = _make_fake_root(tmp_path)
+    paths = al.resolve_paths(str(root))
+    launcher = al.Launcher(paths, open_browser=False)
+    opens: list[str] = []
+    monkeypatch.setattr(al.webbrowser, "open", lambda url: opens.append(url))
+
+    assert launcher.open_dashboard(force=False) is True
+    assert launcher.open_dashboard(force=False) is False
+    assert launcher.open_dashboard(force=False) is False
+    # Manual tray action may force a new tab.
+    assert launcher.open_dashboard(force=True) is True
+    assert opens == [al.BACKEND_URL, al.BACKEND_URL]
+
+    # restart_all must not clear the session flag / open tabs
+    launcher.children = []
+    launcher.restart_all()
+    assert launcher.open_dashboard(force=False) is False
+    assert opens == [al.BACKEND_URL, al.BACKEND_URL]

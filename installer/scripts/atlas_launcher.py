@@ -257,6 +257,7 @@ class Launcher:
         self.on_fatal = on_fatal or (lambda msg: None)
         self._stop = threading.Event()
         self._browser_opened = False
+        self._browser_lock = threading.Lock()
         self.children: list[ChildHandle] = []
         self._watch_thread: Optional[threading.Thread] = None
 
@@ -301,16 +302,30 @@ class Launcher:
         )
         return [ChildHandle(bridge), ChildHandle(backend)]
 
+    def open_dashboard(self, *, force: bool = False) -> bool:
+        """Open the dashboard once per launcher session (unless force=True).
+
+        Returns True if webbrowser.open was called.
+        """
+        with self._browser_lock:
+            if self._browser_opened and not force:
+                log.info("Dashboard already opened this session; not opening another tab")
+                return False
+            self._browser_opened = True
+        webbrowser.open(BACKEND_URL)
+        return True
+
     def start(self) -> None:
         self.paths.ensure_dirs()
         self.children = self.build_children()
         for child in self.children:
             child.start()
             time.sleep(0.4)
-        self._watch_thread = threading.Thread(
-            target=self._watch_loop, name="atlas-watch", daemon=True
-        )
-        self._watch_thread.start()
+        if self._watch_thread is None or not self._watch_thread.is_alive():
+            self._watch_thread = threading.Thread(
+                target=self._watch_loop, name="atlas-watch", daemon=True
+            )
+            self._watch_thread.start()
         if self.open_browser:
             threading.Thread(
                 target=self._open_browser_when_ready, name="atlas-browser", daemon=True
@@ -323,6 +338,7 @@ class Launcher:
             child.stop()
 
     def restart_all(self) -> None:
+        """Restart children without opening extra browser tabs."""
         log.info("Manual restart requested")
         for child in reversed(self.children):
             child.stop()
@@ -332,11 +348,7 @@ class Launcher:
             child.gave_up = False
             child.start()
             time.sleep(0.4)
-        self._browser_opened = False
-        if self.open_browser:
-            threading.Thread(
-                target=self._open_browser_when_ready, name="atlas-browser", daemon=True
-            ).start()
+        # Intentionally do NOT reset _browser_opened or spawn another browser thread.
 
     def _watch_loop(self) -> None:
         # Grace period so a slow MT5 connect is not treated as an instant crash.
@@ -361,9 +373,7 @@ class Launcher:
             try:
                 with urllib.request.urlopen(HEALTH_URL, timeout=2) as resp:
                     if 200 <= getattr(resp, "status", 200) < 500:
-                        if not self._browser_opened:
-                            self._browser_opened = True
-                            webbrowser.open(BACKEND_URL)
+                        self.open_dashboard(force=False)
                         return
             except Exception:
                 time.sleep(1.0)
@@ -443,12 +453,18 @@ def run_tray(launcher: Launcher) -> int:
     import ctypes
     from ctypes import wintypes
 
-    user32 = ctypes.windll.user32
-    shell32 = ctypes.windll.shell32
-    kernel32 = ctypes.windll.kernel32
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+    # 64-bit Windows requires LRESULT-sized wndproc returns; c_long truncates
+    # and breaks WM_COMMAND / tray callbacks (clicks appear to do nothing).
+    LRESULT = ctypes.c_ssize_t
+    HMENU = wintypes.HMENU
+    HICON = wintypes.HICON
+    HWND = wintypes.HWND
 
     WM_DESTROY = 0x0002
-    WM_COMMAND = 0x0111
     WM_USER = 0x0400
     WM_TRAY = WM_USER + 1
     WM_LBUTTONDBLCLK = 0x0203
@@ -461,6 +477,7 @@ def run_tray(launcher: Launcher) -> int:
     MF_STRING = 0x00000000
     MF_SEPARATOR = 0x00000800
     TPM_RIGHTBUTTON = 0x0002
+    TPM_RETURNCMD = 0x0100
     ID_OPEN = 1001
     ID_RESTART = 1002
     ID_QUIT = 1003
@@ -468,25 +485,89 @@ def run_tray(launcher: Launcher) -> int:
     class NOTIFYICONDATA(ctypes.Structure):
         _fields_ = [
             ("cbSize", wintypes.DWORD),
-            ("hWnd", wintypes.HWND),
+            ("hWnd", HWND),
             ("uID", wintypes.UINT),
             ("uFlags", wintypes.UINT),
             ("uCallbackMessage", wintypes.UINT),
-            ("hIcon", wintypes.HICON),
+            ("hIcon", HICON),
             ("szTip", wintypes.WCHAR * 128),
         ]
 
-    WNDPROC = ctypes.WINFUNCTYPE(
-        ctypes.c_long, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM
-    )
+    WNDPROC = ctypes.WINFUNCTYPE(LRESULT, HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
+
+    # Explicit prototypes so LPCWSTR strings are not passed as ANSI / wrong width.
+    user32.DefWindowProcW.argtypes = [HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+    user32.DefWindowProcW.restype = LRESULT
+    user32.CreatePopupMenu.argtypes = []
+    user32.CreatePopupMenu.restype = HMENU
+    user32.DestroyMenu.argtypes = [HMENU]
+    user32.DestroyMenu.restype = wintypes.BOOL
+    user32.AppendMenuW.argtypes = [HMENU, wintypes.UINT, ctypes.c_uint, wintypes.LPCWSTR]
+    user32.AppendMenuW.restype = wintypes.BOOL
+    user32.TrackPopupMenu.argtypes = [
+        HMENU,
+        wintypes.UINT,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        HWND,
+        ctypes.c_void_p,
+    ]
+    user32.TrackPopupMenu.restype = ctypes.c_int
+    user32.GetCursorPos.argtypes = [ctypes.POINTER(wintypes.POINT)]
+    user32.GetCursorPos.restype = wintypes.BOOL
+    user32.SetForegroundWindow.argtypes = [HWND]
+    user32.SetForegroundWindow.restype = wintypes.BOOL
+    user32.PostMessageW.argtypes = [HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+    user32.PostMessageW.restype = wintypes.BOOL
+    user32.PostQuitMessage.argtypes = [ctypes.c_int]
+    user32.PostQuitMessage.restype = None
+    user32.MessageBoxW.argtypes = [HWND, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.UINT]
+    user32.MessageBoxW.restype = ctypes.c_int
+    user32.LoadImageW.argtypes = [
+        wintypes.HINSTANCE,
+        wintypes.LPCWSTR,
+        wintypes.UINT,
+        ctypes.c_int,
+        ctypes.c_int,
+        wintypes.UINT,
+    ]
+    user32.LoadImageW.restype = wintypes.HANDLE
+    user32.LoadIconW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR]
+    user32.LoadIconW.restype = HICON
+    user32.RegisterClassW.argtypes = [ctypes.c_void_p]
+    user32.RegisterClassW.restype = wintypes.ATOM
+    user32.CreateWindowExW.argtypes = [
+        wintypes.DWORD,
+        wintypes.LPCWSTR,
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        HWND,
+        HMENU,
+        wintypes.HINSTANCE,
+        ctypes.c_void_p,
+    ]
+    user32.CreateWindowExW.restype = HWND
+    user32.GetMessageW.argtypes = [ctypes.POINTER(wintypes.MSG), HWND, wintypes.UINT, wintypes.UINT]
+    user32.GetMessageW.restype = wintypes.BOOL
+    user32.TranslateMessage.argtypes = [ctypes.POINTER(wintypes.MSG)]
+    user32.TranslateMessage.restype = wintypes.BOOL
+    user32.DispatchMessageW.argtypes = [ctypes.POINTER(wintypes.MSG)]
+    user32.DispatchMessageW.restype = LRESULT
+    shell32.Shell_NotifyIconW.argtypes = [wintypes.DWORD, ctypes.POINTER(NOTIFYICONDATA)]
+    shell32.Shell_NotifyIconW.restype = wintypes.BOOL
+    kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
+    kernel32.GetModuleHandleW.restype = wintypes.HINSTANCE
 
     nid = NOTIFYICONDATA()
     hwnd_box: dict[str, int] = {"hwnd": 0}
 
     def show_error(msg: str) -> None:
         user32.MessageBoxW(None, msg, "Atlas", 0x00000010)  # MB_ICONERROR
-
-    launcher.on_fatal = show_error
 
     def quit_app() -> None:
         hwnd = hwnd_box["hwnd"]
@@ -500,30 +581,45 @@ def run_tray(launcher: Launcher) -> int:
 
     launcher.on_fatal = on_fatal_and_quit
 
+    def _show_context_menu(hwnd) -> None:
+        menu = user32.CreatePopupMenu()
+        if not menu:
+            return
+        user32.AppendMenuW(menu, MF_STRING, ID_OPEN, ctypes.c_wchar_p("Open Dashboard"))
+        user32.AppendMenuW(menu, MF_STRING, ID_RESTART, ctypes.c_wchar_p("Restart Atlas"))
+        user32.AppendMenuW(menu, MF_SEPARATOR, 0, None)
+        user32.AppendMenuW(menu, MF_STRING, ID_QUIT, ctypes.c_wchar_p("Quit Atlas"))
+        pt = wintypes.POINT()
+        user32.GetCursorPos(ctypes.byref(pt))
+        user32.SetForegroundWindow(hwnd)
+        # TPM_RETURNCMD: return the selected id directly (avoids brittle WM_COMMAND).
+        cmd = int(
+            user32.TrackPopupMenu(
+                menu,
+                TPM_RIGHTBUTTON | TPM_RETURNCMD,
+                pt.x,
+                pt.y,
+                0,
+                hwnd,
+                None,
+            )
+        )
+        user32.DestroyMenu(menu)
+        # Required so the menu dismisses cleanly on some Windows builds.
+        user32.PostMessageW(hwnd, 0, 0, 0)  # WM_NULL
+        if cmd == ID_OPEN:
+            launcher.open_dashboard(force=True)
+        elif cmd == ID_RESTART:
+            launcher.restart_all()
+        elif cmd == ID_QUIT:
+            quit_app()
+
     def wndproc(hwnd, msg, wparam, lparam):
         if msg == WM_TRAY:
             if lparam == WM_LBUTTONDBLCLK:
-                webbrowser.open(BACKEND_URL)
+                launcher.open_dashboard(force=True)
             elif lparam == WM_RBUTTONUP:
-                menu = user32.CreatePopupMenu()
-                user32.AppendMenuW(menu, MF_STRING, ID_OPEN, "Open Dashboard")
-                user32.AppendMenuW(menu, MF_STRING, ID_RESTART, "Restart Atlas")
-                user32.AppendMenuW(menu, MF_SEPARATOR, 0, None)
-                user32.AppendMenuW(menu, MF_STRING, ID_QUIT, "Quit Atlas")
-                pt = wintypes.POINT()
-                user32.GetCursorPos(ctypes.byref(pt))
-                user32.SetForegroundWindow(hwnd)
-                user32.TrackPopupMenu(menu, TPM_RIGHTBUTTON, pt.x, pt.y, 0, hwnd, None)
-                user32.DestroyMenu(menu)
-            return 0
-        if msg == WM_COMMAND:
-            cmd = wparam & 0xFFFF
-            if cmd == ID_OPEN:
-                webbrowser.open(BACKEND_URL)
-            elif cmd == ID_RESTART:
-                launcher.restart_all()
-            elif cmd == ID_QUIT:
-                quit_app()
+                _show_context_menu(hwnd)
             return 0
         if msg == WM_DESTROY:
             launcher.stop()
@@ -532,6 +628,8 @@ def run_tray(launcher: Launcher) -> int:
         return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
 
     proc = WNDPROC(wndproc)
+    # Keep a reference so the callback is not garbage-collected.
+    run_tray._wndproc_ref = proc  # type: ignore[attr-defined]
     class_name = "AtlasLauncherTray"
 
     class WNDCLASS(ctypes.Structure):
@@ -541,7 +639,7 @@ def run_tray(launcher: Launcher) -> int:
             ("cbClsExtra", ctypes.c_int),
             ("cbWndExtra", ctypes.c_int),
             ("hInstance", wintypes.HINSTANCE),
-            ("hIcon", wintypes.HICON),
+            ("hIcon", HICON),
             ("hCursor", wintypes.HANDLE),
             ("hbrBackground", wintypes.HBRUSH),
             ("lpszMenuName", wintypes.LPCWSTR),
@@ -586,7 +684,8 @@ def run_tray(launcher: Launcher) -> int:
             0x00000010 | 0x00000040,  # LR_LOADFROMFILE | LR_DEFAULTSIZE
         )
     if not hicon:
-        hicon = user32.LoadIconW(None, 32512)  # IDI_APPLICATION
+        # MAKEINTRESOURCE(IDI_APPLICATION=32512)
+        hicon = user32.LoadIconW(None, ctypes.cast(32512, wintypes.LPCWSTR))
 
     nid.cbSize = ctypes.sizeof(NOTIFYICONDATA)
     nid.hWnd = hwnd
