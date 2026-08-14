@@ -91,5 +91,9 @@ Troubleshooting
 
 3. Upgrading from an old "Windows Services" install?
      - Prefer uninstalling the old Program Files copy first.
-     - The new installer also attempts to stop/remove legacy
-       AtlasBridge / AtlasBackend services if they still exist.
+     - If the installer detects AtlasBackend / AtlasBridge still registered,
+       it will explain and ask before requesting Windows administrator
+       permission — only to remove those old services. You can decline;
+       the per-user install still completes, but you should then remove
+       the old Program Files Atlas from Windows Settings → Apps so ports
+       8001/8002 are free.

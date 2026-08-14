@@ -241,54 +241,130 @@ begin
   end;
 end;
 
-procedure StopAtlasAt(const Root: String);
+function ServiceRegistered(const Name: String): Boolean;
 var
   ResultCode: Integer;
-  Nssm: String;
+begin
+  // sc query works without elevation. Exit code 0 = service exists;
+  // 1060 = ERROR_SERVICE_DOES_NOT_EXIST.
+  Result :=
+    Exec('sc.exe', 'query "' + Name + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode)
+    and (ResultCode = 0);
+end;
+
+function LegacyAtlasServicesPresent(): Boolean;
+begin
+  Result := ServiceRegistered('AtlasBackend') or ServiceRegistered('AtlasBridge');
+end;
+
+procedure KillBundledPythonAt(const Root: String);
+var
+  ResultCode: Integer;
   PyDll: String;
 begin
-  if Root = '' then Exit;
-  if not DirExists(Root) then Exit;
+  if (Root = '') or (not DirExists(Root)) then Exit;
+  PyDll := Root + '\python\python311.dll';
+  if not FileExists(PyDll) then Exit;
+  // User-owned processes only — never elevates, never touches SCM / nssm.
+  Exec('taskkill.exe',
+       '/F /FI "IMAGENAME eq python.exe" /FI "MODULES eq ' + PyDll + '"',
+       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill.exe',
+       '/F /FI "IMAGENAME eq pythonw.exe" /FI "MODULES eq ' + PyDll + '"',
+       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
 
-  // Legacy Windows services (older Atlas builds) — best-effort cleanup.
+procedure KillUserAtlasProcesses();
+begin
+  // Current per-user install.
+  KillBundledPythonAt(ExpandConstant('{app}'));
+  // Leftover interpreters under legacy Program Files trees (best-effort, no UAC).
+  KillBundledPythonAt(ExpandConstant('{commonpf64}\Atlas'));
+  KillBundledPythonAt(ExpandConstant('{commonpf}\Atlas'));
+  KillBundledPythonAt(ExpandConstant('{pf}\Atlas'));
+end;
+
+procedure RemoveLegacyServicesDirect();
+var
+  ResultCode: Integer;
+begin
+  // Prefer sc.exe — do NOT launch nssm.exe (its manifest triggers unexplained UAC).
   Exec('net.exe', 'stop AtlasBackend', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec('net.exe', 'stop AtlasBridge',  '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Nssm := Root + '\nssm.exe';
-  if FileExists(Nssm) then
+  Exec('sc.exe', 'delete AtlasBackend', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('sc.exe', 'delete AtlasBridge',  '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+function RemoveLegacyServicesElevated(): Boolean;
+var
+  Bat: String;
+  ErrorCode: Integer;
+  Lines: String;
+begin
+  // One-shot elevated helper. No nssm.exe — only net/sc against the two service names.
+  Bat := ExpandConstant('{tmp}\atlas_remove_legacy_services.bat');
+  Lines :=
+    '@echo off' + #13#10 +
+    'net stop AtlasBackend >nul 2>nul' + #13#10 +
+    'net stop AtlasBridge >nul 2>nul' + #13#10 +
+    'sc delete AtlasBackend >nul 2>nul' + #13#10 +
+    'sc delete AtlasBridge >nul 2>nul' + #13#10 +
+    'exit /b 0' + #13#10;
+  if not SaveStringToFile(Bat, Lines, False) then
   begin
-    Exec(Nssm, 'stop AtlasBackend', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Exec(Nssm, 'remove AtlasBackend confirm', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Exec(Nssm, 'stop AtlasBridge', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Exec(Nssm, 'remove AtlasBridge confirm', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  end
-  else
+    Result := False;
+    Exit;
+  end;
+  // 'runas' shows the standard Windows consent UI. Returns False if the user cancels.
+  Result := ShellExec('runas', Bat, '', '', SW_HIDE, ewWaitUntilTerminated, ErrorCode);
+end;
+
+procedure WarnLegacyServicesSkipped();
+begin
+  MsgBox(
+    'Atlas will continue installing for your user account' + #13#10 +
+    '(' + ExpandConstant('{localappdata}\Atlas') + ').' + #13#10 + #13#10 +
+    'The older Windows services (AtlasBackend / AtlasBridge) were NOT removed.' + #13#10 +
+    'They may still use ports 8001/8002.' + #13#10 + #13#10 +
+    'Please uninstall the old Program Files copy of Atlas from' + #13#10 +
+    'Windows Settings → Apps (or Add/Remove Programs), then start the new Atlas.',
+    mbInformation, MB_OK);
+end;
+
+procedure MaybeRemoveLegacyServices();
+begin
+  if not LegacyAtlasServicesPresent() then
+    Exit;  // Fresh / already-migrated machine: never touch SCM, never UAC.
+
+  if IsAdminInstallMode then
   begin
-    Exec('sc.exe', 'delete AtlasBackend', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Exec('sc.exe', 'delete AtlasBridge',  '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    RemoveLegacyServicesDirect();
+    Exit;
   end;
 
-  // Kill tray launcher / bundled python holding files under this root.
-  PyDll := Root + '\python\python311.dll';
-  if FileExists(PyDll) then
+  if MsgBox(
+       'An older Atlas install registered Windows services' + #13#10 +
+       '(AtlasBackend / AtlasBridge), usually under Program Files.' + #13#10 + #13#10 +
+       'Windows will ask for administrator permission ONLY to stop and' + #13#10 +
+       'remove those old services. The new Atlas installs per-user and' + #13#10 +
+       'does not use Windows services.' + #13#10 + #13#10 +
+       'Allow removal of the old services now?',
+       mbConfirmation, MB_YESNO) = IDYES then
   begin
-    Exec('taskkill.exe',
-         '/F /FI "IMAGENAME eq python.exe" /FI "MODULES eq ' + PyDll + '"',
-         '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Exec('taskkill.exe',
-         '/F /FI "IMAGENAME eq pythonw.exe" /FI "MODULES eq ' + PyDll + '"',
-         '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  end;
+    if not RemoveLegacyServicesElevated() then
+      WarnLegacyServicesSkipped();
+  end
+  else
+    WarnLegacyServicesSkipped();
 end;
 
 procedure StopAtlasProcesses();
 begin
-  // Current (per-user) install root.
-  StopAtlasAt(ExpandConstant('{app}'));
-  // Legacy Program Files installs from the NSSM era.
-  StopAtlasAt(ExpandConstant('{commonpf64}\Atlas'));
-  StopAtlasAt(ExpandConstant('{commonpf}\Atlas'));
-  StopAtlasAt(ExpandConstant('{pf}\Atlas'));
-  Sleep(1500);
+  // 1) Always: stop the per-user tray app / bundled python (no elevation).
+  KillUserAtlasProcesses();
+  // 2) Only if legacy NSSM-era services still exist: explained UAC, or skip.
+  MaybeRemoveLegacyServices();
+  Sleep(1000);
 end;
 
 function InitializeSetup(): Boolean;
@@ -304,9 +380,10 @@ end;
 
 function InitializeUninstall(): Boolean;
 begin
-  // Stop tray app before files are removed.
-  StopAtlasProcesses();
-  // Remove optional Startup shortcut if present.
+  // Stop tray app before files are removed (no SCM/nssm from the unelevated path).
+  KillUserAtlasProcesses();
+  // Optional: clean legacy services on uninstall with the same explained prompt.
+  MaybeRemoveLegacyServices();
   DeleteFile(ExpandConstant('{userstartup}\Atlas.lnk'));
   Result := True;
 end;
