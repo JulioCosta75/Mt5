@@ -31,8 +31,20 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 
 COMMENT_CONSISTENCY_THRESHOLD = 0.60
+# Absolute money peak below this makes %-drawdown meaningless on a PnL curve.
+_MIN_PEAK_FOR_DD_PCT = 10.0
+# Clamp absurd percentage drawdowns even when peak clears the floor.
+_DD_PCT_FLOOR = -100.0
+
 _JUNK_COMMENT_RE = re.compile(
-    r"^(?:from\s*#?\d+|to\s*#?\d+|#[0-9]+|\d+)$",
+    r"^(?:"
+    r"from\s*#?\d+"
+    r"|to\s*#?\d+"
+    r"|#[0-9]+"
+    r"|\d+"
+    r"|\[?\s*(?:sl|tp|stop(?:loss)?|trailing)\b.*"
+    r"|(?:sl|tp)\s*[:=]?\s*[\d.].*"
+    r")$",
     re.IGNORECASE,
 )
 
@@ -122,6 +134,10 @@ def comment_is_usable(comment: object) -> bool:
         return False
     if _JUNK_COMMENT_RE.match(text):
         return False
+    # Reject strings that are mostly digits/punctuation (no real name).
+    letters = sum(1 for ch in text if ch.isalpha())
+    if letters < 3:
+        return False
     return True
 
 
@@ -161,21 +177,55 @@ def _deal_net_pnl(deal: dict) -> float:
     )
 
 
-def _drawdown_from_pnl_curve(pnls_chrono: list[float]) -> tuple[float, float]:
-    """Approximate max/current drawdown % from a cumulative realized-PnL curve."""
+def _drawdown_from_pnl_curve(pnls_chrono: list[float]) -> dict:
+    """Approximate drawdown from a cumulative realized-PnL curve.
+
+    Returns pct fields only when the equity peak is large enough to be a
+    meaningful denominator; otherwise reports money drawdown and zeroes pct
+    (avoids nonsense like -1473%).
+    """
+    empty = {
+        "max_drawdown": 0.0,
+        "current_drawdown": 0.0,
+        "max_drawdown_money": 0.0,
+        "current_drawdown_money": 0.0,
+        "drawdown_unit": "pct",
+    }
     if not pnls_chrono:
-        return 0.0, 0.0
+        return empty
+
     equity = 0.0
     peak = 0.0
-    max_dd = 0.0
+    max_dd_pct = 0.0
+    max_dd_money = 0.0
     for pnl in pnls_chrono:
         equity += float(pnl)
         peak = max(peak, equity)
-        if peak > 0:
+        drop_money = peak - equity
+        if drop_money > max_dd_money:
+            max_dd_money = drop_money
+        if peak >= _MIN_PEAK_FOR_DD_PCT:
             dd = (equity - peak) / peak * 100.0
-            max_dd = min(max_dd, dd)
-    current_dd = ((equity - peak) / peak * 100.0) if peak > 0 else 0.0
-    return round(max_dd, 2), round(current_dd, 2)
+            max_dd_pct = min(max_dd_pct, dd)
+
+    current_money = max(0.0, peak - equity)
+    if peak >= _MIN_PEAK_FOR_DD_PCT:
+        current_pct = (equity - peak) / peak * 100.0
+        return {
+            "max_drawdown": round(max(max_dd_pct, _DD_PCT_FLOOR), 2),
+            "current_drawdown": round(max(current_pct, _DD_PCT_FLOOR), 2),
+            "max_drawdown_money": round(max_dd_money, 2),
+            "current_drawdown_money": round(current_money, 2),
+            "drawdown_unit": "pct",
+        }
+
+    return {
+        "max_drawdown": 0.0,
+        "current_drawdown": 0.0,
+        "max_drawdown_money": round(max_dd_money, 2),
+        "current_drawdown_money": round(current_money, 2),
+        "drawdown_unit": "money",
+    }
 
 
 def eas_from_bridge(
@@ -229,7 +279,7 @@ def eas_from_bridge(
         win_rate = round((wins / len(closed) * 100.0), 1) if closed else 0.0
 
         chrono = sorted(deals_m, key=lambda x: x.get("time") or "")
-        max_dd, cur_dd = _drawdown_from_pnl_curve([_deal_net_pnl(d) for d in chrono])
+        dd = _drawdown_from_pnl_curve([_deal_net_pnl(d) for d in chrono])
 
         rows.append({
             "id": f"{account_id}:magic-{magic}",
@@ -244,8 +294,11 @@ def eas_from_bridge(
             "net_pnl": round(realized + floating, 2),
             "trade_count": len(closed),
             "win_rate": win_rate,
-            "max_drawdown": max_dd,
-            "current_drawdown": cur_dd,
+            "max_drawdown": dd["max_drawdown"],
+            "current_drawdown": dd["current_drawdown"],
+            "max_drawdown_money": dd["max_drawdown_money"],
+            "current_drawdown_money": dd["current_drawdown_money"],
+            "drawdown_unit": dd["drawdown_unit"],
             "symbols": sorted({str(p.get("symbol")) for p in poss if p.get("symbol")}),
         })
 

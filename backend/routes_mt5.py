@@ -339,6 +339,9 @@ def build_router(cache) -> APIRouter:
                 "win_rate": 0.0,
                 "max_drawdown": 0.0,
                 "current_drawdown": 0.0,
+                "max_drawdown_money": 0.0,
+                "current_drawdown_money": 0.0,
+                "drawdown_unit": "pct",
                 "symbols": [],
             }
         return match

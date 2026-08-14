@@ -198,7 +198,11 @@ export function StrategiesView({ accounts, isSample = false }) {
                       <td className={`num ${pnlClass(ea.realized_pnl)}`}>{fmt.money(ea.realized_pnl)}</td>
                       <td className={`num ${pnlClass(ea.net_pnl)}`}>{fmt.money(ea.net_pnl)}</td>
                       <td className="num">{ea.trade_count}</td>
-                      <td className="num cell-neg">{fmt.pct(ea.current_drawdown)}</td>
+                      <td className="num cell-neg">
+                        {ea.drawdown_unit === "money"
+                          ? fmt.money(-(ea.current_drawdown_money || 0))
+                          : fmt.pct(ea.current_drawdown)}
+                      </td>
                       <td>
                         <button
                           type="button"
