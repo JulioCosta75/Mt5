@@ -39,13 +39,13 @@ export default function RiskPanel({ account, onUpdate, isSample = false }) {
         </span>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", borderBottom: "1px solid var(--bd-default)" }}>
-        <Stat label="Equity" value={fmt.money(account.equity)} data-testid="account-equity-value" />
-        <Stat label="Balance" value={fmt.money(account.balance)} />
-        <Stat label="Margin Used" value={fmt.money(account.margin_used)} />
+        <Stat label="Equity" value={fmt.money(account.equity)} cls="cell-live" data-testid="account-equity-value" />
+        <Stat label="Balance" value={fmt.money(account.balance)} cls="cell-live" />
+        <Stat label="Margin Used" value={fmt.money(account.margin_used)} cls="cell-live" />
         <Stat
           label="Margin Lvl"
           value={`${fmt.num(account.margin_level, 1)}%`}
-          cls={account.margin_level < 200 ? "cell-warn" : ""}
+          cls={account.margin_level < 200 ? "cell-warn" : "cell-live"}
         />
         <Stat label="Daily P&L" value={fmt.money(account.daily_pnl)} cls={pnlClass(account.daily_pnl)} />
         <Stat label="Cur DD" value={fmt.pct(account.current_drawdown)} cls="cell-neg" />
@@ -93,7 +93,7 @@ export default function RiskPanel({ account, onUpdate, isSample = false }) {
         </div>
         <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
           <button
-            className="btn"
+            className="btn primary"
             onClick={saveLimits}
             disabled={saving}
             data-testid="risk-save-button"

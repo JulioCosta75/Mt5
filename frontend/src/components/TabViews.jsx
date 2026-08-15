@@ -114,8 +114,8 @@ export function StrategiesView({ accounts, isSample = false }) {
                 <tr key={g.strategy} data-testid={`strategy-row-${g.strategy}`}>
                   <td style={{ color: "var(--text-primary)" }}>{g.strategy}</td>
                   <td className="num">{g.total}</td>
-                  <td className="num cell-pos">{g.live}</td>
-                  <td className="num">{fmt.money(g.equity)}</td>
+                  <td className="num cell-live">{g.live}</td>
+                  <td className="num cell-live">{fmt.money(g.equity)}</td>
                   <td className={`num ${pnlClass(g.daily_pnl)}`}>{fmt.money(g.daily_pnl)}</td>
                   <td className="num">{g.positions}</td>
                   <td className="num cell-neg">{fmt.pct(g.total ? g.ddSum / g.total : 0)}</td>
@@ -193,7 +193,7 @@ export function StrategiesView({ accounts, isSample = false }) {
                       </td>
                       <td className="num mono">{ea.magic}</td>
                       <td style={{ color: "var(--text-secondary)" }}>{ea.account_id}</td>
-                      <td className="num">{ea.open_positions}</td>
+                      <td className="num cell-live">{ea.open_positions}</td>
                       <td className={`num ${pnlClass(ea.floating_pnl)}`}>{fmt.money(ea.floating_pnl)}</td>
                       <td className={`num ${pnlClass(ea.realized_pnl)}`}>{fmt.money(ea.realized_pnl)}</td>
                       <td className={`num ${pnlClass(ea.net_pnl)}`}>{fmt.money(ea.net_pnl)}</td>
@@ -331,7 +331,7 @@ export function ReportsView() {
       <div className="panel-header">
         <span className="panel-title">Sr. Atlas Reports · {reports.length}</span>
         <button
-          className="btn"
+          className="btn primary"
           onClick={onGenerate}
           disabled={busy}
           data-testid="reports-generate-button"

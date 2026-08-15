@@ -56,18 +56,18 @@ export default function AccountsTable({ accounts, selectedId, onSelect, isSample
                   style={{
                     cursor: "pointer",
                     background: active ? "rgba(244,244,245,0.04)" : undefined,
-                    borderLeft: active ? "2px solid var(--text-primary)" : "2px solid transparent",
+                    borderLeft: active ? "2px solid var(--accent)" : "2px solid transparent",
                   }}
                 >
                   <td><StatusBadge status={acc.status} isSample={isSample} /></td>
                   <td className="mono" style={{ color: "var(--text-primary)" }}>{acc.login}</td>
                   <td style={{ color: "var(--text-secondary)" }}>{acc.broker}</td>
                   <td style={{ color: "var(--text-secondary)" }}>{acc.strategy}</td>
-                  <td className="num">{fmt.money(acc.balance)}</td>
-                  <td className="num" style={{ color: "var(--text-primary)" }}>{fmt.money(acc.equity)}</td>
+                  <td className="num cell-live">{fmt.money(acc.balance)}</td>
+                  <td className="num cell-live">{fmt.money(acc.equity)}</td>
                   <td className={`num ${pnlClass(acc.daily_pnl)}`}>{fmt.money(acc.daily_pnl)}</td>
                   <td className="num cell-neg">{fmt.pct(acc.current_drawdown)}</td>
-                  <td className="num">{acc.open_positions}</td>
+                  <td className="num cell-live">{acc.open_positions}</td>
                   <td className="num" style={{ color: "var(--text-secondary)" }}>1:{acc.leverage}</td>
                   <td className="num" style={{ color: acc.margin_level < 200 ? "var(--sig-warn)" : "var(--text-primary)" }}>
                     {fmt.num(acc.margin_level, 1)}%

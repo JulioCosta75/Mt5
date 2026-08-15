@@ -38,11 +38,12 @@ function Header({ refreshing, onRefresh, sessionId, activeTab, onTabChange, buil
             alt="Sr. Atlas"
             height={30}
             width={30}
-            style={{ borderRadius: 6, objectFit: "cover", background: "#000" }}
+            className="brand-mark"
+            style={{ objectFit: "cover" }}
             data-testid="header-sr-atlas-logo"
           />
           <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-0.01em" }}>
-            Sr. Atlas
+            Sr. <span className="brand-word">Atlas</span>
           </span>
           <span className="kbd" style={{ marginLeft: 4 }}>MT5</span>
         </div>
@@ -66,8 +67,12 @@ function Header({ refreshing, onRefresh, sessionId, activeTab, onTabChange, buil
         </nav>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span className="live-pill" data-testid="header-live-pill">
+          <span className={`pulse-dot ${refreshing ? "warn" : ""}`} />
+          {refreshing ? "FEED" : "LIVE"}
+        </span>
         <button
-          className="btn success"
+          className="btn primary"
           onClick={onRefresh}
           data-testid="refresh-button"
           disabled={refreshing}
