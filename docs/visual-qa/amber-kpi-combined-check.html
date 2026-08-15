@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Combined amber + KPI P&amp;L check</title>
+  <style>
+    :root {
+      --bg-base: #0A0A0A;
+      --text-primary: #F4F4F5;
+      --text-tertiary: #71717A;
+      --sig-pos: #22C55E;
+      --sig-neg: #EF4444;
+      --accent: #F5A623;
+      --bd-default: #27272A;
+    }
+    body { margin: 0; background: var(--bg-base); color: var(--text-primary); font-family: system-ui, sans-serif; }
+    .cell-pos { color: var(--sig-pos); }
+    .cell-neg { color: var(--sig-neg); }
+    .brand-word { color: var(--accent); }
+    .btn.primary {
+      background: var(--accent); color: #0A0A0A; border: 1px solid var(--accent);
+      padding: 6px 10px; font-size: 11px; font-weight: 600; text-transform: uppercase;
+    }
+    .live-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 8px; border: 1px solid rgba(245,166,35,0.38);
+      background: rgba(245,166,35,0.12); color: var(--accent);
+      font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+    }
+    .hdr { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--bd-default); }
+    .ticker-row {
+      display: flex; align-items: center; gap: 32px;
+      padding: 0 20px; height: 48px; border-bottom: 1px solid var(--bd-default);
+    }
+    .ticker-item { display: flex; align-items: baseline; gap: 8px; font-size: 11.5px; }
+    .ticker-item .label {
+      color: var(--text-tertiary); text-transform: uppercase;
+      letter-spacing: 0.1em; font-size: 9.5px;
+    }
+    .ticker-item .val {
+      font-family: ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+    .ticker-item .val.live { color: var(--accent); }
+    .ticker-item .val.cell-pos { color: var(--sig-pos); }
+    .ticker-item .val.cell-neg { color: var(--sig-neg); }
+    #out { padding: 16px 20px; font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; }
+    .ok { color: var(--sig-pos); }
+    .bad { color: var(--sig-neg); }
+  </style>
+</head>
+<body>
+  <div class="hdr">
+    <div>Sr. <span id="brand" class="brand-word">Atlas</span></div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <span id="live" class="live-pill">LIVE</span>
+      <button id="cta" class="btn primary" type="button">Refresh feed</button>
+    </div>
+  </div>
+  <div class="ticker-row">
+    <span class="ticker-item">
+      <span class="label">Total Equity</span>
+      <span id="eq" class="val live">$1,875,191.12</span>
+    </span>
+    <span class="ticker-item">
+      <span class="label">Daily P&amp;L</span>
+      <span id="pnl" class="val cell-neg">-$1,447.04 (-0.42%)</span>
+    </span>
+    <span class="ticker-item">
+      <span class="label">Avg DD</span>
+      <span id="dd" class="val cell-neg">-3.91%</span>
+    </span>
+    <span class="ticker-item">
+      <span class="label">Open Pos</span>
+      <span id="open" class="val live">47</span>
+    </span>
+    <span class="ticker-item">
+      <span class="label">Win day</span>
+      <span id="pos" class="val cell-pos">+$2,100.00</span>
+    </span>
+  </div>
+  <pre id="out"></pre>
+  <script>
+    function hex(el) {
+      const c = getComputedStyle(el).color;
+      const m = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      if (!m) return c;
+      return '#' + [m[1], m[2], m[3]].map(n => Number(n).toString(16).padStart(2, '0')).join('');
+    }
+    const expect = {
+      brand: '#f5a623', live: '#f5a623', cta: '#f5a623',
+      eq: '#f5a623', open: '#f5a623',
+      pnl: '#ef4444', dd: '#ef4444', pos: '#22c55e',
+    };
+    const got = {
+      brand: hex(document.getElementById('brand')),
+      live: hex(document.getElementById('live')),
+      cta: hex(document.getElementById('cta')),
+      eq: hex(document.getElementById('eq')),
+      open: hex(document.getElementById('open')),
+      pnl: hex(document.getElementById('pnl')),
+      dd: hex(document.getElementById('dd')),
+      pos: hex(document.getElementById('pos')),
+    };
+    // CTA background is amber; color is dark — check backgroundColor for CTA
+    const ctaBg = getComputedStyle(document.getElementById('cta')).backgroundColor;
+    const ctaBgM = ctaBg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    got.cta = ctaBgM
+      ? '#' + [ctaBgM[1], ctaBgM[2], ctaBgM[3]].map(n => Number(n).toString(16).padStart(2, '0')).join('')
+      : got.cta;
+
+    let ok = true;
+    let lines = [];
+    for (const k of Object.keys(expect)) {
+      const pass = got[k].toLowerCase() === expect[k];
+      ok = ok && pass;
+      lines.push(`${k.padEnd(6)} got ${got[k]}  expect ${expect[k]}  ${pass ? 'OK' : 'FAIL'}`);
+    }
+    document.getElementById('out').innerHTML =
+      lines.join('\n') + '\n' +
+      (ok
+        ? '<span class="ok">PASS — amber accent and P&L red/green coexist</span>'
+        : '<span class="bad">FAIL — combined styles conflict</span>');
+    document.title = ok ? 'PASS' : 'FAIL';
+  </script>
+</body>
+</html>
