@@ -49,21 +49,13 @@ set "LOGS_DIR=%ATLAS_ROOT%\logs"
 if not exist "%DATA_DIR%" mkdir "%DATA_DIR%" >nul 2>nul
 if not exist "%LOGS_DIR%" mkdir "%LOGS_DIR%" >nul 2>nul
 
-REM ---- Locate NSSM (bundled first, download as last resort) ---
+REM ---- Locate NSSM (optional — Phase 1+ tray launcher does not need it) ---
 set "NSSM="
 if exist "%INSTALLER_DIR%\nssm.exe"  set "NSSM=%INSTALLER_DIR%\nssm.exe"
 if not defined NSSM if exist "%ATLAS_ROOT%\nssm.exe"  set "NSSM=%ATLAS_ROOT%\nssm.exe"
 if not defined NSSM if exist "%SCRIPTS_DIR%nssm.exe"  set "NSSM=%SCRIPTS_DIR%nssm.exe"
 if not defined NSSM (
-    echo [setup] nssm.exe not found locally - downloading NSSM 2.24 ...
-    call :download_nssm
-    if exist "%INSTALLER_DIR%\nssm.exe" set "NSSM=%INSTALLER_DIR%\nssm.exe"
-)
-if not defined NSSM (
-    echo [ERROR] Could not locate or download nssm.exe.
-    echo         Please drop a Windows nssm.exe ^(64-bit^) at:
-    echo         %INSTALLER_DIR%\nssm.exe
-    exit /b 1
+    echo [info] nssm.exe not found — OK for tray launcher. Windows services install will need it.
 )
 
 REM ---- Locate Python -----------------------------------------

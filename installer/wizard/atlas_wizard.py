@@ -217,8 +217,10 @@ class WizardApp(tk.Tk):
                "  •  Start the Atlas services (bridge + backend)\n"
                "  •  Verify the connection and open the dashboard\n\n"
                "Prerequisites:\n"
-               "  ✓  MetaTrader 5 installed and logged into your account\n"
-               "  ✓  In MT5: Tools → Options → Expert Advisors → \"Allow algorithmic trading\"\n"
+               "  ✓  MetaTrader 5 installed (you do not need to open it first —\n"
+               "     Atlas launches the terminal and logs in with the credentials you enter)\n"
+               "  ✓  After first connect: enable Tools → Options → Expert Advisors →\n"
+               "     \"Allow algorithmic trading\" if Atlas warns that it is off\n"
                "  ✓  This wizard runs with administrator privileges")
         tk.Label(self.body, text=msg, fg="#F4F4F5", bg="#0A0A0A",
                  font=("Segoe UI", 10), justify="left").pack(anchor="w")
@@ -242,8 +244,9 @@ class WizardApp(tk.Tk):
             ttk.Entry(self.body, textvariable=self.mt5_terminal_path, width=80).pack(anchor="w", pady=(8, 16), fill="x")
 
         tk.Label(self.body,
-                 text=("Optional. If left blank, the Bridge will try to attach to whichever\n"
-                       "MT5 terminal is currently running. Specifying a path forces a specific install."),
+                 text=("Recommended: pick the install Atlas should launch. If left blank,\n"
+                       "the Bridge auto-discovers terminal64.exe. Close any open MT5 window\n"
+                       "before starting Atlas so the bridge can launch a clean session."),
                  fg="#A1A1AA", bg="#0A0A0A", font=("Segoe UI", 9), justify="left").pack(anchor="w")
 
     def step_creds(self):
@@ -356,12 +359,31 @@ class WizardApp(tk.Tk):
             code, body = http_json("http://127.0.0.1:8001/api/system/health", timeout=5)
             if code == 200 and isinstance(body, dict):
                 self.health.insert("end", json.dumps(body, indent=2))
-                if body.get("mode") == "mt5" and (body.get("bridge") or {}).get("terminal_connected"):
+                bridge = body.get("bridge") or {}
+                if body.get("mode") == "mt5" and bridge.get("terminal_connected"):
                     self.health.insert("end", "\n\n✓  Atlas is connected to your MT5 terminal.")
+                    if bridge.get("trade_allowed") is False:
+                        self.health.insert(
+                            "end",
+                            "\n\n⚠  Algorithmic trading is OFF in MetaTrader 5.\n"
+                            "    Enable: Tools → Options → Expert Advisors → "
+                            "\"Allow algorithmic trading\".\n"
+                            "    Atlas can read the account, but live supervision "
+                            "of trading state stays limited until this is on.",
+                        )
+                    elif bridge.get("message"):
+                        self.health.insert("end", "\n\n⚠  " + str(bridge.get("message")))
                 elif body.get("mode") == "mock":
                     self.health.insert("end", "\n\n⚠  Backend running in MOCK mode (MT5_BRIDGE_URL not picked up). Restart services.")
                 else:
-                    self.health.insert("end", "\n\n⚠  Backend OK, but bridge cannot reach MT5. Check that the terminal is open and 'Allow algorithmic trading' is enabled.")
+                    detail = bridge.get("message") or bridge.get("last_error") or ""
+                    self.health.insert(
+                        "end",
+                        "\n\n⚠  Backend OK, but the bridge could not connect to MT5.\n"
+                        "    Close any open MetaTrader 5 window, confirm login/password/server,\n"
+                        "    then restart Atlas so the bridge can launch and log in.\n"
+                        + (f"    Detail: {detail}" if detail else ""),
+                    )
             else:
                 self.health.insert("end", f"Backend unreachable. status={code}\n{body}")
 

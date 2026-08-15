@@ -1,6 +1,6 @@
 # MT5 Bridge
 
-Serviço Python que corre numa máquina **Windows** com o terminal MetaTrader 5 instalado e logado, e expõe os dados da conta numa API HTTP simples para ser consumida pelo backend Linux do projeto **QUANT.SUPERVISE**.
+Serviço Python que corre numa máquina **Windows** com o terminal MetaTrader 5 instalado, e expõe os dados da conta numa API HTTP simples para ser consumida pelo backend do projeto **Atlas / QUANT.SUPERVISE**. O bridge lança o terminal e faz login com as credenciais do `.env`.
 
 ---
 
@@ -15,8 +15,8 @@ A biblioteca oficial `MetaTrader5` (PyPI) **só funciona em Windows** porque com
 | # | Limitação | Consequência |
 |---|-----------|--------------|
 | 1 | Apenas Windows | Tem de correr numa máquina Windows |
-| 2 | Terminal MT5 tem de estar aberto | Se fechar, o bridge fica offline (`/health` reporta) |
-| 3 | Algo Trading tem de estar ON | Tools → Options → Expert Advisors → "Allow algorithmic trading" |
+| 2 | Preferir terminal fechado ao arranque | O bridge lança o terminal e faz login; anexar a um MT5 já aberto pode falhar (IPC) |
+| 3 | Algo Trading idealmente ON | Se `trade_allowed=false`, `/health` avisa; Tools → Options → Expert Advisors → "Allow algorithmic trading" |
 | 4 | Uma conta por processo | Para N contas, corra N bridges em portas diferentes (BRIDGE_PORT distinto, BRIDGE_TOKEN distinto) |
 | 5 | API síncrona | Wrap em `asyncio.to_thread` (já feito) |
 | 6 | Sem histórico de equity nativo | Reconstruímos via `history_deals_get` + gravamos snapshots ao vivo |
@@ -28,8 +28,8 @@ A biblioteca oficial `MetaTrader5` (PyPI) **só funciona em Windows** porque com
 
 - Windows 10/11 ou Windows Server 2019+
 - **Python 3.10–3.12** (a `MetaTrader5` ainda não é estável em 3.13)
-- Terminal MetaTrader 5 do seu broker, com a conta a usar **já logada**
-- "Allow algorithmic trading" **ativado** em Tools → Options → Expert Advisors
+- Terminal MetaTrader 5 do seu broker (instalado; o bridge lança e autentica)
+- Depois do primeiro login: se `/health` reportar `trade_allowed=false`, ative "Allow algorithmic trading" em Tools → Options → Expert Advisors
 
 ---
 
