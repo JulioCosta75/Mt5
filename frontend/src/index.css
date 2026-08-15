@@ -144,6 +144,9 @@ button { font-family: inherit; }
     color: var(--text-primary);
     font-weight: 500;
 }
+/* Same or higher specificity than .ticker-item .val so P&L colors win. */
+.ticker-item .val.cell-pos { color: var(--sig-pos); }
+.ticker-item .val.cell-neg { color: var(--sig-neg); }
 
 .kbd {
     font-family: 'Geist Mono', monospace;

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>KPI ticker P&amp;L color specificity check</title>
+  <style>
+    :root {
+      --bg-base: #0A0A0A;
+      --text-primary: #F4F4F5;
+      --text-tertiary: #71717A;
+      --sig-pos: #22C55E;
+      --sig-neg: #EF4444;
+      --bd-default: #27272A;
+    }
+    body { margin: 0; background: var(--bg-base); color: var(--text-primary); font-family: system-ui, sans-serif; }
+    .cell-pos { color: var(--sig-pos); }
+    .cell-neg { color: var(--sig-neg); }
+    .ticker-row {
+      display: flex; align-items: center; gap: 32px;
+      padding: 0 20px; height: 48px; border-bottom: 1px solid var(--bd-default);
+    }
+    .ticker-item { display: flex; align-items: baseline; gap: 8px; font-size: 11.5px; }
+    .ticker-item .label {
+      color: var(--text-tertiary); text-transform: uppercase;
+      letter-spacing: 0.1em; font-size: 9.5px;
+    }
+    .ticker-item .val {
+      font-family: ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+    /* Fix under test */
+    .ticker-item .val.cell-pos { color: var(--sig-pos); }
+    .ticker-item .val.cell-neg { color: var(--sig-neg); }
+    #out { padding: 16px 20px; font-family: ui-monospace, monospace; font-size: 12px; }
+    .ok { color: var(--sig-pos); }
+    .bad { color: var(--sig-neg); }
+  </style>
+</head>
+<body>
+  <div class="ticker-row" data-testid="kpi-ticker">
+    <span class="ticker-item" data-testid="kpi-daily-pnl">
+      <span class="label">Daily P&amp;L</span>
+      <span id="pnl" class="val cell-neg">-$1,447.04 (-0.42%)</span>
+    </span>
+    <span class="ticker-item" data-testid="kpi-avg-dd">
+      <span class="label">Avg DD</span>
+      <span id="dd" class="val cell-neg">-3.91%</span>
+    </span>
+    <span class="ticker-item">
+      <span class="label">Positive sample</span>
+      <span id="pos" class="val cell-pos">+$2,100.00</span>
+    </span>
+  </div>
+  <pre id="out"></pre>
+  <script>
+    function hex(el) {
+      const c = getComputedStyle(el).color;
+      const m = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      if (!m) return c;
+      return '#' + [m[1], m[2], m[3]].map(n => Number(n).toString(16).padStart(2, '0')).join('');
+    }
+    const pnl = document.getElementById('pnl');
+    const dd = document.getElementById('dd');
+    const pos = document.getElementById('pos');
+    const pnlHex = hex(pnl);
+    const ddHex = hex(dd);
+    const posHex = hex(pos);
+    const negOk = pnlHex.toLowerCase() === '#ef4444' && ddHex.toLowerCase() === '#ef4444';
+    const posOk = posHex.toLowerCase() === '#22c55e';
+    const out = document.getElementById('out');
+    out.innerHTML =
+      `Daily P&L computed: ${pnlHex}  expected #ef4444  ${negOk && pnlHex ? '' : ''}\n` +
+      `Avg DD computed:    ${ddHex}  expected #ef4444\n` +
+      `Positive computed:  ${posHex}  expected #22c55e\n` +
+      (negOk && posOk
+        ? '<span class="ok">PASS — ticker P&L colors win specificity</span>'
+        : '<span class="bad">FAIL — specificity still wrong</span>');
+    document.title = (negOk && posOk) ? 'PASS' : 'FAIL';
+  </script>
+</body>
+</html>

@@ -121,10 +121,19 @@ async function refresh() {
         b.reachable ? "ok" : "fail",
         b.reachable ? "reachable" : "unreachable");
       document.getElementById("s-terminal").textContent =
-        b.account_logged_in ? ("login " + (b.login || "?")) : (b.last_error || "not logged in");
+        b.account_logged_in
+          ? ("login " + (b.login || "?")
+             + (b.trade_allowed === false
+                ? " — enable Allow algorithmic trading (Tools → Options → Expert Advisors)"
+                : ""))
+          : (b.message || b.last_error || "not logged in");
       setPill(document.getElementById("s-terminal-pill"),
-        b.terminal_connected ? "ok" : "fail",
-        b.terminal_connected ? "connected" : "disconnected");
+        b.terminal_connected
+          ? (b.trade_allowed === false ? "warn" : "ok")
+          : "fail",
+        b.terminal_connected
+          ? (b.trade_allowed === false ? "connected · algo off" : "connected")
+          : "disconnected");
     } else {
       document.getElementById("s-bridge-url").textContent = "not configured (mock mode)";
       setPill(document.getElementById("s-bridge"), "warn", "n/a");
