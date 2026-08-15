@@ -135,6 +135,11 @@ Type: filesandordirs; Name: "{app}\logs"
 Type: filesandordirs; Name: "{app}\python\Lib\site-packages"
 
 [Code]
+const
+  // taskkill MODULES filter expects the DLL *basename* only.
+  // Full path matches 0 processes (confirmed on Windows with Atlas running).
+  AtlasPyDllName = 'python311.dll';
+
 var
   MT5Page: TInputQueryWizardPage;
   MT5Ready: Boolean;
@@ -257,31 +262,144 @@ begin
   Result := ServiceRegistered('AtlasBackend') or ServiceRegistered('AtlasBridge');
 end;
 
-procedure KillBundledPythonAt(const Root: String);
+function NativeTaskKillPath(): String;
+begin
+  // 32-bit Setup must use sysnative so MODULES can see 64-bit pythonw/python.
+  if IsWin64 then
+    Result := ExpandConstant('{sysnative}\taskkill.exe')
+  else
+    Result := ExpandConstant('{sys}\taskkill.exe');
+end;
+
+function NativeTaskListPath(): String;
+begin
+  if IsWin64 then
+    Result := ExpandConstant('{sysnative}\tasklist.exe')
+  else
+    Result := ExpandConstant('{sys}\tasklist.exe');
+end;
+
+function IsDigitsOnly(const S: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  if S = '' then Exit;
+  for I := 1 to Length(S) do
+    if (S[I] < '0') or (S[I] > '9') then
+      Exit;
+  Result := True;
+end;
+
+procedure KillLauncherTreeAt(const Root: String);
+var
+  LockPath: String;
+  PidAnsi: AnsiString;
+  Pid: String;
+  ResultCode: Integer;
+begin
+  if Root = '' then Exit;
+  LockPath := Root + '\data\atlas_launcher.lock';
+  if not FileExists(LockPath) then Exit;
+  // Lock file is held open by the running launcher — use locked read.
+  if LoadStringFromLockedFile(LockPath, PidAnsi) then
+  begin
+    Pid := Trim(String(PidAnsi));
+    if IsDigitsOnly(Pid) then
+      Exec(NativeTaskKillPath(), '/PID ' + Pid + ' /T /F',
+           '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
+  DeleteFile(LockPath);
+end;
+
+procedure KillAtlasPythonByModuleName();
 var
   ResultCode: Integer;
-  PyDll: String;
+  TK: String;
 begin
-  if (Root = '') or (not DirExists(Root)) then Exit;
-  PyDll := Root + '\python\python311.dll';
-  if not FileExists(PyDll) then Exit;
-  // User-owned processes only — never elevates, never touches SCM / nssm.
-  Exec('taskkill.exe',
-       '/F /FI "IMAGENAME eq python.exe" /FI "MODULES eq ' + PyDll + '"',
+  // Basename only — never the full path (full path = silent no-op).
+  TK := NativeTaskKillPath();
+  Exec(TK,
+       '/F /FI "IMAGENAME eq python.exe" /FI "MODULES eq ' + AtlasPyDllName + '"',
        '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec('taskkill.exe',
-       '/F /FI "IMAGENAME eq pythonw.exe" /FI "MODULES eq ' + PyDll + '"',
+  Exec(TK,
+       '/F /FI "IMAGENAME eq pythonw.exe" /FI "MODULES eq ' + AtlasPyDllName + '"',
        '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 
-procedure KillUserAtlasProcesses();
+function AtlasInstallHasBundledPython(const Root: String): Boolean;
 begin
-  // Current per-user install.
-  KillBundledPythonAt(ExpandConstant('{app}'));
-  // Leftover interpreters under legacy Program Files trees (best-effort, no UAC).
-  KillBundledPythonAt(ExpandConstant('{commonpf64}\Atlas'));
-  KillBundledPythonAt(ExpandConstant('{commonpf}\Atlas'));
-  KillBundledPythonAt(ExpandConstant('{pf}\Atlas'));
+  Result := (Root <> '') and FileExists(Root + '\python\' + AtlasPyDllName);
+end;
+
+function TaskListHasAtlasPython(const ImageName: String): Boolean;
+var
+  TmpOut, TmpBat: String;
+  ResultCode: Integer;
+  Lines: TArrayOfString;
+  BatBody: String;
+  I: Integer;
+  Line: String;
+begin
+  Result := False;
+  TmpOut := ExpandConstant('{tmp}\atlas_tasklist_check.txt');
+  TmpBat := ExpandConstant('{tmp}\atlas_tasklist_check.bat');
+  DeleteFile(TmpOut);
+  // Tiny helper bat avoids fragile cmd.exe quoting around paths with spaces.
+  BatBody :=
+    '@echo off' + #13#10 +
+    '"' + NativeTaskListPath() + '" /NH /FI "IMAGENAME eq ' + ImageName +
+    '" /FI "MODULES eq ' + AtlasPyDllName + '" > "' + TmpOut + '" 2>nul' + #13#10 +
+    'exit /b 0' + #13#10;
+  if not SaveStringToFile(TmpBat, BatBody, False) then Exit;
+  if not Exec(ExpandConstant('{cmd}'), '/C "' + TmpBat + '"', '', SW_HIDE,
+              ewWaitUntilTerminated, ResultCode) then
+    Exit;
+  if not FileExists(TmpOut) then Exit;
+  if not LoadStringsFromFile(TmpOut, Lines) then Exit;
+  for I := 0 to GetArrayLength(Lines) - 1 do
+  begin
+    Line := Trim(Lines[I]);
+    if (Line <> '') and (Pos('INFO:', UpperCase(Line)) = 0) and
+       (Pos(LowerCase(ImageName), LowerCase(Line)) > 0) then
+    begin
+      Result := True;
+      Exit;
+    end;
+  end;
+end;
+
+function AtlasPythonStillRunning(): Boolean;
+begin
+  Result :=
+    TaskListHasAtlasPython('pythonw.exe') or
+    TaskListHasAtlasPython('python.exe');
+end;
+
+procedure KillUserAtlasProcesses();
+var
+  AppRoot, Pf64, Pf, PfLegacy: String;
+  AnyBundled: Boolean;
+begin
+  AppRoot := ExpandConstant('{app}');
+  Pf64 := ExpandConstant('{commonpf64}\Atlas');
+  Pf := ExpandConstant('{commonpf}\Atlas');
+  PfLegacy := ExpandConstant('{pf}\Atlas');
+
+  // 1) Prefer PID tree from launcher lock (same approach as stop_atlas.bat).
+  KillLauncherTreeAt(AppRoot);
+  KillLauncherTreeAt(Pf64);
+  KillLauncherTreeAt(Pf);
+  KillLauncherTreeAt(PfLegacy);
+
+  // 2) Fallback: MODULES basename filter (only if an Atlas embeddable exists).
+  AnyBundled :=
+    AtlasInstallHasBundledPython(AppRoot) or
+    AtlasInstallHasBundledPython(Pf64) or
+    AtlasInstallHasBundledPython(Pf) or
+    AtlasInstallHasBundledPython(PfLegacy);
+  if AnyBundled then
+    KillAtlasPythonByModuleName();
 end;
 
 procedure RemoveLegacyServicesDirect();
@@ -359,12 +477,21 @@ begin
 end;
 
 procedure StopAtlasProcesses();
+var
+  Attempt: Integer;
 begin
   // 1) Always: stop the per-user tray app / bundled python (no elevation).
-  KillUserAtlasProcesses();
+  //    Retry a few times — taskkill can race with child spawn / handle release.
+  for Attempt := 1 to 3 do
+  begin
+    KillUserAtlasProcesses();
+    Sleep(750);
+    if not AtlasPythonStillRunning() then
+      Break;
+  end;
   // 2) Only if legacy NSSM-era services still exist: explained UAC, or skip.
   MaybeRemoveLegacyServices();
-  Sleep(1000);
+  Sleep(500);
 end;
 
 function InitializeSetup(): Boolean;
@@ -374,14 +501,30 @@ end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
+  NeedsRestart := False;
   StopAtlasProcesses();
-  Result := '';
+  // Confirm processes are gone before CloseApplications / file copy.
+  if AtlasPythonStillRunning() then
+    Result :=
+      'Atlas is still running and could not be stopped automatically.' + #13#10 +
+      'Right-click the Atlas tray icon -> Quit, then click Retry,' + #13#10 +
+      'or close Setup and run it again.'
+  else
+    Result := '';
 end;
 
 function InitializeUninstall(): Boolean;
+var
+  Attempt: Integer;
 begin
   // Stop tray app before files are removed (no SCM/nssm from the unelevated path).
-  KillUserAtlasProcesses();
+  for Attempt := 1 to 3 do
+  begin
+    KillUserAtlasProcesses();
+    Sleep(750);
+    if not AtlasPythonStillRunning() then
+      Break;
+  end;
   // Optional: clean legacy services on uninstall with the same explained prompt.
   MaybeRemoveLegacyServices();
   DeleteFile(ExpandConstant('{userstartup}\Atlas.lnk'));

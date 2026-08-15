@@ -15,10 +15,11 @@ if exist "%DATA_DIR%\atlas_launcher.lock" (
   del /F /Q "%DATA_DIR%\atlas_launcher.lock" >nul 2>nul
 )
 
-REM 2) Kill only the bundled Atlas embeddable interpreter (never system Python).
+REM 2) Kill Atlas embeddable interpreters by MODULES *basename* only.
+REM    Full path in MODULES matches 0 processes (confirmed on Windows).
 if exist "%ATLAS_ROOT%\python\python311.dll" (
-  taskkill /F /FI "IMAGENAME eq python.exe" /FI "MODULES eq %ATLAS_ROOT%\python\python311.dll" >nul 2>nul
-  taskkill /F /FI "IMAGENAME eq pythonw.exe" /FI "MODULES eq %ATLAS_ROOT%\python\python311.dll" >nul 2>nul
+  taskkill /F /FI "IMAGENAME eq python.exe" /FI "MODULES eq python311.dll" >nul 2>nul
+  taskkill /F /FI "IMAGENAME eq pythonw.exe" /FI "MODULES eq python311.dll" >nul 2>nul
 )
 
 REM 3) Legacy cleanup: if old NSSM services still exist from a prior install, stop them.
