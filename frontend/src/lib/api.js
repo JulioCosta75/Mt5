@@ -12,9 +12,12 @@ export const api = {
   equity: (id, points = 200) => client.get(`/accounts/${id}/equity`, { params: { points } }).then(r => r.data),
   drawdown: (id, points = 200) => client.get(`/accounts/${id}/drawdown`, { params: { points } }).then(r => r.data),
   trades: (id, params = {}) => client.get(`/accounts/${id}/trades`, { params }).then(r => r.data),
+  eas: () => client.get("/eas").then(r => r.data),
+  accountEas: (id) => client.get(`/accounts/${id}/eas`).then(r => r.data),
+  renameEa: (accountId, magic, label) =>
+    client.put(`/accounts/${accountId}/eas/${magic}`, { label }).then(r => r.data),
   alerts: (params = {}) => client.get("/alerts", { params }).then(r => r.data),
   ackAlert: (id, acknowledged = true) => client.post(`/alerts/${id}/ack`, { acknowledged }).then(r => r.data),
-  killSwitch: (id, enabled) => client.post(`/accounts/${id}/kill-switch`, { enabled }).then(r => r.data),
   updateRisk: (id, payload) => client.put(`/accounts/${id}/risk-limits`, payload).then(r => r.data),
   tick: () => client.post("/sim/tick").then(r => r.data),
   systemHealth: () => client.get("/system/health").then(r => r.data),
