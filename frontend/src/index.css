@@ -177,6 +177,9 @@ button { font-family: inherit; }
 .ticker-item .val.live {
     color: var(--accent);
 }
+/* Same or higher specificity than .ticker-item .val so P&L colors win. */
+.ticker-item .val.cell-pos { color: var(--sig-pos); }
+.ticker-item .val.cell-neg { color: var(--sig-neg); }
 
 .kbd {
     font-family: 'Geist Mono', monospace;
