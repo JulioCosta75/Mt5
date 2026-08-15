@@ -92,7 +92,7 @@ export default function Settings() {
   const state = status?.state || "unconfigured";
   const stateMeta = {
     connected: { label: "Connected", color: "#22C55E", desc: "Atlas is connected to your MetaTrader 5 account." },
-    pending_restart: { label: "Applying / Pending restart", color: "#F59E0B", desc: "Settings saved. Atlas is (re)starting its services to connect." },
+    pending_restart: { label: "Applying / Pending restart", color: "#F59E0B", desc: "Settings saved. Atlas is restarting to connect to MetaTrader 5." },
     unconfigured: { label: "Configuration Mode", color: "#F59E0B", desc: "No MetaTrader 5 account connected yet. Enter your credentials below." },
   }[state] || { label: state, color: "#A1A1AA", desc: "" };
 
@@ -163,7 +163,7 @@ export default function Settings() {
           <input data-testid="mt5-port" style={inputStyle} value={form.bridge_port} onChange={setField("bridge_port")} placeholder="8002" inputMode="numeric" />
 
           <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-            <button type="submit" className="btn success" data-testid="mt5-save" disabled={saving || loading}>
+            <button type="submit" className="btn primary" data-testid="mt5-save" disabled={saving || loading}>
               {saving ? "SAVING…" : "SAVE & CONNECT"}
             </button>
             <button type="button" className="btn" data-testid="mt5-clear" onClick={onClear} disabled={saving || loading}>

@@ -43,9 +43,9 @@ export default function BrandBoot({ onDone }) {
           data-testid="boot-forge-logo"
         />
         <div className="brand-boot-supervisor" data-testid="boot-sr-atlas">
-          <img src={srAtlasRound} alt="Sr. Atlas" width="26" height="26" />
+          <img src={srAtlasRound} alt="Sr. Atlas" width="26" height="26" className="brand-mark" />
           <span>
-            <b>Sr. Atlas</b> · AI Supervisor
+            <b>Sr. <span className="brand-word">Atlas</span></b> · AI Supervisor
           </span>
         </div>
 

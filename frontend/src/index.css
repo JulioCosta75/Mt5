@@ -18,6 +18,11 @@
     --sig-neg: #EF4444;
     --sig-warn: #F59E0B;
     --sig-info: #3B82F6;
+    /* Brand accent — Option A amber (signature only; never for P&L). */
+    --accent: #F5A623;
+    --accent-dim: rgba(245, 166, 35, 0.12);
+    --accent-border: rgba(245, 166, 35, 0.38);
+    --accent-fg: #0A0A0A;
 }
 
 * {
@@ -70,6 +75,31 @@ body {
 .cell-neg { color: var(--sig-neg); }
 .cell-warn { color: var(--sig-warn); }
 .cell-info { color: var(--sig-info); }
+.cell-live { color: var(--accent); }
+
+.brand-word {
+    color: var(--accent);
+}
+.brand-mark {
+    border: 1px solid var(--accent-border);
+    border-radius: 6px;
+    background: #000;
+}
+
+.live-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: 2px;
+    border: 1px solid var(--accent-border);
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
 
 .bg-pos-soft { background: rgba(34,197,94,0.10); }
 .bg-neg-soft { background: rgba(239,68,68,0.10); }
@@ -103,8 +133,8 @@ button { font-family: inherit; }
 
 .pulse-dot {
     width: 6px; height: 6px; border-radius: 9999px;
-    background: var(--sig-pos);
-    box-shadow: 0 0 0 0 rgba(34,197,94,0.7);
+    background: var(--accent);
+    box-shadow: 0 0 0 0 rgba(245, 166, 35, 0.55);
     animation: pulse 1.6s infinite;
 }
 .pulse-dot.warn { background: var(--sig-warn); box-shadow: 0 0 0 0 rgba(245,158,11,0.7); }
@@ -144,6 +174,12 @@ button { font-family: inherit; }
     color: var(--text-primary);
     font-weight: 500;
 }
+.ticker-item .val.live {
+    color: var(--accent);
+}
+/* Same or higher specificity than .ticker-item .val so P&L colors win. */
+.ticker-item .val.cell-pos { color: var(--sig-pos); }
+.ticker-item .val.cell-neg { color: var(--sig-neg); }
 
 .kbd {
     font-family: 'Geist Mono', monospace;
@@ -171,7 +207,27 @@ button { font-family: inherit; }
 .btn.danger:hover { background: rgba(239,68,68,0.08); }
 .btn.success { color: var(--sig-pos); border-color: rgba(34,197,94,0.4); }
 .btn.success:hover { background: rgba(34,197,94,0.08); }
-.btn.active { background: rgba(244,244,245,0.08); border-color: var(--bd-focus); }
+/* Primary CTA — brand amber (not P&L green). */
+.btn.primary {
+    background: var(--accent);
+    color: var(--accent-fg);
+    border-color: var(--accent);
+    font-weight: 600;
+}
+.btn.primary:hover {
+    background: #ffb53a;
+    border-color: #ffb53a;
+    color: var(--accent-fg);
+}
+.btn.primary:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+.btn.active {
+    background: rgba(244,244,245,0.08);
+    border-color: var(--bd-focus);
+    box-shadow: inset 0 -2px 0 var(--accent);
+}
 
 .badge {
     display: inline-flex; align-items: center; gap: 5px;
@@ -182,7 +238,11 @@ button { font-family: inherit; }
     font-weight: 600;
     border: 1px solid;
 }
-.badge.live { color: var(--sig-pos); border-color: rgba(34,197,94,0.4); background: rgba(34,197,94,0.08); }
+.badge.live {
+    color: var(--accent);
+    border-color: var(--accent-border);
+    background: var(--accent-dim);
+}
 .badge.paused { color: var(--sig-warn); border-color: rgba(245,158,11,0.4); background: rgba(245,158,11,0.08); }
 .badge.error { color: var(--sig-neg); border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.08); }
 
@@ -215,7 +275,7 @@ input:focus, select:focus { border-color: var(--bd-focus); }
     inset: 0;
     z-index: 10000;
     background:
-        radial-gradient(1200px 600px at 50% -10%, rgba(34,197,94,0.06), transparent 60%),
+        radial-gradient(1200px 600px at 50% -10%, rgba(245, 166, 35, 0.07), transparent 60%),
         var(--bg-base);
     display: flex;
     flex-direction: column;
@@ -242,13 +302,13 @@ input:focus, select:focus { border-color: var(--bd-focus); }
     display: flex; align-items: center; gap: 10px;
     color: var(--text-secondary); font-size: 13px;
 }
-.brand-boot-supervisor b { color: var(--text-primary); font-weight: 600; }
+.brand-boot-supervisor b { color: var(--accent); font-weight: 600; }
 .brand-boot-bar {
     width: 260px; height: 2px; background: var(--bd-default); overflow: hidden;
 }
 .brand-boot-bar-fill {
     height: 100%;
-    background: linear-gradient(90deg, #16A34A, #22C55E);
+    background: linear-gradient(90deg, #D97706, var(--accent));
     transition: width 120ms linear;
 }
 .brand-boot-status {

@@ -26,20 +26,26 @@ function CustomTooltip({ active, payload, label, format }) {
   );
 }
 
-export function EquityChart({ data }) {
+export function EquityChart({ data, isSample = false }) {
   return (
     <div className="panel" data-testid="equity-panel" style={{ height: 320, display: "flex", flexDirection: "column" }}>
       <div className="panel-header">
-        <span className="panel-title">Equity Curve · 90D</span>
-        <span className="kbd">{data?.length ?? 0} pts</span>
+        <span className="panel-title">
+          Equity Curve · Live
+          {isSample ? <span className="kbd" style={{ marginLeft: 8 }} data-testid="equity-sample-label">SAMPLE DATA</span> : null}
+        </span>
+        <span className="live-pill" style={{ padding: "2px 6px", fontSize: 9 }} data-testid="equity-live-pill">
+          <span className="pulse-dot" />
+          Feed
+        </span>
       </div>
       <div style={{ flex: 1, padding: "8px 4px 4px 0" }}>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="equityFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#22C55E" stopOpacity={0.18} />
-                <stop offset="100%" stopColor="#22C55E" stopOpacity={0} />
+                <stop offset="0%" stopColor="#F5A623" stopOpacity={0.18} />
+                <stop offset="100%" stopColor="#F5A623" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid stroke="#18181B" strokeDasharray="0" vertical={false} />
@@ -61,7 +67,7 @@ export function EquityChart({ data }) {
             <Area
               type="monotone"
               dataKey="equity"
-              stroke="#22C55E"
+              stroke="#F5A623"
               strokeWidth={1.5}
               fill="url(#equityFill)"
               dot={false}
@@ -74,11 +80,14 @@ export function EquityChart({ data }) {
   );
 }
 
-export function DrawdownChart({ data, maxDD, currentDD }) {
+export function DrawdownChart({ data, maxDD, currentDD, isSample = false }) {
   return (
     <div className="panel" data-testid="drawdown-panel" style={{ height: 320, display: "flex", flexDirection: "column" }}>
       <div className="panel-header">
-        <span className="panel-title">Drawdown · 90D</span>
+        <span className="panel-title">
+          Drawdown · 90D
+          {isSample ? <span className="kbd" style={{ marginLeft: 8 }} data-testid="drawdown-sample-label">SAMPLE DATA</span> : null}
+        </span>
         <span style={{ display: "flex", gap: 12, fontSize: 10 }}>
           <span style={{ color: "var(--text-tertiary)" }}>MAX</span>
           <span className="mono cell-neg" data-testid="dd-max">{fmt.pct(maxDD)}</span>

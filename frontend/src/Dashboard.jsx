@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef, useReducer } from "rea
 import { Link } from "react-router-dom";
 import { api, fmt } from "@/lib/api";
 import { srAtlasRound } from "@/assets/branding";
+import { isSamplePresentation } from "@/lib/sampleMode";
 import KpiTicker from "@/components/KpiTicker";
 import AccountsTable from "@/components/AccountsTable";
 import { EquityChart, DrawdownChart } from "@/components/Charts";
@@ -37,11 +38,12 @@ function Header({ refreshing, onRefresh, sessionId, activeTab, onTabChange, buil
             alt="Sr. Atlas"
             height={30}
             width={30}
-            style={{ borderRadius: 6, objectFit: "cover", background: "#000" }}
+            className="brand-mark"
+            style={{ objectFit: "cover" }}
             data-testid="header-sr-atlas-logo"
           />
           <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-0.01em" }}>
-            Sr. Atlas
+            Sr. <span className="brand-word">Atlas</span>
           </span>
           <span className="kbd" style={{ marginLeft: 4 }}>MT5</span>
         </div>
@@ -65,8 +67,12 @@ function Header({ refreshing, onRefresh, sessionId, activeTab, onTabChange, buil
         </nav>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span className="live-pill" data-testid="header-live-pill">
+          <span className={`pulse-dot ${refreshing ? "warn" : ""}`} />
+          {refreshing ? "FEED" : "LIVE"}
+        </span>
         <button
-          className="btn success"
+          className="btn primary"
           onClick={onRefresh}
           data-testid="refresh-button"
           disabled={refreshing}
@@ -131,12 +137,19 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("Overview");
   const [buildInfo, setBuildInfo] = useState(null);
   const [mt5Status, setMt5Status] = useState(null);
+  const [healthMode, setHealthMode] = useState(null);
   const selectedIdRef = useRef(null);
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
 
+  const isSample = isSamplePresentation(mt5Status, healthMode);
   const loadGlobals = useCallback(async () => {
-    const [k, a, al] = await Promise.all([api.kpis(), api.accounts(), api.alerts()]);
-    dispatch({ type: "SET_GLOBALS", kpis: k, accounts: a, alerts: al.alerts || [] });
+    const settled = await Promise.allSettled([api.kpis(), api.accounts(), api.alerts()]);
+    const kpis = settled[0].status === "fulfilled" ? settled[0].value : null;
+    const accountsRaw = settled[1].status === "fulfilled" ? settled[1].value : [];
+    const accounts = Array.isArray(accountsRaw) ? accountsRaw : [];
+    const alertsPayload = settled[2].status === "fulfilled" ? settled[2].value : null;
+    const alerts = Array.isArray(alertsPayload?.alerts) ? alertsPayload.alerts : [];
+    dispatch({ type: "SET_GLOBALS", kpis, accounts, alerts });
   }, []);
 
   const loadAccountDetail = useCallback(async (id) => {
@@ -149,17 +162,20 @@ export default function Dashboard() {
     dispatch({ type: "SET_DETAIL", equity: eq.series || [], drawdown: dd, trades: tr.trades || [] });
   }, []);
 
-  // initial load
+  // initial load — always leave the connecting state, even if one feed fails
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      await loadGlobals();
-      if (!cancelled) dispatch({ type: "LOADING", value: false });
+      try {
+        await loadGlobals();
+      } finally {
+        if (!cancelled) dispatch({ type: "LOADING", value: false });
+      }
     })();
     return () => { cancelled = true; };
   }, [loadGlobals]);
 
-  // running build/version (verifies which deployment is live)
+  // running build/version + connection mode (verifies which deployment is live)
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -174,6 +190,12 @@ export default function Dashboard() {
         if (!cancelled) setMt5Status(c.status || null);
       } catch (e) {
         if (!cancelled) setMt5Status(null);
+      }
+      try {
+        const h = await api.systemHealth();
+        if (!cancelled) setHealthMode(h.mode || null);
+      } catch (e) {
+        if (!cancelled) setHealthMode(null);
       }
     })();
     return () => { cancelled = true; };
@@ -205,24 +227,25 @@ export default function Dashboard() {
   return (
     <div className="App" data-testid="dashboard">
       <Header refreshing={refreshing} onRefresh={onRefresh} sessionId={sessionId} activeTab={activeTab} onTabChange={setActiveTab} buildInfo={buildInfo} />
-      {mt5Status && mt5Status.state !== "connected" && (
+      {isSample && (
         <div
           data-testid="config-mode-banner"
           style={{
-            display: "flex", alignItems: "center", gap: 12, padding: "9px 20px",
+            display: "flex", alignItems: "flex-start", gap: 12, padding: "10px 20px",
             background: "#2A1E05", borderBottom: "1px solid #7A5A12", color: "#FCD34D", fontSize: 13,
           }}
         >
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#F59E0B", display: "inline-block" }} />
-          <span>
-            <b>Configuration Mode</b> — Atlas is not connected to MetaTrader 5 yet
-            (showing sample data). Connect your MT5 account to see live data.
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#F59E0B", display: "inline-block", marginTop: 5, flexShrink: 0 }} />
+          <span style={{ lineHeight: 1.45 }}>
+            <b>Configuration Mode — Simulated Sample Data</b>
+            {" "}Atlas is not connected to MetaTrader 5.
+            All trading accounts, trades, alerts, charts, risk values, and strategy activity shown here are simulated sample data — not verified live activity.
           </span>
           <Link
             to="/settings"
             data-testid="config-mode-cta"
             className="btn"
-            style={{ marginLeft: "auto", textDecoration: "none", padding: "4px 12px" }}
+            style={{ marginLeft: "auto", textDecoration: "none", padding: "4px 12px", flexShrink: 0 }}
           >
             Open Settings →
           </Link>
@@ -245,23 +268,25 @@ export default function Dashboard() {
         >
           {/* LEFT COLUMN */}
           <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
-            <AccountsTable accounts={accounts} selectedId={selectedId} onSelect={(id) => dispatch({ type: "SELECT", id })} />
+            <AccountsTable accounts={accounts} selectedId={selectedId} onSelect={(id) => dispatch({ type: "SELECT", id })} isSample={isSample} />
             {selectedAccount && (
               <>
                 <RiskPanel
                   key={selectedAccount.id}
                   account={selectedAccount}
                   onUpdate={() => { loadGlobals(); loadAccountDetail(selectedId); }}
+                  isSample={isSample}
                 />
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                  <EquityChart data={equity} />
+                  <EquityChart data={equity} isSample={isSample} />
                   <DrawdownChart
                     data={drawdown.series}
                     maxDD={drawdown.max_drawdown}
                     currentDD={drawdown.current_drawdown}
+                    isSample={isSample}
                   />
                 </div>
-                <TradesTable trades={trades} accountId={selectedId} />
+                <TradesTable trades={trades} accountId={selectedId} isSample={isSample} />
               </>
             )}
           </div>
@@ -269,26 +294,42 @@ export default function Dashboard() {
           {/* RIGHT COLUMN */}
           <aside style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
             <SupervisionPanel serverTime={kpis?.server_time} />
-            <AlertsPanel alerts={alerts} onAck={onAckAlert} />
+            <AlertsPanel alerts={alerts} onAck={onAckAlert} isSample={isSample} />
             <div className="panel" data-testid="system-panel">
               <div className="panel-header">
                 <span className="panel-title">System</span>
                 <span className="pulse-dot" />
               </div>
               <div style={{ padding: 14, fontSize: 11, color: "var(--text-secondary)" }}>
-                <Row label="API Latency" value="42 ms" />
-                <Row label="MT5 Bridge" value={<span className="cell-pos">CONNECTED</span>} />
-                <Row label="Risk Engine" value={<span className="cell-pos">ACTIVE</span>} />
-                <Row label="Telegram Notif" value={<span className="cell-pos">ENABLED</span>} />
-                <Row label="Last Heartbeat" value={kpis ? fmt.timeShort(kpis.server_time) : "—"} />
-                <Row label="Strategies Loaded" value={<span className="mono">6</span>} />
+                {isSample ? (
+                  <>
+                    <Row label="API Latency" value={<span className="cell-warn" data-testid="system-api-latency">SAMPLE · —</span>} />
+                    <Row label="MT5 Bridge" value={<span className="cell-warn" data-testid="system-mt5-bridge">NOT CONNECTED</span>} />
+                    <Row label="Risk Engine" value={<span className="cell-warn" data-testid="system-risk-engine">SIMULATION</span>} />
+                    <Row label="Telegram Notif" value={<span className="cell-warn" data-testid="system-telegram">NOT CONFIGURED</span>} />
+                    <Row label="Last Heartbeat" value={<span data-testid="system-heartbeat">{kpis ? `SAMPLE · ${fmt.timeShort(kpis.server_time)}` : "SAMPLE · —"}</span>} />
+                    <Row label="Strategies Loaded" value={<span className="mono cell-warn" data-testid="system-strategies">SAMPLE · 6</span>} />
+                    <Row label="Backend" value={<span className="cell-pos" data-testid="system-backend">OK</span>} />
+                    <Row label="Store" value={<span className="cell-pos" data-testid="system-store">OK</span>} />
+                    <Row label="Dashboard" value={<span className="cell-pos" data-testid="system-dashboard">OK</span>} />
+                  </>
+                ) : (
+                  <>
+                    <Row label="API Latency" value="42 ms" />
+                    <Row label="MT5 Bridge" value={<span className="cell-pos">CONNECTED</span>} />
+                    <Row label="Risk Engine" value={<span className="cell-pos">ACTIVE</span>} />
+                    <Row label="Telegram Notif" value={<span className="cell-pos">ENABLED</span>} />
+                    <Row label="Last Heartbeat" value={kpis ? fmt.timeShort(kpis.server_time) : "—"} />
+                    <Row label="Strategies Loaded" value={<span className="mono">6</span>} />
+                  </>
+                )}
               </div>
             </div>
           </aside>
         </main>
       ) : (
         <main style={{ padding: 14 }} data-testid={`tab-content-${activeTab.toLowerCase()}`}>
-          {activeTab === "Strategies" && <StrategiesView accounts={accounts} />}
+          {activeTab === "Strategies" && <StrategiesView accounts={accounts} isSample={isSample} />}
           {activeTab === "Risk" && (
             <RiskView
               accounts={accounts}
@@ -296,10 +337,11 @@ export default function Dashboard() {
               onSelect={(id) => dispatch({ type: "SELECT", id })}
               selectedAccount={selectedAccount}
               onUpdate={() => { loadGlobals(); loadAccountDetail(selectedId); }}
+              isSample={isSample}
             />
           )}
           {activeTab === "Reports" && <ReportsView />}
-          {activeTab === "Audit" && <AuditView alerts={alerts} onAck={onAckAlert} />}
+          {activeTab === "Audit" && <AuditView alerts={alerts} onAck={onAckAlert} isSample={isSample} />}
         </main>
       )}
       <footer

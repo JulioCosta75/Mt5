@@ -14,18 +14,9 @@ function Stat({ label, value, mono = true, cls = "" }) {
   );
 }
 
-export default function RiskPanel({ account, onUpdate }) {
+export default function RiskPanel({ account, onUpdate, isSample = false }) {
   const [limits, setLimits] = useState(account.risk_limits);
   const [saving, setSaving] = useState(false);
-  const [killing, setKilling] = useState(false);
-
-  const toggleKill = async () => {
-    setKilling(true);
-    try {
-      await api.killSwitch(account.id, !account.kill_switch);
-      onUpdate();
-    } finally { setKilling(false); }
-  };
 
   const saveLimits = async () => {
     setSaving(true);
@@ -42,24 +33,19 @@ export default function RiskPanel({ account, onUpdate }) {
   return (
     <div className="panel" data-testid="risk-panel">
       <div className="panel-header">
-        <span className="panel-title">Risk · {account.id} · {account.login}</span>
-        <button
-          className={`btn ${account.kill_switch ? "success" : "danger"}`}
-          onClick={toggleKill}
-          disabled={killing}
-          data-testid="kill-switch-button"
-        >
-          {killing ? "…" : account.kill_switch ? "RESUME TRADING" : "KILL SWITCH"}
-        </button>
+        <span className="panel-title">
+          Risk · {account.id} · {account.login}
+          {isSample ? <span className="kbd" style={{ marginLeft: 8 }} data-testid="risk-sample-label">SAMPLE DATA</span> : null}
+        </span>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", borderBottom: "1px solid var(--bd-default)" }}>
-        <Stat label="Equity" value={fmt.money(account.equity)} data-testid="account-equity-value" />
-        <Stat label="Balance" value={fmt.money(account.balance)} />
-        <Stat label="Margin Used" value={fmt.money(account.margin_used)} />
+        <Stat label="Equity" value={fmt.money(account.equity)} cls="cell-live" data-testid="account-equity-value" />
+        <Stat label="Balance" value={fmt.money(account.balance)} cls="cell-live" />
+        <Stat label="Margin Used" value={fmt.money(account.margin_used)} cls="cell-live" />
         <Stat
           label="Margin Lvl"
           value={`${fmt.num(account.margin_level, 1)}%`}
-          cls={account.margin_level < 200 ? "cell-warn" : ""}
+          cls={account.margin_level < 200 ? "cell-warn" : "cell-live"}
         />
         <Stat label="Daily P&L" value={fmt.money(account.daily_pnl)} cls={pnlClass(account.daily_pnl)} />
         <Stat label="Cur DD" value={fmt.pct(account.current_drawdown)} cls="cell-neg" />
@@ -107,7 +93,7 @@ export default function RiskPanel({ account, onUpdate }) {
         </div>
         <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
           <button
-            className="btn"
+            className="btn primary"
             onClick={saveLimits}
             disabled={saving}
             data-testid="risk-save-button"
