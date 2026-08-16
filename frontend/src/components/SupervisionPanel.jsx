@@ -117,13 +117,13 @@ export default function SupervisionPanel({ serverTime }) {
         {snapshot && (
           <>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              <Stat label="Total Equity" value={fmt.money(snapshot.kpis.total_equity)} />
+              <Stat label="Total Equity" value={fmt.money(snapshot.kpis.total_equity)} cls="cell-live" />
               <Stat
                 label="Daily P&L"
                 value={fmt.money(snapshot.kpis.daily_pnl)}
                 cls={snapshot.kpis.daily_pnl >= 0 ? "cell-pos" : "cell-neg"}
               />
-              <Stat label="Accounts Live" value={`${snapshot.accounts.live}/${snapshot.accounts.total}`} />
+              <Stat label="Accounts Live" value={`${snapshot.accounts.live}/${snapshot.accounts.total}`} cls="cell-live" />
               <Stat
                 label="Active Alerts"
                 value={snapshot.alerts.active}
@@ -144,7 +144,7 @@ export default function SupervisionPanel({ serverTime }) {
         )}
 
         <button
-          className="btn"
+          className="btn primary"
           onClick={onGenerateReport}
           disabled={busy}
           data-testid="supervision-generate-report"

@@ -27,6 +27,12 @@ if errorlevel 1 (
     echo [ERROR] Environment detection failed - see messages above.
     exit /b 1
 )
+if not defined NSSM (
+    echo [ERROR] nssm.exe is required to install Windows services.
+    echo         Place a 64-bit nssm.exe at %INSTALLER_DIR%\nssm.exe
+    echo         ^(or use scripts\start_atlas_app.bat for the tray launcher instead.^)
+    exit /b 1
+)
 
 echo ============================================================
 echo  Atlas service installer

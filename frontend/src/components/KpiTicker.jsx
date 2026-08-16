@@ -14,7 +14,7 @@ export default function KpiTicker({ kpis }) {
     <div className="ticker-row" data-testid="kpi-ticker">
       <span className="ticker-item" data-testid="kpi-total-equity">
         <span className="label">Total Equity</span>
-        <span className="val">{fmt.money(kpis.total_equity)}</span>
+        <span className="val live">{fmt.money(kpis.total_equity)}</span>
       </span>
       <span className="ticker-item" data-testid="kpi-daily-pnl">
         <span className="label">Daily P&amp;L</span>
@@ -26,12 +26,12 @@ export default function KpiTicker({ kpis }) {
       </span>
       <span className="ticker-item" data-testid="kpi-open-positions">
         <span className="label">Open Pos</span>
-        <span className="val">{kpis.open_positions}</span>
+        <span className="val live">{kpis.open_positions}</span>
       </span>
       <span className="ticker-item" data-testid="kpi-accounts">
         <span className="label">Accounts</span>
         <span className="val">
-          <span className="cell-pos">{kpis.accounts_live}</span>
+          <span className="cell-live">{kpis.accounts_live}</span>
           <span style={{ color: "var(--text-tertiary)" }}> / {kpis.accounts_total}</span>
         </span>
       </span>
@@ -45,7 +45,7 @@ export default function KpiTicker({ kpis }) {
       </span>
       <span className="ticker-item" style={{ marginLeft: "auto" }} data-testid="kpi-server-time">
         <span className="label">UTC</span>
-        <span className="val">{fmt.time(kpis.server_time)}</span>
+        <span className="val live">{fmt.time(kpis.server_time)}</span>
       </span>
     </div>
   );
