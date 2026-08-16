@@ -87,7 +87,14 @@ if ATLAS_STORE == "mongo":
     mongo_client = AsyncIOMotorClient(mongo_url)
     mongo_db = mongo_client[os.environ.get("DB_NAME", "test_database")]
 
-app = FastAPI(title="Atlas — MT5 Supervision API")
+_SERVE_FRONTEND = os.environ.get("SERVE_FRONTEND", "false").lower() == "true"
+# When the API process also hosts the React SPA, keep /docs for the product
+# Documentation page — not Swagger UI.
+app = FastAPI(
+    title="Atlas — MT5 Supervision API",
+    docs_url=None if _SERVE_FRONTEND else "/docs",
+    redoc_url=None if _SERVE_FRONTEND else "/redoc",
+)
 api_router = APIRouter(prefix="/api")
 
 # ------------------------------------------------------------
@@ -301,28 +308,36 @@ def _find_account(account_id: str) -> dict:
 # Aggregates KPIs, account health, risk and alerts into a single
 # supervisor-oriented view with an overall OK / WARNING / ALERT status.
 # ------------------------------------------------------------
-def _supervision_snapshot() -> dict:
-    total_equity = sum(a["equity"] for a in ACCOUNTS)
-    total_balance = sum(a["balance"] for a in ACCOUNTS)
-    daily_pnl = sum(a["daily_pnl"] for a in ACCOUNTS)
-    open_positions = sum(a["open_positions"] for a in ACCOUNTS)
+def _supervision_snapshot_from_accounts(
+    accounts: list[dict],
+    *,
+    bridge_ok: bool | None = None,
+    alerts: list[dict] | None = None,
+) -> dict:
+    alert_rows = ALERTS if alerts is None else alerts
+    total_equity = sum(a.get("equity", 0.0) for a in accounts)
+    total_balance = sum(a.get("balance", 0.0) for a in accounts)
+    daily_pnl = sum(a.get("daily_pnl", 0.0) for a in accounts)
+    open_positions = sum(a.get("open_positions", 0) for a in accounts)
 
-    live = sum(1 for a in ACCOUNTS if a["status"] == "LIVE")
-    paused = sum(1 for a in ACCOUNTS if a["status"] == "PAUSED")
-    error = sum(1 for a in ACCOUNTS if a["status"] == "ERROR")
+    live = sum(1 for a in accounts if a.get("status") == "LIVE")
+    paused = sum(1 for a in accounts if a.get("status") == "PAUSED")
+    error = sum(1 for a in accounts if a.get("status") == "ERROR")
 
-    active_alerts = sum(1 for a in ALERTS if not a["acknowledged"])
-    critical = sum(1 for a in ALERTS if a["severity"] == "CRITICAL" and not a["acknowledged"])
-    warning = sum(1 for a in ALERTS if a["severity"] == "WARNING" and not a["acknowledged"])
+    active_alerts = sum(1 for a in alert_rows if not a.get("acknowledged"))
+    critical = sum(1 for a in alert_rows if a.get("severity") == "CRITICAL" and not a.get("acknowledged"))
+    warning = sum(1 for a in alert_rows if a.get("severity") == "WARNING" and not a.get("acknowledged"))
 
-    n = max(len(ACCOUNTS), 1)
-    avg_dd = round(sum(a["current_drawdown"] for a in ACCOUNTS) / n, 2)
-    worst_dd = round(min((a["current_drawdown"] for a in ACCOUNTS), default=0.0), 2)
+    n = max(len(accounts), 1)
+    avg_dd = round(sum(float(a.get("current_drawdown", 0.0)) for a in accounts) / n, 2) if accounts else 0.0
+    worst_dd = round(min((float(a.get("current_drawdown", 0.0)) for a in accounts), default=0.0), 2)
     accounts_over_limit = sum(
-        1 for a in ACCOUNTS
-        if abs(a["current_drawdown"]) >= float(a["risk_limits"]["max_daily_loss_pct"])
+        1 for a in accounts
+        if abs(float(a.get("current_drawdown", 0.0)))
+        >= float((a.get("risk_limits") or {}).get("max_daily_loss_pct", 5.0))
     )
 
+    # Account/alert severity first — ALERT must keep priority over bridge failure.
     if error > 0 or critical > 0:
         status = "ALERT"
     elif paused > 0 or warning > 0 or accounts_over_limit > 0:
@@ -330,14 +345,47 @@ def _supervision_snapshot() -> dict:
     else:
         status = "OK"
 
+    bridge_down = bridge_ok is False
+    # Historical real cache is not mock; still never report OK while the bridge is down.
+    if bridge_down and status == "OK":
+        status = "WARNING"
+
     services = {
         "backend_ok": True,
         "store_ok": True,
-        "bridge_ok": True if MT5_MODE else None,
+        "bridge_ok": bridge_ok if bridge_ok is not None else (True if MT5_MODE else None),
         "dashboard_ok": True,
     }
 
-    if status == "OK":
+    if bridge_down:
+        if accounts:
+            cache_note = (
+                "MT5 bridge is unavailable; displayed data comes from cache "
+                "and may be outdated."
+            )
+        else:
+            cache_note = (
+                "MT5 bridge is unavailable and no cached account data is available."
+            )
+        if status == "ALERT":
+            message = (
+                f"ALERT: {critical} critical alert(s), {error} account(s) in ERROR state. "
+                f"{cache_note}"
+            )
+        elif paused > 0 or warning > 0 or accounts_over_limit > 0:
+            message = (
+                f"Degraded: {warning} warning alert(s), {paused} paused account(s), "
+                f"{accounts_over_limit} account(s) near risk limits. {cache_note}"
+            )
+        else:
+            message = cache_note
+    elif not accounts and MT5_MODE:
+        if status == "OK":
+            status = "WARNING"
+        message = (
+            "MT5 mode is active but no live account data is available from the bridge yet."
+        )
+    elif status == "OK":
         message = "All Forge Factory Lab core services are online and healthy."
     elif status == "WARNING":
         message = (
@@ -360,7 +408,7 @@ def _supervision_snapshot() -> dict:
             "daily_pnl_pct": round(daily_pnl / total_equity * 100, 2) if total_equity else 0.0,
             "open_positions": open_positions,
         },
-        "accounts": {"total": len(ACCOUNTS), "live": live, "paused": paused, "error": error},
+        "accounts": {"total": len(accounts), "live": live, "paused": paused, "error": error},
         "risk": {
             "avg_drawdown": avg_dd,
             "worst_drawdown": worst_dd,
@@ -370,6 +418,95 @@ def _supervision_snapshot() -> dict:
         "services": services,
         "message": message,
     }
+
+
+def _supervision_snapshot() -> dict:
+    """Mock-mode snapshot (sync). Prefer `_live_supervision_snapshot` when serving HTTP."""
+    return _supervision_snapshot_from_accounts(ACCOUNTS, bridge_ok=None)
+
+
+async def _mt5_live_accounts() -> tuple[list[dict], bool]:
+    """Fetch enriched accounts from configured MT5 bridge(s). Returns (accounts, bridge_ok)."""
+    import httpx
+    from mt5_adapter import account_from_bridge, drawdown_from_equity
+    from mt5_client import clients
+
+    out: list[dict] = []
+    any_reachable = False
+    for client in clients():
+        try:
+            bridge_acc = await client.account()
+        except (httpx.HTTPError, httpx.HTTPStatusError) as e:
+            logging.getLogger("server").warning(
+                "bridge %s account fetch failed: %s", client.endpoint.url, e
+            )
+            continue
+        if not bridge_acc:
+            continue
+        any_reachable = True
+        try:
+            positions = await client.positions()
+        except httpx.HTTPError:
+            positions = []
+        login = int(bridge_acc["login"])
+        if _cache is not None:
+            overrides = await _cache.get_overrides(login)
+            anchor = await _cache.maybe_set_daily_anchor(
+                login, bridge_acc.get("balance", 0.0)
+            )
+            eq_doc = await _cache.get(f"equity:{login}")
+            series = (eq_doc or {}).get("payload", {}).get("series", []) or []
+        else:
+            overrides = {
+                "risk_limits": {
+                    "max_daily_loss_pct": 5.0,
+                    "max_position_size_lots": 1.0,
+                    "max_open_positions": 10,
+                },
+                "kill_switch": False,
+            }
+            anchor = None
+            series = []
+        _, max_dd, current_dd = drawdown_from_equity(series)
+        acc = account_from_bridge(
+            bridge_acc,
+            positions_count=len(positions),
+            risk_limits=overrides["risk_limits"],
+            kill_switch=overrides["kill_switch"],
+            max_dd=max_dd,
+            current_dd=current_dd,
+            daily_pnl_anchor=anchor,
+        )
+        if _cache is not None:
+            await _cache.put(f"account:{login}", acc)
+        out.append(acc)
+
+    if not any_reachable and _cache is not None:
+        # Fall back to cached account snapshots (same strategy as routes_mt5).
+        try:
+            cached_keys = await _cache.cache.find(
+                {"_id": {"$regex": r"^account:"}}, {"_id": 0}
+            ).to_list(50)
+            for d in cached_keys:
+                payload = d.get("payload")
+                if payload:
+                    payload = dict(payload)
+                    payload["stale"] = True
+                    out.append(payload)
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger("server").warning("cache account fallback failed: %s", e)
+
+    return out, any_reachable
+
+
+async def _live_supervision_snapshot() -> dict:
+    if not MT5_MODE:
+        return _supervision_snapshot()
+    accounts, bridge_ok = await _mt5_live_accounts()
+    # Do not mix mock ALERTS into live MT5 supervision — that would be untruthful.
+    return _supervision_snapshot_from_accounts(
+        accounts, bridge_ok=bridge_ok, alerts=[]
+    )
 
 
 # ------------------------------------------------------------
@@ -569,9 +706,11 @@ async def system_health():
                     "server": h.get("server"),
                     "last_error": h.get("last_error"),
                     "trade_allowed": h.get("trade_allowed"),
+                    "message": h.get("message"),
                 })
             except (httpx.HTTPError, Exception) as e:  # noqa: BLE001
                 info["error"] = str(e)
+            out["bridge"] = info
     return out
 
 
@@ -663,12 +802,12 @@ async def delete_mt5_config():
 # ------------------------------------------------------------
 @app.get("/api/supervision/snapshot")
 async def supervision_snapshot():
-    return _supervision_snapshot()
+    return await _live_supervision_snapshot()
 
 
 @app.post("/api/atlas/report")
 async def create_atlas_report(payload: AtlasReportIn):
-    snap = _supervision_snapshot()
+    snap = await _live_supervision_snapshot()
     report = {
         "supervisor": payload.supervisor,
         "ecosystem": payload.ecosystem,
@@ -704,7 +843,7 @@ async def list_atlas_reports(limit: int = 50, status: Optional[str] = None):
 # background scheduler and the on-demand endpoint below.
 # ------------------------------------------------------------
 async def _capture_snapshot_report(source: str = "auto") -> dict:
-    snap = _supervision_snapshot()
+    snap = await _live_supervision_snapshot()
     report = {
         "supervisor": snap["supervisor"],
         "ecosystem": snap["ecosystem"],
@@ -780,16 +919,65 @@ async def healthcheck_page():
 # ------------------------------------------------------------
 # Static frontend serving (Windows installer mode).
 # Set SERVE_FRONTEND=true and FRONTEND_BUILD=/path/to/build to enable.
-# Must be mounted LAST so /api/* routes take precedence.
+#
+# Starlette StaticFiles(html=True) only serves directory index.html /
+# 404.html — it does NOT fall back to index.html for SPA client routes
+# like /settings. Serve real assets when they exist; otherwise return
+# index.html so React Router can handle the path.
 # ------------------------------------------------------------
-if os.environ.get("SERVE_FRONTEND", "false").lower() == "true":
+def mount_spa_frontend(application: FastAPI, build_dir: Path) -> bool:
+    """Register SPA static + index.html fallback. Returns True if mounted."""
     from fastapi.staticfiles import StaticFiles
-    fb = Path(os.environ.get("FRONTEND_BUILD", str(ROOT_DIR / ".." / "frontend_build")))
-    if (fb / "index.html").exists():
-        app.mount("/", StaticFiles(directory=str(fb), html=True), name="frontend")
-        logging.getLogger("server").info("Serving frontend from %s", fb)
+
+    root = build_dir.resolve()
+    index = root / "index.html"
+    if not index.exists():
+        return False
+
+    static_dir = root / "static"
+    if static_dir.is_dir():
+        application.mount(
+            "/static",
+            StaticFiles(directory=str(static_dir)),
+            name="frontend_static",
+        )
+
+    @application.get("/")
+    async def spa_root():
+        return FileResponse(index)
+
+    @application.get("/{full_path:path}")
+    async def spa_fallback(full_path: str):
+        if full_path == "api" or full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not Found")
+
+        candidate = (root / full_path).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Not Found")
+
+        if candidate.is_file():
+            return FileResponse(candidate)
+
+        return FileResponse(index)
+
+    return True
+
+
+if os.environ.get("SERVE_FRONTEND", "false").lower() == "true":
+    _frontend_build = Path(
+        os.environ.get("FRONTEND_BUILD", str(ROOT_DIR / ".." / "frontend_build"))
+    )
+    if mount_spa_frontend(app, _frontend_build):
+        logging.getLogger("server").info(
+            "Serving SPA frontend from %s (asset + index.html fallback)",
+            _frontend_build.resolve(),
+        )
     else:
-        logging.getLogger("server").warning("SERVE_FRONTEND=true but %s/index.html missing", fb)
+        logging.getLogger("server").warning(
+            "SERVE_FRONTEND=true but %s/index.html missing", _frontend_build
+        )
 
 app.add_middleware(
     CORSMiddleware,

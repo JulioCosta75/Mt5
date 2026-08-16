@@ -14,8 +14,10 @@ export default function PageShell({ children, active, testId }) {
     <div className="page-shell" data-testid={testId}>
       <header className="page-shell-header" data-testid="page-header">
         <Link to="/" className="page-shell-brand" data-testid="page-brand-link">
-          <img src={srAtlasRound} alt="Sr. Atlas" height="34" width="34" style={{ borderRadius: 7, background: "#000" }} />
-          <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: "-0.01em" }}>Sr. Atlas</span>
+          <img src={srAtlasRound} alt="Sr. Atlas" height="34" width="34" className="brand-mark" style={{ borderRadius: 7 }} />
+          <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: "-0.01em" }}>
+            Sr. <span className="brand-word">Atlas</span>
+          </span>
         </Link>
         <nav className="page-shell-nav">
           {links.map((l) => (

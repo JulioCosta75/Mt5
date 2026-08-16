@@ -37,6 +37,8 @@ function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/about" element={<About />} />
           <Route path="/docs" element={<Documentation />} />
+          {/* Deep links / refresh on tab-like paths still load the terminal. */}
+          <Route path="*" element={<Dashboard />} />
         </Routes>
       </BrowserRouter>
     </div>

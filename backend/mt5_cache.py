@@ -101,3 +101,28 @@ class MT5Cache:
                 {"_id": login}, {"$set": {"daily_pnl_anchor": anchor}}, upsert=True,
             )
         return float(anchor["balance"])
+
+    async def get_ea_labels(self, login: int) -> dict[int, str]:
+        doc = await self.overrides.find_one({"_id": login}) or {}
+        raw = doc.get("ea_labels") or {}
+        out: dict[int, str] = {}
+        for k, v in raw.items():
+            try:
+                out[int(k)] = str(v)
+            except (TypeError, ValueError):
+                continue
+        return out
+
+    async def set_ea_label(self, login: int, magic: int, label: str | None) -> dict[int, str]:
+        key = str(int(magic))
+        if label is None or not str(label).strip():
+            await self.overrides.update_one(
+                {"_id": login}, {"$unset": {f"ea_labels.{key}": ""}}, upsert=True,
+            )
+        else:
+            await self.overrides.update_one(
+                {"_id": login},
+                {"$set": {f"ea_labels.{key}": str(label).strip()}},
+                upsert=True,
+            )
+        return await self.get_ea_labels(login)
