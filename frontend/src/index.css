@@ -322,7 +322,7 @@ input:focus, select:focus { border-color: var(--bd-focus); }
 }
 
 /* ============================================================
-   Secondary pages (About / Documentation)
+   Secondary pages (About / Help)
    ============================================================ */
 .page-shell { min-height: 100vh; background: var(--bg-base); }
 .page-shell-header {
@@ -378,3 +378,29 @@ input:focus, select:focus { border-color: var(--bd-focus); }
     padding: 1px 5px; border: 1px solid rgba(34,197,94,0.18);
 }
 .doc-body b { color: var(--text-primary); }
+.doc-body ul ul { margin-top: 6px; margin-bottom: 6px; }
+.doc-table-wrap { overflow-x: auto; margin: 0 0 12px; }
+.doc-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+}
+.doc-table th,
+.doc-table td {
+    text-align: left;
+    vertical-align: top;
+    padding: 10px 12px;
+    border: 1px solid var(--bd-default);
+}
+.doc-table th {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.03);
+    font-weight: 600;
+}
+.doc-table td { color: var(--text-secondary); }
+.doc-footnote {
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+    font-style: italic;
+}

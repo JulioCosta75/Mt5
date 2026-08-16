@@ -14,11 +14,19 @@ an n8n health‑monitoring workflow orchestrated under the Sr. Atlas identity.
 
 ## 1. Architecture
 
+> **In-app Help** (`/docs`, `/help`) shows the end-user guide (English) —
+> what Atlas does / does not do, how to connect MT5, panel states, and common
+> issues. See `docs/user-guide.md`.
+>
+> **Technical** architecture (API, MongoDB/SQLite, n8n, install for developers)
+> stays in this README and in `docs/technical-architecture.md` — not in the
+> main product navigation.
+
 ```
 ┌──────────────────────────────┐        ┌──────────────────────────────┐
 │  Frontend (React)            │        │  n8n — Sr. Atlas Health       │
 │  Institutional dark terminal │        │  Monitor workflow             │
-│  Dashboard · About · Docs    │        │  (polls the 3 health checks)  │
+│  Dashboard · About · Help    │        │  (polls the 3 health checks)  │
 └──────────────┬───────────────┘        └───────────────┬──────────────┘
                │ REACT_APP_BACKEND_URL/api               │ HTTP
                ▼                                          ▼

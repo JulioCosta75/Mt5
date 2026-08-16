@@ -3,13 +3,13 @@ import { Link } from "react-router-dom";
 import { srAtlasRound, srAtlasIcon } from "@/assets/branding";
 import { api } from "@/lib/api";
 
-/** Shared top navigation for the secondary pages (About, Documentation, Settings). */
+/** Shared top navigation for the secondary pages (About, Help, Settings). */
 export default function PageShell({ children, active, testId }) {
   const links = [
     { to: "/", label: "Terminal" },
     { to: "/settings", label: "Settings" },
     { to: "/about", label: "About" },
-    { to: "/docs", label: "Documentation" },
+    { to: "/docs", label: "Help" },
   ];
   const [reporting, setReporting] = useState(false);
   const [banner, setBanner] = useState(null);
