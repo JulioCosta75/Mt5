@@ -103,7 +103,7 @@ single module (`assets/branding/index.js`).
 ```
 branding/
 ├── sr-atlas/logo-round.png     # favicon, app icon, header badge, boot, avatar
-└── forge-factory/logo.png      # welcome, loading, about, documentation
+└── forge-factory/logo.png      # welcome, loading, about, help
 ```
 
 | Where                       | Asset                     |
@@ -112,7 +112,7 @@ branding/
 | Dashboard header            | Sr. Atlas round + wordmark|
 | Welcome / loading splash    | Forge Factory Lab + Sr. Atlas |
 | About page                  | Forge Factory Lab + brand hierarchy |
-| Documentation page          | Forge Factory Lab         |
+| Help (user guide) page      | Forge Factory Lab         |
 
 **Rules:** use the supplied logos exactly as provided — do not redesign,
 recreate, recolor or modify them. To update a logo, replace the file keeping
