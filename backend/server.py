@@ -87,7 +87,14 @@ if ATLAS_STORE == "mongo":
     mongo_client = AsyncIOMotorClient(mongo_url)
     mongo_db = mongo_client[os.environ.get("DB_NAME", "test_database")]
 
-app = FastAPI(title="Atlas — MT5 Supervision API")
+_SERVE_FRONTEND = os.environ.get("SERVE_FRONTEND", "false").lower() == "true"
+# When the API process also hosts the React SPA, keep /docs for the product
+# Documentation page — not Swagger UI.
+app = FastAPI(
+    title="Atlas — MT5 Supervision API",
+    docs_url=None if _SERVE_FRONTEND else "/docs",
+    redoc_url=None if _SERVE_FRONTEND else "/redoc",
+)
 api_router = APIRouter(prefix="/api")
 
 # ------------------------------------------------------------
@@ -912,16 +919,65 @@ async def healthcheck_page():
 # ------------------------------------------------------------
 # Static frontend serving (Windows installer mode).
 # Set SERVE_FRONTEND=true and FRONTEND_BUILD=/path/to/build to enable.
-# Must be mounted LAST so /api/* routes take precedence.
+#
+# Starlette StaticFiles(html=True) only serves directory index.html /
+# 404.html — it does NOT fall back to index.html for SPA client routes
+# like /settings. Serve real assets when they exist; otherwise return
+# index.html so React Router can handle the path.
 # ------------------------------------------------------------
-if os.environ.get("SERVE_FRONTEND", "false").lower() == "true":
+def mount_spa_frontend(application: FastAPI, build_dir: Path) -> bool:
+    """Register SPA static + index.html fallback. Returns True if mounted."""
     from fastapi.staticfiles import StaticFiles
-    fb = Path(os.environ.get("FRONTEND_BUILD", str(ROOT_DIR / ".." / "frontend_build")))
-    if (fb / "index.html").exists():
-        app.mount("/", StaticFiles(directory=str(fb), html=True), name="frontend")
-        logging.getLogger("server").info("Serving frontend from %s", fb)
+
+    root = build_dir.resolve()
+    index = root / "index.html"
+    if not index.exists():
+        return False
+
+    static_dir = root / "static"
+    if static_dir.is_dir():
+        application.mount(
+            "/static",
+            StaticFiles(directory=str(static_dir)),
+            name="frontend_static",
+        )
+
+    @application.get("/")
+    async def spa_root():
+        return FileResponse(index)
+
+    @application.get("/{full_path:path}")
+    async def spa_fallback(full_path: str):
+        if full_path == "api" or full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not Found")
+
+        candidate = (root / full_path).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Not Found")
+
+        if candidate.is_file():
+            return FileResponse(candidate)
+
+        return FileResponse(index)
+
+    return True
+
+
+if os.environ.get("SERVE_FRONTEND", "false").lower() == "true":
+    _frontend_build = Path(
+        os.environ.get("FRONTEND_BUILD", str(ROOT_DIR / ".." / "frontend_build"))
+    )
+    if mount_spa_frontend(app, _frontend_build):
+        logging.getLogger("server").info(
+            "Serving SPA frontend from %s (asset + index.html fallback)",
+            _frontend_build.resolve(),
+        )
     else:
-        logging.getLogger("server").warning("SERVE_FRONTEND=true but %s/index.html missing", fb)
+        logging.getLogger("server").warning(
+            "SERVE_FRONTEND=true but %s/index.html missing", _frontend_build
+        )
 
 app.add_middleware(
     CORSMiddleware,
