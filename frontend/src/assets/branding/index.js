@@ -4,7 +4,7 @@
 // changes are required across the app.
 //
 //   sr-atlas/logo-round.png    -> favicon, app icon, header badge, boot, avatar
-//   forge-factory/logo.png     -> welcome, loading, about, documentation
+//   forge-factory/logo.png     -> welcome, loading, about, guide
 //
 // Brand hierarchy:
 //   Forge Factory Lab = the company / laboratory / engineering environment.
