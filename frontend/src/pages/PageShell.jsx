@@ -3,13 +3,13 @@ import { Link } from "react-router-dom";
 import { srAtlasRound, srAtlasIcon } from "@/assets/branding";
 import { api } from "@/lib/api";
 
-/** Shared top navigation for the secondary pages (About, Help, Settings). */
+/** Shared top navigation for the secondary pages (About, Guide, Settings). */
 export default function PageShell({ children, active, testId }) {
   const links = [
     { to: "/", label: "Terminal" },
     { to: "/settings", label: "Settings" },
     { to: "/about", label: "About" },
-    { to: "/docs", label: "Help" },
+    { to: "/guide", label: "Guide" },
   ];
   const [reporting, setReporting] = useState(false);
   const [banner, setBanner] = useState(null);
@@ -20,14 +20,14 @@ export default function PageShell({ children, active, testId }) {
     setBanner(null);
     try {
       const res = await api.reportProblem();
-      setBanner({ type: "ok", text: res?.message || "Relatório guardado e enviado, obrigado" });
+      setBanner({ type: "ok", text: res?.message || "Report saved and sent, thank you" });
     } catch (e) {
       const detail = e?.response?.data?.detail;
       setBanner({
         type: "error",
         text: typeof detail === "string" && detail.trim()
           ? detail
-          : "Não foi possível enviar — tenta mais tarde ou contacta diretamente.",
+          : "Could not send — try again later or contact us directly.",
       });
     } finally {
       setReporting(false);
@@ -61,9 +61,9 @@ export default function PageShell({ children, active, testId }) {
             data-testid="report-problem-button"
             onClick={onReportProblem}
             disabled={reporting}
-            title="Envia um diagnóstico automático à Forge Factory Lab (sem passwords nem tokens)"
+            title="Sends an automatic diagnostic to Forge Factory Lab (no passwords or tokens)"
           >
-            {reporting ? "A enviar…" : "Reportar problema"}
+            {reporting ? "Sending…" : "Report Problem"}
           </button>
         </nav>
         <div className="page-shell-badge">

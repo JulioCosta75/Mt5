@@ -13,24 +13,24 @@ function Doc({ title, children, testId }) {
   );
 }
 
-/** End-user Help — English guide. Technical architecture lives in docs/ + README. */
-export default function Help() {
+/** End-user Guide — English. Technical architecture lives in docs/ + README. */
+export default function Guide() {
   return (
-    <PageShell active="help" testId="help-page">
+    <PageShell active="guide" testId="guide-page">
       <section className="doc-hero">
         <img
           src={forgeFactoryLogo}
           alt="Forge Factory Lab"
           className="doc-hero-logo"
-          data-testid="help-forge-logo"
+          data-testid="guide-forge-logo"
         />
         <div>
-          <h1>Help</h1>
+          <h1>Guide</h1>
           <p className="mono">Sr. Atlas — User Guide</p>
         </div>
       </section>
 
-      <Doc title="Why Sr. Atlas exists" testId="help-why">
+      <Doc title="Why Sr. Atlas exists" testId="guide-why">
         <p>
           Trading is often sold as a get-rich-quick promise. In reality, most
           people who try end up acting on impulse — which, without realizing it,
@@ -61,13 +61,13 @@ export default function Help() {
         </p>
       </Doc>
 
-      <Doc title="The dashboard, element by element" testId="help-panel">
+      <Doc title="The dashboard, element by element" testId="guide-panel">
         <p>
           <b>Top bar</b>
         </p>
         <ul>
           <li>
-            <b>Tabs</b> (Overview, Strategies, Risk, Reports, Audit, About, Help,
+            <b>Tabs</b> (Overview, Strategies, Risk, Reports, Audit, About, Guide,
             Settings) — the different views of Atlas.
           </li>
           <li>
@@ -226,7 +226,7 @@ export default function Help() {
         </ul>
       </Doc>
 
-      <Doc title="The other tabs" testId="help-tabs">
+      <Doc title="The other tabs" testId="guide-tabs">
         <p>
           <b>Strategies</b>
         </p>
@@ -305,7 +305,7 @@ export default function Help() {
         </p>
       </Doc>
 
-      <Doc title="Before you start" testId="help-prereqs">
+      <Doc title="Before you start" testId="guide-prereqs">
         <p>You need:</p>
         <ol>
           <li>
@@ -322,7 +322,7 @@ export default function Help() {
         </ol>
       </Doc>
 
-      <Doc title="How to connect your account" testId="help-connect">
+      <Doc title="How to connect your account" testId="guide-connect">
         <ol>
           <li>Open Sr. Atlas.</li>
           <li>
@@ -339,7 +339,7 @@ export default function Help() {
         </p>
       </Doc>
 
-      <Doc title="What the dashboard states mean" testId="help-states">
+      <Doc title="What the dashboard states mean" testId="guide-states">
         <div className="doc-table-wrap">
           <table className="doc-table">
             <thead>
@@ -384,7 +384,7 @@ export default function Help() {
         </p>
       </Doc>
 
-      <Doc title="Common problems" testId="help-troubleshoot">
+      <Doc title="Common problems" testId="guide-troubleshoot">
         <p>
           <b>&quot;The dashboard isn&apos;t showing my data&quot;</b>
         </p>
@@ -422,7 +422,7 @@ export default function Help() {
         </ul>
       </Doc>
 
-      <Doc title="Where to get help" testId="help-report">
+      <Doc title="Where to get help" testId="guide-report">
         <p>
           If the sections above don&apos;t solve it, use the{" "}
           <b>&quot;Report Problem&quot;</b> button on the dashboard. It

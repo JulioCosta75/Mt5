@@ -64,7 +64,8 @@ def test_report_problem_persists_before_email_and_succeeds(client, atlas_db, mon
     assert body["saved"] is True
     assert body["email_sent"] is True
     assert body["report_id"] >= 1
-    assert "enviado" in body["message"].lower()
+    assert "sent" in body["message"].lower()
+    assert "thank you" in body["message"].lower()
     assert atlas_db.is_file()
 
     hist = client.get("/api/system/problem-reports")
@@ -94,9 +95,9 @@ def test_report_problem_persists_even_when_email_not_configured(client, atlas_db
     r = client.post("/api/system/report-problem", json={"note": "offline test"})
     assert r.status_code == 503, r.text
     detail = r.json()["detail"]
-    assert "guardado localmente" in detail.lower()
+    assert "saved locally" in detail.lower()
     assert "#" in detail
-    assert "enviado" not in detail.lower() or "não" in detail.lower()
+    assert "report saved and sent" not in detail.lower()
 
     hist = client.get("/api/system/problem-reports")
     assert hist.status_code == 200
@@ -117,9 +118,9 @@ def test_report_problem_never_claims_sent_on_provider_error(client, atlas_db, mo
 
     assert r.status_code == 503
     detail = r.json()["detail"].lower()
-    assert "guardado localmente" in detail
+    assert "saved locally" in detail
     # Must not claim success as if email went through alone
-    assert not detail.startswith("relatório enviado")
+    assert not detail.startswith("report saved and sent")
 
     rows = client.get("/api/system/problem-reports").json()["reports"]
     assert rows[0]["email_status"] == "failed"

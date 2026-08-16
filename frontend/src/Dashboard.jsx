@@ -65,7 +65,7 @@ function Header({
             </button>
           ))}
           <Link to="/about" className="btn" data-testid="nav-about" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>About</Link>
-          <Link to="/docs" className="btn" data-testid="nav-docs" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>Help</Link>
+          <Link to="/guide" className="btn" data-testid="nav-guide" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>Guide</Link>
           <Link to="/settings" className="btn" data-testid="nav-settings" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>Settings</Link>
           <button
             type="button"
@@ -74,9 +74,9 @@ function Header({
             onClick={onReportProblem}
             disabled={reporting}
             style={{ border: "none", padding: "4px 10px" }}
-            title="Envia um diagnóstico automático à Forge Factory Lab (sem passwords nem tokens)"
+            title="Sends an automatic diagnostic to Forge Factory Lab (no passwords or tokens)"
           >
-            {reporting ? "A enviar…" : "Reportar problema"}
+            {reporting ? "Sending…" : "Report Problem"}
           </button>
         </nav>
       </div>
@@ -246,13 +246,13 @@ export default function Dashboard() {
       const res = await api.reportProblem();
       setReportBanner({
         type: "ok",
-        text: res?.message || "Relatório guardado e enviado, obrigado",
+        text: res?.message || "Report saved and sent, thank you",
       });
     } catch (e) {
       const detail = e?.response?.data?.detail;
       const text = typeof detail === "string" && detail.trim()
         ? detail
-        : "Não foi possível enviar — tenta mais tarde ou contacta diretamente.";
+        : "Could not send — try again later or contact us directly.";
       setReportBanner({ type: "error", text });
     } finally {
       setReporting(false);

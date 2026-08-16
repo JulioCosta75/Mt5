@@ -767,7 +767,7 @@ async def get_problem_report(report_id: int):
     store = ProblemReportStore()
     row = store.get(report_id)
     if not row:
-        raise HTTPException(status_code=404, detail="Relatório não encontrado")
+        raise HTTPException(status_code=404, detail="Report not found")
     return {"report": row}
 
 

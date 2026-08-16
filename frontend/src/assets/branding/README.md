@@ -9,7 +9,7 @@ branding/
 │   ├── logo-round.svg        # round badge version
 │   └── icon.svg              # SA icon — favicon, app icon, nav icon
 └── forge-factory/
-    └── logo.svg              # company logo — welcome, loading, about, help
+    └── logo.svg              # company logo — welcome, loading, about, guide
 ```
 
 ## Brand hierarchy

@@ -3,7 +3,7 @@ import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Dashboard from "@/Dashboard";
 import About from "@/pages/About";
-import Help from "@/pages/Help";
+import Guide from "@/pages/Guide";
 import Settings from "@/pages/Settings";
 import BrandBoot from "@/components/BrandBoot";
 
@@ -36,9 +36,10 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/about" element={<About />} />
-          {/* /docs kept as stable URL; label in nav is Help (user guide). */}
-          <Route path="/docs" element={<Help />} />
-          <Route path="/help" element={<Help />} />
+          {/* /docs and /help kept as stable aliases; visible nav label is Guide. */}
+          <Route path="/docs" element={<Guide />} />
+          <Route path="/guide" element={<Guide />} />
+          <Route path="/help" element={<Guide />} />
           {/* Deep links / refresh on tab-like paths still load the terminal. */}
           <Route path="*" element={<Dashboard />} />
         </Routes>

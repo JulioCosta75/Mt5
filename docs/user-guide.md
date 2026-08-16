@@ -1,7 +1,7 @@
 # Sr. Atlas — User Guide
 
-Canonical text for the in-app **Help** tab (`/docs`, `/help`).
-If you change this file, update `frontend/src/pages/Help.jsx` too.
+Canonical text for the in-app **Guide** tab (`/guide`, `/docs`, `/help`).
+If you change this file, update `frontend/src/pages/Guide.jsx` too.
 
 ## Why Sr. Atlas exists
 
@@ -21,7 +21,7 @@ Sr. Atlas was born out of a real need, not a business opportunity spotted from t
 
 ### Top bar
 
-- **Tabs** (Overview, Strategies, Risk, Reports, Audit, About, Help, Settings) — the different views of Atlas.
+- **Tabs** (Overview, Strategies, Risk, Reports, Audit, About, Guide, Settings) — the different views of Atlas.
 - **REFRESH FEED** — forces an immediate data update instead of waiting for the next automatic cycle.
 - **v0.3.0 · [code version] · session-XXXX** — the exact installed version and current session identifier, useful when reporting problems.
 

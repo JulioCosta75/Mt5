@@ -322,7 +322,7 @@ input:focus, select:focus { border-color: var(--bd-focus); }
 }
 
 /* ============================================================
-   Secondary pages (About / Help)
+   Secondary pages (About / Guide)
    ============================================================ */
 .page-shell { min-height: 100vh; background: var(--bg-base); }
 .page-shell-header {

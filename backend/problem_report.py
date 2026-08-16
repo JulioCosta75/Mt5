@@ -35,11 +35,11 @@ _SECRET_KEY_RE = re.compile(
 DEFAULT_TO = "juliopdcosta@gmail.com"
 DEFAULT_FROM = "Sr. Atlas <onboarding@resend.dev>"
 USER_FACING_FAIL = (
-    "não foi possível enviar por email — tenta mais tarde ou contacta diretamente."
+    "could not send by email — try again later or contact us directly."
 )
 NOT_CONFIGURED_FAIL = (
-    "o envio por email ainda não está configurado neste Atlas. "
-    "Contacta diretamente a Forge Factory Lab."
+    "email sending isn't configured on this Atlas yet. "
+    "Contact Forge Factory Lab directly."
 )
 
 
@@ -191,8 +191,8 @@ def _safe_url_host(url: Any) -> str | None:
 
 def format_report_text(payload: dict) -> str:
     return (
-        "Sr. Atlas — relatório automático de problema\n"
-        "(apenas recolha / registo — sem correção automática)\n"
+        "Sr. Atlas — automatic problem report\n"
+        "(collection / registration only — no automatic remediation)\n"
         "============================================\n\n"
         + json.dumps(payload, indent=2, ensure_ascii=False, default=str)
     )
@@ -217,7 +217,7 @@ async def send_problem_report(payload: dict) -> dict:
     to_addr = (os.environ.get("REPORT_PROBLEM_TO") or DEFAULT_TO).strip()
     from_addr = (os.environ.get("REPORT_PROBLEM_FROM") or DEFAULT_FROM).strip()
     subject = (
-        f"[Sr. Atlas] Relatório de problema · "
+        f"[Sr. Atlas] Problem report · "
         f"{payload.get('version') or '?'} · "
         f"{payload.get('generated_at') or ''}"
     )
@@ -257,7 +257,7 @@ async def send_problem_report(payload: dict) -> dict:
         pass
     return {
         "ok": True,
-        "message": "Relatório guardado e enviado, obrigado",
+        "message": "Report saved and sent, thank you",
         "provider": "resend",
         "id": data.get("id"),
     }
@@ -297,7 +297,7 @@ async def submit_problem_report(
             email_error=e.user_message,
         )
         raise ReportSendError(
-            f"Relatório guardado localmente (#{report_id}), mas {e.user_message}",
+            f"Report saved locally (#{report_id}), but {e.user_message}",
             status_code=e.status_code,
             report_id=report_id,
         ) from e
@@ -313,7 +313,7 @@ async def submit_problem_report(
         "email_sent": True,
         "report_id": report_id,
         "message": email_result.get("message")
-        or "Relatório guardado e enviado, obrigado",
+        or "Report saved and sent, thank you",
         "provider": email_result.get("provider"),
         "email_id": email_result.get("id"),
     }

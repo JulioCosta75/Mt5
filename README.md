@@ -14,7 +14,7 @@ an n8n health‑monitoring workflow orchestrated under the Sr. Atlas identity.
 
 ## 1. Architecture
 
-> **In-app Help** (`/docs`, `/help`) shows the end-user guide (English) —
+> **In-app Guide** (`/guide`, `/docs`, `/help`) shows the end-user guide (English) —
 > what Atlas does / does not do, how to connect MT5, panel states, and common
 > issues. See `docs/user-guide.md`.
 >
@@ -26,7 +26,7 @@ an n8n health‑monitoring workflow orchestrated under the Sr. Atlas identity.
 ┌──────────────────────────────┐        ┌──────────────────────────────┐
 │  Frontend (React)            │        │  n8n — Sr. Atlas Health       │
 │  Institutional dark terminal │        │  Monitor workflow             │
-│  Dashboard · About · Help    │        │  (polls the 3 health checks)  │
+│  Dashboard · About · Guide   │        │  (polls the 3 health checks)  │
 └──────────────┬───────────────┘        └───────────────┬──────────────┘
                │ REACT_APP_BACKEND_URL/api               │ HTTP
                ▼                                          ▼
@@ -103,7 +103,7 @@ single module (`assets/branding/index.js`).
 ```
 branding/
 ├── sr-atlas/logo-round.png     # favicon, app icon, header badge, boot, avatar
-└── forge-factory/logo.png      # welcome, loading, about, help
+└── forge-factory/logo.png      # welcome, loading, about, guide
 ```
 
 | Where                       | Asset                     |
@@ -112,7 +112,7 @@ branding/
 | Dashboard header            | Sr. Atlas round + wordmark|
 | Welcome / loading splash    | Forge Factory Lab + Sr. Atlas |
 | About page                  | Forge Factory Lab + brand hierarchy |
-| Help (user guide) page      | Forge Factory Lab         |
+| Guide (user guide) page     | Forge Factory Lab         |
 
 **Rules:** use the supplied logos exactly as provided — do not redesign,
 recreate, recolor or modify them. To update a logo, replace the file keeping
