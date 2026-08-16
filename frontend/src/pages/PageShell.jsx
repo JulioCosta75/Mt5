@@ -20,7 +20,7 @@ export default function PageShell({ children, active, testId }) {
     setBanner(null);
     try {
       const res = await api.reportProblem();
-      setBanner({ type: "ok", text: res?.message || "Relatório enviado, obrigado" });
+      setBanner({ type: "ok", text: res?.message || "Relatório guardado e enviado, obrigado" });
     } catch (e) {
       const detail = e?.response?.data?.detail;
       setBanner({

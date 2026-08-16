@@ -1,11 +1,13 @@
-"""Problem-report diagnostics + Resend email delivery.
+"""Problem-report diagnostics + local SQLite registry + Resend email.
 
-Never include credentials (passwords, tokens, API keys, MT5 login).
+Collection and registration only — never auto-remediation, never credentials.
 Uses Resend's HTTP API via httpx (no extra Python package).
-Configure with env:
-  RESEND_API_KEY          — required to send (Julio creates the Resend account)
+
+Env:
+  RESEND_API_KEY          — required to email (Julio creates the Resend account)
   REPORT_PROBLEM_TO       — default juliopdcosta@gmail.com
   REPORT_PROBLEM_FROM     — verified sender, e.g. "Sr. Atlas <onboarding@resend.dev>"
+  ATLAS_SQLITE_PATH       — SQLite file for problem_reports table (shared atlas.db OK)
 """
 from __future__ import annotations
 
@@ -19,6 +21,8 @@ from typing import Any
 
 import httpx
 
+from problem_report_store import ProblemReportStore
+
 logger = logging.getLogger("problem_report")
 
 # Substrings that mark a dict key / env name as secret (case-insensitive).
@@ -31,21 +35,22 @@ _SECRET_KEY_RE = re.compile(
 DEFAULT_TO = "juliopdcosta@gmail.com"
 DEFAULT_FROM = "Sr. Atlas <onboarding@resend.dev>"
 USER_FACING_FAIL = (
-    "Não foi possível enviar — tenta mais tarde ou contacta diretamente."
+    "não foi possível enviar por email — tenta mais tarde ou contacta diretamente."
 )
 NOT_CONFIGURED_FAIL = (
-    "Não foi possível enviar — o envio de relatórios ainda não está "
-    "configurado neste Atlas. Contacta diretamente a Forge Factory Lab."
+    "o envio por email ainda não está configurado neste Atlas. "
+    "Contacta diretamente a Forge Factory Lab."
 )
 
 
 class ReportSendError(Exception):
-    """Raised when the report cannot be sent. ``user_message`` is safe to show."""
+    """Raised when the email cannot be sent. ``user_message`` is safe to show."""
 
-    def __init__(self, user_message: str, *, status_code: int = 503):
+    def __init__(self, user_message: str, *, status_code: int = 503, report_id: int | None = None):
         super().__init__(user_message)
         self.user_message = user_message
         self.status_code = status_code
+        self.report_id = report_id
 
 
 def _is_secret_key(key: str) -> bool:
@@ -66,7 +71,6 @@ def sanitize(value: Any, *, _depth: int = 0) -> Any:
     if isinstance(value, list):
         return [sanitize(v, _depth=_depth + 1) for v in value[:200]]
     if isinstance(value, str):
-        # Redact long token-like strings if they somehow appear as values.
         if len(value) >= 24 and re.fullmatch(r"[A-Za-z0-9_\-\.=]+", value):
             if value.startswith(("re_", "sk_", "Bearer", "ghp_")):
                 return "<redacted>"
@@ -80,7 +84,6 @@ def _tail_log_file(path: Path, max_lines: int = 80) -> list[str]:
             return []
         text = path.read_text(encoding="utf-8", errors="replace")
         lines = text.splitlines()
-        # Drop lines that look like they contain secrets.
         cleaned = []
         for line in lines[-max_lines:]:
             if _SECRET_KEY_RE.search(line) and ("=" in line or ":" in line):
@@ -95,7 +98,6 @@ def _tail_log_file(path: Path, max_lines: int = 80) -> list[str]:
 def collect_log_tails() -> dict[str, list[str]]:
     """Best-effort recent log lines from common Atlas log locations."""
     candidates: list[Path] = []
-    # Installer layout / relative
     root = Path(__file__).resolve().parent
     candidates.extend(
         [
@@ -147,7 +149,6 @@ def build_diagnostic_payload(health: dict, *, note: str | None = None) -> dict:
                 "reachable": bridge.get("reachable"),
                 "terminal_connected": bridge.get("terminal_connected"),
                 "account_logged_in": bridge.get("account_logged_in"),
-                # Never include login / password / token.
                 "server": bridge.get("server"),
                 "last_error": bridge.get("last_error"),
                 "trade_allowed": bridge.get("trade_allowed"),
@@ -160,6 +161,7 @@ def build_diagnostic_payload(health: dict, *, note: str | None = None) -> dict:
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "product": "Sr. Atlas",
         "kind": "problem_report",
+        "no_auto_remediation": True,
         "mode": health.get("mode"),
         "version": health.get("version"),
         "build": sanitize(health.get("build") or {}),
@@ -169,7 +171,6 @@ def build_diagnostic_payload(health: dict, *, note: str | None = None) -> dict:
         "recent_logs": collect_log_tails(),
     }
     if note and isinstance(note, str) and note.strip():
-        # Optional free-text from UI — truncate, no secrets expected.
         payload["user_note"] = note.strip()[:1000]
     return sanitize(payload)
 
@@ -191,9 +192,20 @@ def _safe_url_host(url: Any) -> str | None:
 def format_report_text(payload: dict) -> str:
     return (
         "Sr. Atlas — relatório automático de problema\n"
+        "(apenas recolha / registo — sem correção automática)\n"
         "============================================\n\n"
         + json.dumps(payload, indent=2, ensure_ascii=False, default=str)
     )
+
+
+def _guess_tester(explicit: str | None) -> str | None:
+    if explicit and explicit.strip():
+        return explicit.strip()[:120]
+    for key in ("ATLAS_TESTER_NAME", "USERNAME", "USER"):
+        val = (os.environ.get(key) or "").strip()
+        if val:
+            return val[:120]
+    return None
 
 
 async def send_problem_report(payload: dict) -> dict:
@@ -231,7 +243,6 @@ async def send_problem_report(payload: dict) -> dict:
         raise ReportSendError(USER_FACING_FAIL, status_code=503) from e
 
     if resp.status_code >= 400:
-        # Never echo API key or raw provider secrets back to the client.
         logger.warning(
             "Resend rejected report: status=%s body=%s",
             resp.status_code,
@@ -246,7 +257,63 @@ async def send_problem_report(payload: dict) -> dict:
         pass
     return {
         "ok": True,
-        "message": "Relatório enviado, obrigado",
+        "message": "Relatório guardado e enviado, obrigado",
         "provider": "resend",
         "id": data.get("id"),
+    }
+
+
+async def submit_problem_report(
+    health: dict,
+    *,
+    note: str | None = None,
+    tester: str | None = None,
+    store: ProblemReportStore | None = None,
+) -> dict:
+    """Persist diagnostic locally, then attempt email. Never auto-remediates.
+
+    Always writes SQLite history first. Email success → user confirmation.
+    Email failure → clear error that still acknowledges the local save —
+    never claims the email was sent.
+    """
+    payload = build_diagnostic_payload(health, note=note)
+    build = payload.get("build") if isinstance(payload.get("build"), dict) else {}
+    registry = store or ProblemReportStore()
+    report_id = registry.insert(
+        tester=_guess_tester(tester),
+        atlas_version=str(payload.get("version") or build.get("version") or "") or None,
+        atlas_build=str(build.get("build") or "") or None,
+        diagnostic=payload,
+        email_status="pending",
+    )
+
+    try:
+        email_result = await send_problem_report(payload)
+    except ReportSendError as e:
+        status = "not_configured" if e.user_message == NOT_CONFIGURED_FAIL else "failed"
+        registry.update_email(
+            report_id,
+            email_status=status,
+            email_error=e.user_message,
+        )
+        raise ReportSendError(
+            f"Relatório guardado localmente (#{report_id}), mas {e.user_message}",
+            status_code=e.status_code,
+            report_id=report_id,
+        ) from e
+
+    registry.update_email(
+        report_id,
+        email_status="sent",
+        email_provider_id=email_result.get("id"),
+    )
+    return {
+        "ok": True,
+        "saved": True,
+        "email_sent": True,
+        "report_id": report_id,
+        "message": email_result.get("message")
+        or "Relatório guardado e enviado, obrigado",
+        "provider": email_result.get("provider"),
+        "email_id": email_result.get("id"),
     }

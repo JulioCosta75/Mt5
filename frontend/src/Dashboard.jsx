@@ -246,7 +246,7 @@ export default function Dashboard() {
       const res = await api.reportProblem();
       setReportBanner({
         type: "ok",
-        text: res?.message || "Relatório enviado, obrigado",
+        text: res?.message || "Relatório guardado e enviado, obrigado",
       });
     } catch (e) {
       const detail = e?.response?.data?.detail;

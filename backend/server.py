@@ -724,24 +724,51 @@ async def system_version():
 
 
 # ------------------------------------------------------------
-# /api/system/report-problem — one-click diagnostic email to Forge.
-# Never includes credentials. Requires RESEND_API_KEY (see problem_report.py).
+# /api/system/report-problem — collect + persist + email Forge.
+# Collection/registration only — never auto-remediation.
+# Never includes credentials. Email requires RESEND_API_KEY.
 # ------------------------------------------------------------
 class ProblemReportBody(BaseModel):
     note: Optional[str] = Field(default=None, max_length=1000)
+    tester: Optional[str] = Field(default=None, max_length=120)
 
 
 @app.post("/api/system/report-problem")
 async def report_problem(body: Optional[ProblemReportBody] = None):
-    from problem_report import ReportSendError, build_diagnostic_payload, send_problem_report
+    from problem_report import ReportSendError, submit_problem_report
 
     health = await system_health()
-    payload = build_diagnostic_payload(health, note=(body.note if body else None))
     try:
-        result = await send_problem_report(payload)
+        result = await submit_problem_report(
+            health,
+            note=(body.note if body else None),
+            tester=(body.tester if body else None),
+        )
     except ReportSendError as e:
         raise HTTPException(status_code=e.status_code, detail=e.user_message) from e
     return result
+
+
+@app.get("/api/system/problem-reports")
+async def list_problem_reports(limit: int = 50):
+    """Local history of saved problem reports (metadata — for consultation)."""
+    from problem_report_store import ProblemReportStore
+
+    store = ProblemReportStore()
+    rows = store.list_recent(limit=limit)
+    return {"count": len(rows), "reports": rows}
+
+
+@app.get("/api/system/problem-reports/{report_id}")
+async def get_problem_report(report_id: int):
+    """Fetch one saved report including sanitized diagnostic JSON."""
+    from problem_report_store import ProblemReportStore
+
+    store = ProblemReportStore()
+    row = store.get(report_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Relatório não encontrado")
+    return {"report": row}
 
 
 # ------------------------------------------------------------
