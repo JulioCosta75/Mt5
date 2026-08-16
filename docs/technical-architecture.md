@@ -1,7 +1,7 @@
 # Technical architecture (developers)
 
 > This content previously lived in the in-app **Documentation** tab.
-> End users now see **Help** (`/docs`) — the Portuguese user guide.
+> End users now see **Help** (`/docs`) — the English user guide.
 > Keep this file (and the root `README.md`) for engineering reference only;
 > do not surface MongoDB / API / n8n internals in the main product navigation.
 

@@ -1,162 +1,162 @@
-# Sr. Atlas — Guia do Utilizador
+# Sr. Atlas — User Guide
 
-Fonte canónica do texto mostrado no separador **Help** (`/docs`) da aplicação.
-Se alterares este ficheiro, actualiza também `frontend/src/pages/Help.jsx`.
+Canonical text for the in-app **Help** tab (`/docs`, `/help`).
+If you change this file, update `frontend/src/pages/Help.jsx` too.
 
-## Porque existe o Sr. Atlas
+## Why Sr. Atlas exists
 
-O trading é muitas vezes vendido como uma promessa de enriquecer depressa. Na realidade, a maioria de quem tenta acaba a agir por impulso — o que, sem perceber, se parece muito com jogar à sorte. Estudar a sério é difícil, quase como perceber como um avião voa.
+Trading is often sold as a get-rich-quick promise. In reality, most people who try end up acting on impulse — which, without realizing it, looks a lot like gambling. Studying it properly is hard, almost like understanding how a plane flies.
 
-O Sr. Atlas nasceu de uma necessidade real, não de uma oportunidade de negócio vista de fora: a de ter algo que ajudasse **a cada decisão**, e que ajudasse a **aprender com cada decisão** — não uma ferramenta que decide ou negoceia por ti.
+Sr. Atlas was born out of a real need, not a business opportunity spotted from the outside: the need for something that helps **with every decision**, and helps you **learn from every decision** — not a tool that decides or trades for you.
 
-**O que o Sr. Atlas NÃO faz:**
+**What Sr. Atlas does NOT do:**
 
-- Não decide por ti.
-- Não compra nem vende nada sozinho.
-- Não toca no teu dinheiro nem nas tuas ordens.
+- It does not decide for you.
+- It does not buy or sell anything on its own.
+- It never touches your money or your orders.
 
-**O que o Sr. Atlas faz:** mostra-te a verdade sobre o estado real da tua conta, sem filtros e sem enfeites — mesmo quando essa verdade é desconfortável (por exemplo, avisar que os dados estão desatualizados, em vez de fingir que está tudo bem). A decisão continua sempre a ser tua; o Atlas só te ajuda a decidir a ver com clareza.
+**What Sr. Atlas does:** it shows you the true state of your account, without filters or embellishment — even when that truth is uncomfortable (for example, warning you that data is outdated instead of pretending everything is fine). The decision is always yours; Atlas just helps you see clearly before you make it.
 
-## O painel, elemento a elemento
+## The dashboard, element by element
 
-### Barra superior
+### Top bar
 
-- **Separadores** (Overview, Strategies, Risk, Reports, Audit, About, Help, Settings) — as diferentes vistas do Atlas.
-- **REFRESH FEED** — força uma atualização imediata dos dados, em vez de esperar pelo próximo ciclo automático.
-- **v0.3.0 · [versão do código] · session-XXXX** — a versão exata instalada e o identificador da sessão atual, úteis para reportar problemas.
+- **Tabs** (Overview, Strategies, Risk, Reports, Audit, About, Help, Settings) — the different views of Atlas.
+- **REFRESH FEED** — forces an immediate data update instead of waiting for the next automatic cycle.
+- **v0.3.0 · [code version] · session-XXXX** — the exact installed version and current session identifier, useful when reporting problems.
 
-### Barra de estatísticas globais
+### Global stats bar
 
-- **TOTAL EQUITY** — o valor real da tua conta neste momento (saldo mais/menos o resultado das posições abertas).
-- **DAILY P&L** — quanto ganhaste ou perdeste hoje, em valor e em percentagem.
-- **AVG DD** — a média do "drawdown" (quanto a conta caiu desde o pico mais recente) nas contas monitorizadas.
-- **OPEN POS** — número de posições abertas neste momento.
-- **ACCOUNTS** — quantas contas estão "ao vivo" (ligadas e a receber dados reais) sobre o total configurado.
-- **ALERTS** — número de alertas ativos a precisar da tua atenção.
-- **UTC, data/hora** — o relógio de referência do sistema (hora universal, não a hora local).
+- **TOTAL EQUITY** — your account's real value right now (balance plus/minus the result of open positions).
+- **DAILY P&L** — how much you've gained or lost today, in value and percentage.
+- **AVG DD** — the average "drawdown" (how much the account has fallen since its most recent peak) across monitored accounts.
+- **OPEN POS** — number of currently open positions.
+- **ACCOUNTS** — how many accounts are "live" (connected and receiving real data) out of the total configured.
+- **ALERTS** — number of active alerts needing your attention.
+- **UTC, date/time** — the system's reference clock (universal time, not local time).
 
-### Tabela "MT5 Accounts"
+### "MT5 Accounts" table
 
-Uma linha por conta MT5 ligada. Colunas: **Status**, **Account** (número da conta), **Broker** (corretora), **Strategy** (nome da estratégia associada), **Balance** (saldo), **Equity** (valor real, incluindo posições abertas), **Daily P&L**, **DD** (drawdown atual), **POS** (posições abertas), **LEV** (alavancagem, ex: 1:30), **Margin %** (nível de margem — quanto mais alto, mais folga tens antes de um "stop out" do broker).
+One row per connected MT5 account. Columns: **Status**, **Account** (account number), **Broker**, **Strategy** (associated strategy name), **Balance**, **Equity** (real value, including open positions), **Daily P&L**, **DD** (current drawdown), **POS** (open positions), **LEV** (leverage, e.g. 1:30), **Margin %** (margin level — the higher it is, the more room you have before a broker "stop out").
 
-### Secção "Risk"
+### "Risk" section
 
-Repete os números da conta selecionada (Equity, Balance, Margin Used, Margin Lvl, Daily P&L, Cur DD, Max DD, Leverage), e acrescenta:
+Repeats the numbers for the selected account (Equity, Balance, Margin Used, Margin Lvl, Daily P&L, Cur DD, Max DD, Leverage), plus:
 
-- **Risk Limits** — três campos que defines tu: **Max Daily Loss (%)**, **Max Position Size (lots)**, **Max Open Positions** — com botão **Save Limits** para gravar.
+- **Risk Limits** — three fields you define: **Max Daily Loss (%)**, **Max Position Size (lots)**, **Max Open Positions** — with a **Save Limits** button.
 
-### Painel "Sr. Atlas Supervision" (lado direito)
+### "Sr. Atlas Supervision" panel (right side)
 
-- Selo de estado geral: **OK** ou **WARNING**, com uma frase a explicar porquê (ex: "MT5 bridge is unavailable; displayed data comes from cache and may be outdated").
-- Resumo: Total Equity, Daily P&L, Accounts Live, Active Alerts.
-- **Core Services** — o estado de cada peça interna do Atlas, uma a uma:
-  - **Backend** — o "cérebro" que serve o painel.
-  - **Store** — onde os dados ficam guardados.
-  - **Bridge** — a ligação direta ao teu terminal MT5.
-  - **Dashboard** — o próprio painel que estás a ver.
+- Overall status badge: **OK** or **WARNING**, with a sentence explaining why (e.g. "MT5 bridge is unavailable; displayed data comes from cache and may be outdated").
+- Summary: Total Equity, Daily P&L, Accounts Live, Active Alerts.
+- **Core Services** — the status of each internal Atlas component, one by one:
+  - **Backend** — the "brain" that serves the dashboard.
+  - **Store** — where the data is kept.
+  - **Bridge** — the direct connection to your MT5 terminal.
+  - **Dashboard** — the panel you're looking at right now.
 
-  Cada uma mostra **OK** (verde) ou **DOWN** (vermelho). Se o Bridge estiver "DOWN", os números que vês vêm de uma cópia guardada (cache), não ao vivo — o Atlas avisa sempre quando isto acontece.
-- **Generate Sr. Atlas Report** — botão para criar um relatório da conta.
-- **Recent Reports** — lista dos relatórios já gerados.
+  Each shows **OK** (green) or **DOWN** (red). If Bridge is "DOWN", the numbers you see come from a saved copy (cache), not live data — Atlas always warns you when this happens.
+- **Generate Sr. Atlas Report** — button to create an account report.
+- **Recent Reports** — list of reports already generated.
 
-### Gráficos, em baixo
+### Charts, below
 
-- **Equity Curve · 90D** — a evolução do valor da tua conta nos últimos 90 dias.
-- **Drawdown · 90D** — a evolução das quedas desde o pico, no mesmo período.
+- **Equity Curve · 90D** — your account's value over the last 90 days.
+- **Drawdown · 90D** — drawdowns from peak over the same period.
 
-### Histórico de operações (fundo do Overview)
+### Trade history (bottom of Overview)
 
-- **Trade History** — lista das tuas operações já fechadas: símbolo, lado (compra/venda), lotes, hora de abertura e fecho, duração em minutos, resultado (P&L) e estratégia associada. Podes filtrar por símbolo e por lado. No topo da tabela: resultado líquido total (**NET**), percentagem de operações ganhas (**WIN%**), e número de operações (**N**).
+- **Trade History** — list of your already-closed trades: symbol, side (buy/sell), lots, open/close time, duration in minutes, result (P&L), and associated strategy. You can filter by symbol and side. At the top of the table: total net result (**NET**), win percentage (**WIN%**), and number of trades (**N**).
 
-### Painel de alertas (lado direito)
+### Alerts panel (right side)
 
-- **Alerts** — contagem de alertas por gravidade (vermelho = crítico, laranja = aviso, azul = informativo). Mostra "No alerts" quando não há nada a assinalar.
-- **System** — o "pulso" técnico do sistema: **API Latency**, **MT5 Bridge**, **Risk Engine**, **Telegram Notif**, **Last Heartbeat**, **Strategies Loaded**.
+- **Alerts** — count of alerts by severity (red = critical, orange = warning, blue = info). Shows "No alerts" when there's nothing to flag.
+- **System** — the technical "pulse" of the system: **API Latency**, **MT5 Bridge**, **Risk Engine**, **Telegram Notif**, **Last Heartbeat**, **Strategies Loaded**.
 
-## Os outros separadores
+## The other tabs
 
 ### Strategies
 
-Agrupa as tuas contas por estratégia em vez de por conta individual — útil se um dia tiveres várias contas a seguir a mesma abordagem. Mostra, por estratégia: contas associadas, quantas estão ao vivo, equity total, P&L diário, posições abertas, drawdown médio.
+Groups your accounts by strategy instead of by individual account — useful if you ever have multiple accounts following the same approach. Shows, per strategy: associated accounts, how many are live, total equity, daily P&L, open positions, average drawdown.
 
 ### Risk
 
-A mesma secção "Risk" já descrita acima (Risk Limits), mas como página própria.
+The same "Risk" section described above (Risk Limits), as its own page.
 
 ### Reports
 
-Lista dos relatórios já gerados pelo botão "Generate Sr. Atlas Report", com estado, mensagem e origem de cada um. Vazio até gerares o primeiro.
+List of reports already generated via the "Generate Sr. Atlas Report" button, with status, message, and origin for each. Empty until you generate the first one.
 
 ### Audit
 
-Um registo histórico de eventos do sistema (o "diário de bordo" do Atlas) — separado do histórico de operações. Vazio até haver eventos registados.
+A historical log of system events (Atlas's "logbook") — separate from trade history. Empty until events are logged.
 
 ### About
 
-Página de apresentação da marca — o logótipo e princípios da Forge Factory Lab ("Conhecimento, validação e verdade vêm antes da automação") e do Sr. Atlas. Não tem funcionalidade, é só identidade.
+Brand presentation page — the Forge Factory Lab logo and principles ("Knowledge, validation and truth come before automation") and Sr. Atlas's own. No functionality, identity only.
 
 ### Settings
 
-Onde ligas (ou alteras, a qualquer momento, sem reinstalar) a tua conta MT5:
+Where you connect (or change, anytime, without reinstalling) your MT5 account:
 
-- **MT5 Login** — o número da tua conta.
-- **MT5 Password** — fica guardada; podes deixar em branco para manter a atual.
-- **Server / Broker** — o nome do servidor da tua corretora (ex: `PepperstoneUK-Demo`).
-- **Terminal path** (opcional) — onde o MT5 está instalado; normalmente não precisas de mexer, o Atlas encontra sozinho.
-- **Bridge port** — a porta técnica usada para a ligação (não precisas de alterar isto, a não ser que saibas exatamente porquê).
-- **Save & Connect** — grava e liga.
-- **Clear** — limpa os campos.
+- **MT5 Login** — your account number.
+- **MT5 Password** — stored; leave blank to keep the current one.
+- **Server / Broker** — your broker's server name (e.g. `PepperstoneUK-Demo`).
+- **Terminal path** (optional) — where MT5 is installed; you usually don't need to touch this, Atlas finds it automatically.
+- **Bridge port** — the technical port used for the connection (no need to change this unless you know exactly why).
+- **Save & Connect** — saves and connects.
+- **Clear** — clears the fields.
 
-Um indicador no topo mostra sempre se estás **Connected** (ligado) ou não, em tempo real.
+An indicator at the top always shows whether you're **Connected** or not, in real time.
 
-## Antes de começares
+## Before you start
 
-Precisas de:
+You need:
 
-1. Uma conta MetaTrader 5 (demo ou real) já criada, com login, password e nome do servidor (ex: `PepperstoneUK-Demo`).
-2. O terminal MetaTrader 5 instalado neste computador.
-3. No terminal MT5: ir a **Ferramentas → Opções → Expert Advisors** e ativar **"Allow algorithmic trading"**. Sem isto, o Sr. Atlas liga-se à tua conta mas não consegue confirmar que está tudo pronto.
+1. A MetaTrader 5 account (demo or real) already created, with login, password, and server name (e.g. `PepperstoneUK-Demo`).
+2. The MetaTrader 5 terminal installed on this computer.
+3. In the MT5 terminal: go to **Tools → Options → Expert Advisors** and enable **"Allow algorithmic trading"**. Without this, Sr. Atlas connects to your account but can't confirm everything is ready.
 
-## Como ligar a tua conta
+## How to connect your account
 
-1. Abre o Sr. Atlas.
-2. Vai a **Definições**.
-3. Introduz o login, password e servidor da tua conta MT5.
-4. Guarda. O painel deve mostrar os teus dados reais em poucos segundos.
+1. Open Sr. Atlas.
+2. Go to **Settings**.
+3. Enter your MT5 login, password, and server.
+4. Save. The dashboard should show your real data within seconds.
 
-Não precisas de abrir o terminal MT5 manualmente primeiro — o Sr. Atlas trata disso sozinho.
+You don't need to open the MT5 terminal manually first — Sr. Atlas handles that on its own.
 
-## O que significam os estados do painel
+## What the dashboard states mean
 
-| Estado | O que significa |
+| State | What it means |
 |---|---|
-| **OK / Saudável** | Tudo ligado e a funcionar normalmente. |
-| **WARNING (Aviso)** | Ligado, mas há algo a precisar da tua atenção — por exemplo, "Allow algorithmic trading" desligado no terminal. |
-| **PAUSED (Em pausa)** | A supervisão está temporariamente parada — normalmente porque a ligação ao terminal MT5 foi interrompida. |
+| **OK / Healthy** | Everything connected and working normally. |
+| **WARNING** | Connected, but something needs your attention — for example, "Allow algorithmic trading" disabled in the terminal. |
+| **PAUSED** | Supervision is temporarily stopped — usually because the connection to the MT5 terminal was interrupted. |
 
-O Sr. Atlas nunca mostra "tudo saudável" se a ligação à tua conta estiver mesmo em baixo — preferimos avisar-te a mentir-te sobre o estado da tua conta.
+Sr. Atlas never shows "all healthy" if your account connection is actually down — we'd rather warn you than lie to you about your account's status.
 
-## Problemas comuns
+## Common problems
 
-**"O painel não mostra os meus dados"**
+**"The dashboard isn't showing my data"**
 
-- Confirma que o terminal MT5 está instalado neste computador.
-- Confirma que "Allow algorithmic trading" está ativado (ver acima).
-- Confirma o login/password/servidor em Definições.
+- Confirm the MT5 terminal is installed on this computer.
+- Confirm "Allow algorithmic trading" is enabled (see above).
+- Confirm your login/password/server in Settings.
 
-**"Aparece um aviso sobre trading automático desligado"**
+**"A warning about automated trading being disabled appears"**
 
-- Vai ao terminal MT5 → Ferramentas → Opções → Expert Advisors → ativa "Allow algorithmic trading".
+- Go to the MT5 terminal → Tools → Options → Expert Advisors → enable "Allow algorithmic trading".
 
-**"Instalei mas não abre nada no browser"**
+**"I installed it but nothing opens in the browser"**
 
-- Espera um minuto — os serviços podem demorar uns segundos a arrancar após a instalação.
-- Se continuar sem abrir, tenta o atalho "Start Atlas" no menu Iniciar.
+- Wait a minute — the services may take a few seconds to start after installation.
+- If it still doesn't open, try the "Start Atlas" shortcut in the Start menu.
 
-## Onde pedir ajuda
+## Where to get help
 
-Se as secções acima não resolverem, usa o botão **"Reportar problema"** no painel. Ele junta automaticamente o estado de saúde do sistema e os registos relevantes — nunca as tuas credenciais — e envia diretamente para a Forge Factory Lab, com um clique.
+If the sections above don't solve it, use the **"Report Problem"** button on the dashboard. It automatically attaches the system's health status and relevant logs — never your credentials — and sends it directly to Forge Factory Lab, with one click.
 
 ---
 
-*Este documento explica o que o Sr. Atlas faz e não faz. Se algo aqui não corresponder ao que vês no ecrã, é mais importante confiares no que vês do que neste texto — e por favor avisa-nos.*
+*This document explains what Sr. Atlas does and doesn't do. If anything here doesn't match what you see on screen, trust what you see over this text — and please let us know.*

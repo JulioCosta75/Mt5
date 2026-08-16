@@ -13,7 +13,7 @@ function Doc({ title, children, testId }) {
   );
 }
 
-/** End-user Help — Portuguese guide. Technical architecture lives in docs/ + README. */
+/** End-user Help — English guide. Technical architecture lives in docs/ + README. */
 export default function Help() {
   return (
     <PageShell active="help" testId="help-page">
@@ -26,384 +26,414 @@ export default function Help() {
         />
         <div>
           <h1>Help</h1>
-          <p className="mono">Sr. Atlas — Guia do Utilizador</p>
+          <p className="mono">Sr. Atlas — User Guide</p>
         </div>
       </section>
 
-      <Doc title="Porque existe o Sr. Atlas" testId="help-why">
+      <Doc title="Why Sr. Atlas exists" testId="help-why">
         <p>
-          O trading é muitas vezes vendido como uma promessa de enriquecer depressa.
-          Na realidade, a maioria de quem tenta acaba a agir por impulso — o que, sem
-          perceber, se parece muito com jogar à sorte. Estudar a sério é difícil,
-          quase como perceber como um avião voa.
+          Trading is often sold as a get-rich-quick promise. In reality, most
+          people who try end up acting on impulse — which, without realizing it,
+          looks a lot like gambling. Studying it properly is hard, almost like
+          understanding how a plane flies.
         </p>
         <p>
-          O Sr. Atlas nasceu de uma necessidade real, não de uma oportunidade de
-          negócio vista de fora: a de ter algo que ajudasse <b>a cada decisão</b>, e
-          que ajudasse a <b>aprender com cada decisão</b> — não uma ferramenta que
-          decide ou negoceia por ti.
+          Sr. Atlas was born out of a real need, not a business opportunity
+          spotted from the outside: the need for something that helps{" "}
+          <b>with every decision</b>, and helps you{" "}
+          <b>learn from every decision</b> — not a tool that decides or trades
+          for you.
         </p>
-        <p><b>O que o Sr. Atlas NÃO faz:</b></p>
+        <p>
+          <b>What Sr. Atlas does NOT do:</b>
+        </p>
         <ul>
-          <li>Não decide por ti.</li>
-          <li>Não compra nem vende nada sozinho.</li>
-          <li>Não toca no teu dinheiro nem nas tuas ordens.</li>
+          <li>It does not decide for you.</li>
+          <li>It does not buy or sell anything on its own.</li>
+          <li>It never touches your money or your orders.</li>
         </ul>
         <p>
-          <b>O que o Sr. Atlas faz:</b> mostra-te a verdade sobre o estado real da
-          tua conta, sem filtros e sem enfeites — mesmo quando essa verdade é
-          desconfortável (por exemplo, avisar que os dados estão desatualizados, em
-          vez de fingir que está tudo bem). A decisão continua sempre a ser tua; o
-          Atlas só te ajuda a decidir a ver com clareza.
+          <b>What Sr. Atlas does:</b> it shows you the true state of your
+          account, without filters or embellishment — even when that truth is
+          uncomfortable (for example, warning you that data is outdated instead
+          of pretending everything is fine). The decision is always yours; Atlas
+          just helps you see clearly before you make it.
         </p>
       </Doc>
 
-      <Doc title="O painel, elemento a elemento" testId="help-panel">
-        <p><b>Barra superior</b></p>
-        <ul>
-          <li>
-            <b>Separadores</b> (Overview, Strategies, Risk, Reports, Audit, About,
-            Help, Settings) — as diferentes vistas do Atlas.
-          </li>
-          <li>
-            <b>REFRESH FEED</b> — força uma atualização imediata dos dados, em vez
-            de esperar pelo próximo ciclo automático.
-          </li>
-          <li>
-            <b>v0.3.0 · [versão do código] · session-XXXX</b> — a versão exata
-            instalada e o identificador da sessão atual, úteis para reportar
-            problemas.
-          </li>
-        </ul>
-
-        <p><b>Barra de estatísticas globais</b></p>
-        <ul>
-          <li>
-            <b>TOTAL EQUITY</b> — o valor real da tua conta neste momento (saldo
-            mais/menos o resultado das posições abertas).
-          </li>
-          <li>
-            <b>DAILY P&amp;L</b> — quanto ganhaste ou perdeste hoje, em valor e em
-            percentagem.
-          </li>
-          <li>
-            <b>AVG DD</b> — a média do &quot;drawdown&quot; (quanto a conta caiu
-            desde o pico mais recente) nas contas monitorizadas.
-          </li>
-          <li>
-            <b>OPEN POS</b> — número de posições abertas neste momento.
-          </li>
-          <li>
-            <b>ACCOUNTS</b> — quantas contas estão &quot;ao vivo&quot; (ligadas e a
-            receber dados reais) sobre o total configurado.
-          </li>
-          <li>
-            <b>ALERTS</b> — número de alertas ativos a precisar da tua atenção.
-          </li>
-          <li>
-            <b>UTC, data/hora</b> — o relógio de referência do sistema (hora
-            universal, não a hora local).
-          </li>
-        </ul>
-
-        <p><b>Tabela &quot;MT5 Accounts&quot;</b></p>
+      <Doc title="The dashboard, element by element" testId="help-panel">
         <p>
-          Uma linha por conta MT5 ligada. Colunas: <b>Status</b>, <b>Account</b>{" "}
-          (número da conta), <b>Broker</b> (corretora), <b>Strategy</b> (nome da
-          estratégia associada), <b>Balance</b> (saldo), <b>Equity</b> (valor real,
-          incluindo posições abertas), <b>Daily P&amp;L</b>, <b>DD</b> (drawdown
-          atual), <b>POS</b> (posições abertas), <b>LEV</b> (alavancagem, ex:{" "}
-          <code>1:30</code>), <b>Margin %</b> (nível de margem — quanto mais alto,
-          mais folga tens antes de um &quot;stop out&quot; do broker).
-        </p>
-
-        <p><b>Secção &quot;Risk&quot;</b></p>
-        <p>
-          Repete os números da conta selecionada (Equity, Balance, Margin Used,
-          Margin Lvl, Daily P&amp;L, Cur DD, Max DD, Leverage), e acrescenta:
+          <b>Top bar</b>
         </p>
         <ul>
           <li>
-            <b>Risk Limits</b> — três campos que defines tu:{" "}
+            <b>Tabs</b> (Overview, Strategies, Risk, Reports, Audit, About, Help,
+            Settings) — the different views of Atlas.
+          </li>
+          <li>
+            <b>REFRESH FEED</b> — forces an immediate data update instead of
+            waiting for the next automatic cycle.
+          </li>
+          <li>
+            <b>v0.3.0 · [code version] · session-XXXX</b> — the exact installed
+            version and current session identifier, useful when reporting
+            problems.
+          </li>
+        </ul>
+
+        <p>
+          <b>Global stats bar</b>
+        </p>
+        <ul>
+          <li>
+            <b>TOTAL EQUITY</b> — your account&apos;s real value right now
+            (balance plus/minus the result of open positions).
+          </li>
+          <li>
+            <b>DAILY P&amp;L</b> — how much you&apos;ve gained or lost today, in
+            value and percentage.
+          </li>
+          <li>
+            <b>AVG DD</b> — the average &quot;drawdown&quot; (how much the
+            account has fallen since its most recent peak) across monitored
+            accounts.
+          </li>
+          <li>
+            <b>OPEN POS</b> — number of currently open positions.
+          </li>
+          <li>
+            <b>ACCOUNTS</b> — how many accounts are &quot;live&quot; (connected
+            and receiving real data) out of the total configured.
+          </li>
+          <li>
+            <b>ALERTS</b> — number of active alerts needing your attention.
+          </li>
+          <li>
+            <b>UTC, date/time</b> — the system&apos;s reference clock (universal
+            time, not local time).
+          </li>
+        </ul>
+
+        <p>
+          <b>&quot;MT5 Accounts&quot; table</b>
+        </p>
+        <p>
+          One row per connected MT5 account. Columns: <b>Status</b>,{" "}
+          <b>Account</b> (account number), <b>Broker</b>, <b>Strategy</b>{" "}
+          (associated strategy name), <b>Balance</b>, <b>Equity</b> (real value,
+          including open positions), <b>Daily P&amp;L</b>, <b>DD</b> (current
+          drawdown), <b>POS</b> (open positions), <b>LEV</b> (leverage, e.g.{" "}
+          <code>1:30</code>), <b>Margin %</b> (margin level — the higher it is,
+          the more room you have before a broker &quot;stop out&quot;).
+        </p>
+
+        <p>
+          <b>&quot;Risk&quot; section</b>
+        </p>
+        <p>
+          Repeats the numbers for the selected account (Equity, Balance, Margin
+          Used, Margin Lvl, Daily P&amp;L, Cur DD, Max DD, Leverage), plus:
+        </p>
+        <ul>
+          <li>
+            <b>Risk Limits</b> — three fields you define:{" "}
             <b>Max Daily Loss (%)</b>, <b>Max Position Size (lots)</b>,{" "}
-            <b>Max Open Positions</b> — com botão <b>Save Limits</b> para gravar.
+            <b>Max Open Positions</b> — with a <b>Save Limits</b> button.
           </li>
         </ul>
 
-        <p><b>Painel &quot;Sr. Atlas Supervision&quot; (lado direito)</b></p>
+        <p>
+          <b>&quot;Sr. Atlas Supervision&quot; panel (right side)</b>
+        </p>
         <ul>
           <li>
-            Selo de estado geral: <b>OK</b> ou <b>WARNING</b>, com uma frase a
-            explicar porquê (ex: &quot;MT5 bridge is unavailable; displayed data
+            Overall status badge: <b>OK</b> or <b>WARNING</b>, with a sentence
+            explaining why (e.g. &quot;MT5 bridge is unavailable; displayed data
             comes from cache and may be outdated&quot;).
           </li>
-          <li>Resumo: Total Equity, Daily P&amp;L, Accounts Live, Active Alerts.</li>
+          <li>Summary: Total Equity, Daily P&amp;L, Accounts Live, Active Alerts.</li>
           <li>
-            <b>Core Services</b> — o estado de cada peça interna do Atlas, uma a
-            uma:
+            <b>Core Services</b> — the status of each internal Atlas component,
+            one by one:
             <ul>
               <li>
-                <b>Backend</b> — o &quot;cérebro&quot; que serve o painel.
+                <b>Backend</b> — the &quot;brain&quot; that serves the dashboard.
               </li>
               <li>
-                <b>Store</b> — onde os dados ficam guardados.
+                <b>Store</b> — where the data is kept.
               </li>
               <li>
-                <b>Bridge</b> — a ligação direta ao teu terminal MT5.
+                <b>Bridge</b> — the direct connection to your MT5 terminal.
               </li>
               <li>
-                <b>Dashboard</b> — o próprio painel que estás a ver.
+                <b>Dashboard</b> — the panel you&apos;re looking at right now.
               </li>
             </ul>
-            Cada uma mostra <b>OK</b> (verde) ou <b>DOWN</b> (vermelho). Se o
-            Bridge estiver &quot;DOWN&quot;, os números que vês vêm de uma cópia
-            guardada (cache), não ao vivo — o Atlas avisa sempre quando isto
-            acontece.
+            Each shows <b>OK</b> (green) or <b>DOWN</b> (red). If Bridge is
+            &quot;DOWN&quot;, the numbers you see come from a saved copy
+            (cache), not live data — Atlas always warns you when this happens.
           </li>
           <li>
-            <b>Generate Sr. Atlas Report</b> — botão para criar um relatório da
-            conta.
+            <b>Generate Sr. Atlas Report</b> — button to create an account
+            report.
           </li>
           <li>
-            <b>Recent Reports</b> — lista dos relatórios já gerados.
-          </li>
-        </ul>
-
-        <p><b>Gráficos, em baixo</b></p>
-        <ul>
-          <li>
-            <b>Equity Curve · 90D</b> — a evolução do valor da tua conta nos
-            últimos 90 dias.
-          </li>
-          <li>
-            <b>Drawdown · 90D</b> — a evolução das quedas desde o pico, no mesmo
-            período.
+            <b>Recent Reports</b> — list of reports already generated.
           </li>
         </ul>
 
-        <p><b>Histórico de operações (fundo do Overview)</b></p>
+        <p>
+          <b>Charts, below</b>
+        </p>
         <ul>
           <li>
-            <b>Trade History</b> — lista das tuas operações já fechadas: símbolo,
-            lado (compra/venda), lotes, hora de abertura e fecho, duração em
-            minutos, resultado (P&amp;L) e estratégia associada. Podes filtrar por
-            símbolo e por lado. No topo da tabela: resultado líquido total (
-            <b>NET</b>), percentagem de operações ganhas (<b>WIN%</b>), e número
-            de operações (<b>N</b>).
+            <b>Equity Curve · 90D</b> — your account&apos;s value over the last
+            90 days.
+          </li>
+          <li>
+            <b>Drawdown · 90D</b> — drawdowns from peak over the same period.
           </li>
         </ul>
 
-        <p><b>Painel de alertas (lado direito)</b></p>
+        <p>
+          <b>Trade history (bottom of Overview)</b>
+        </p>
         <ul>
           <li>
-            <b>Alerts</b> — contagem de alertas por gravidade (vermelho =
-            crítico, laranja = aviso, azul = informativo). Mostra &quot;No
-            alerts&quot; quando não há nada a assinalar.
+            <b>Trade History</b> — list of your already-closed trades: symbol,
+            side (buy/sell), lots, open/close time, duration in minutes, result
+            (P&amp;L), and associated strategy. You can filter by symbol and
+            side. At the top of the table: total net result (<b>NET</b>), win
+            percentage (<b>WIN%</b>), and number of trades (<b>N</b>).
+          </li>
+        </ul>
+
+        <p>
+          <b>Alerts panel (right side)</b>
+        </p>
+        <ul>
+          <li>
+            <b>Alerts</b> — count of alerts by severity (red = critical, orange
+            = warning, blue = info). Shows &quot;No alerts&quot; when
+            there&apos;s nothing to flag.
           </li>
           <li>
-            <b>System</b> — o &quot;pulso&quot; técnico do sistema:{" "}
+            <b>System</b> — the technical &quot;pulse&quot; of the system:{" "}
             <b>API Latency</b>, <b>MT5 Bridge</b>, <b>Risk Engine</b>,{" "}
-            <b>Telegram Notif</b>, <b>Last Heartbeat</b>, <b>Strategies Loaded</b>.
+            <b>Telegram Notif</b>, <b>Last Heartbeat</b>,{" "}
+            <b>Strategies Loaded</b>.
           </li>
         </ul>
       </Doc>
 
-      <Doc title="Os outros separadores" testId="help-tabs">
-        <p><b>Strategies</b></p>
+      <Doc title="The other tabs" testId="help-tabs">
         <p>
-          Agrupa as tuas contas por estratégia em vez de por conta individual —
-          útil se um dia tiveres várias contas a seguir a mesma abordagem. Mostra,
-          por estratégia: contas associadas, quantas estão ao vivo, equity total,
-          P&amp;L diário, posições abertas, drawdown médio.
+          <b>Strategies</b>
         </p>
-        <p><b>Risk</b></p>
         <p>
-          A mesma secção &quot;Risk&quot; já descrita acima (Risk Limits), mas
-          como página própria.
+          Groups your accounts by strategy instead of by individual account —
+          useful if you ever have multiple accounts following the same approach.
+          Shows, per strategy: associated accounts, how many are live, total
+          equity, daily P&amp;L, open positions, average drawdown.
         </p>
-        <p><b>Reports</b></p>
         <p>
-          Lista dos relatórios já gerados pelo botão &quot;Generate Sr. Atlas
-          Report&quot;, com estado, mensagem e origem de cada um. Vazio até
-          gerares o primeiro.
+          <b>Risk</b>
         </p>
-        <p><b>Audit</b></p>
         <p>
-          Um registo histórico de eventos do sistema (o &quot;diário de
-          bordo&quot; do Atlas) — separado do histórico de operações. Vazio até
-          haver eventos registados.
+          The same &quot;Risk&quot; section described above (Risk Limits), as
+          its own page.
         </p>
-        <p><b>About</b></p>
         <p>
-          Página de apresentação da marca — o logótipo e princípios da Forge
-          Factory Lab (&quot;Conhecimento, validação e verdade vêm antes da
-          automação&quot;) e do Sr. Atlas. Não tem funcionalidade, é só
-          identidade.
+          <b>Reports</b>
         </p>
-        <p><b>Settings</b></p>
         <p>
-          Onde ligas (ou alteras, a qualquer momento, sem reinstalar) a tua conta
-          MT5:
+          List of reports already generated via the &quot;Generate Sr. Atlas
+          Report&quot; button, with status, message, and origin for each. Empty
+          until you generate the first one.
+        </p>
+        <p>
+          <b>Audit</b>
+        </p>
+        <p>
+          A historical log of system events (Atlas&apos;s &quot;logbook&quot;) —
+          separate from trade history. Empty until events are logged.
+        </p>
+        <p>
+          <b>About</b>
+        </p>
+        <p>
+          Brand presentation page — the Forge Factory Lab logo and principles
+          (&quot;Knowledge, validation and truth come before automation&quot;)
+          and Sr. Atlas&apos;s own. No functionality, identity only.
+        </p>
+        <p>
+          <b>Settings</b>
+        </p>
+        <p>
+          Where you connect (or change, anytime, without reinstalling) your MT5
+          account:
         </p>
         <ul>
           <li>
-            <b>MT5 Login</b> — o número da tua conta.
+            <b>MT5 Login</b> — your account number.
           </li>
           <li>
-            <b>MT5 Password</b> — fica guardada; podes deixar em branco para
-            manter a atual.
+            <b>MT5 Password</b> — stored; leave blank to keep the current one.
           </li>
           <li>
-            <b>Server / Broker</b> — o nome do servidor da tua corretora (ex:{" "}
+            <b>Server / Broker</b> — your broker&apos;s server name (e.g.{" "}
             <code>PepperstoneUK-Demo</code>).
           </li>
           <li>
-            <b>Terminal path</b> (opcional) — onde o MT5 está instalado;
-            normalmente não precisas de mexer, o Atlas encontra sozinho.
+            <b>Terminal path</b> (optional) — where MT5 is installed; you usually
+            don&apos;t need to touch this, Atlas finds it automatically.
           </li>
           <li>
-            <b>Bridge port</b> — a porta técnica usada para a ligação (não
-            precisas de alterar isto, a não ser que saibas exatamente porquê).
+            <b>Bridge port</b> — the technical port used for the connection (no
+            need to change this unless you know exactly why).
           </li>
           <li>
-            <b>Save &amp; Connect</b> — grava e liga.
+            <b>Save &amp; Connect</b> — saves and connects.
           </li>
           <li>
-            <b>Clear</b> — limpa os campos.
+            <b>Clear</b> — clears the fields.
           </li>
         </ul>
         <p>
-          Um indicador no topo mostra sempre se estás <b>Connected</b> (ligado)
-          ou não, em tempo real.
+          An indicator at the top always shows whether you&apos;re{" "}
+          <b>Connected</b> or not, in real time.
         </p>
       </Doc>
 
-      <Doc title="Antes de começares" testId="help-prereqs">
-        <p>Precisas de:</p>
+      <Doc title="Before you start" testId="help-prereqs">
+        <p>You need:</p>
         <ol>
           <li>
-            Uma conta MetaTrader 5 (demo ou real) já criada, com login, password e
-            nome do servidor (ex: <code>PepperstoneUK-Demo</code>).
+            A MetaTrader 5 account (demo or real) already created, with login,
+            password, and server name (e.g. <code>PepperstoneUK-Demo</code>).
           </li>
-          <li>O terminal MetaTrader 5 instalado neste computador.</li>
+          <li>The MetaTrader 5 terminal installed on this computer.</li>
           <li>
-            No terminal MT5: ir a <b>Ferramentas → Opções → Expert Advisors</b> e
-            ativar <b>&quot;Allow algorithmic trading&quot;</b>. Sem isto, o Sr.
-            Atlas liga-se à tua conta mas não consegue confirmar que está tudo
-            pronto.
+            In the MT5 terminal: go to <b>Tools → Options → Expert Advisors</b>{" "}
+            and enable <b>&quot;Allow algorithmic trading&quot;</b>. Without
+            this, Sr. Atlas connects to your account but can&apos;t confirm
+            everything is ready.
           </li>
         </ol>
       </Doc>
 
-      <Doc title="Como ligar a tua conta" testId="help-connect">
+      <Doc title="How to connect your account" testId="help-connect">
         <ol>
-          <li>Abre o Sr. Atlas.</li>
+          <li>Open Sr. Atlas.</li>
           <li>
-            Vai a <b>Definições</b>.
+            Go to <b>Settings</b>.
           </li>
-          <li>Introduz o login, password e servidor da tua conta MT5.</li>
+          <li>Enter your MT5 login, password, and server.</li>
           <li>
-            Guarda. O painel deve mostrar os teus dados reais em poucos segundos.
+            Save. The dashboard should show your real data within seconds.
           </li>
         </ol>
         <p>
-          Não precisas de abrir o terminal MT5 manualmente primeiro — o Sr. Atlas
-          trata disso sozinho.
+          You don&apos;t need to open the MT5 terminal manually first — Sr. Atlas
+          handles that on its own.
         </p>
       </Doc>
 
-      <Doc title="O que significam os estados do painel" testId="help-states">
+      <Doc title="What the dashboard states mean" testId="help-states">
         <div className="doc-table-wrap">
           <table className="doc-table">
             <thead>
               <tr>
-                <th>Estado</th>
-                <th>O que significa</th>
+                <th>State</th>
+                <th>What it means</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>
-                  <b>OK / Saudável</b>
+                  <b>OK / Healthy</b>
                 </td>
-                <td>Tudo ligado e a funcionar normalmente.</td>
+                <td>Everything connected and working normally.</td>
               </tr>
               <tr>
                 <td>
-                  <b>WARNING (Aviso)</b>
+                  <b>WARNING</b>
                 </td>
                 <td>
-                  Ligado, mas há algo a precisar da tua atenção — por exemplo,
-                  &quot;Allow algorithmic trading&quot; desligado no terminal.
+                  Connected, but something needs your attention — for example,
+                  &quot;Allow algorithmic trading&quot; disabled in the
+                  terminal.
                 </td>
               </tr>
               <tr>
                 <td>
-                  <b>PAUSED (Em pausa)</b>
+                  <b>PAUSED</b>
                 </td>
                 <td>
-                  A supervisão está temporariamente parada — normalmente porque a
-                  ligação ao terminal MT5 foi interrompida.
+                  Supervision is temporarily stopped — usually because the
+                  connection to the MT5 terminal was interrupted.
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
         <p>
-          O Sr. Atlas nunca mostra &quot;tudo saudável&quot; se a ligação à tua
-          conta estiver mesmo em baixo — preferimos avisar-te a mentir-te sobre o
-          estado da tua conta.
+          Sr. Atlas never shows &quot;all healthy&quot; if your account
+          connection is actually down — we&apos;d rather warn you than lie to you
+          about your account&apos;s status.
         </p>
       </Doc>
 
-      <Doc title="Problemas comuns" testId="help-troubleshoot">
+      <Doc title="Common problems" testId="help-troubleshoot">
         <p>
-          <b>&quot;O painel não mostra os meus dados&quot;</b>
+          <b>&quot;The dashboard isn&apos;t showing my data&quot;</b>
         </p>
         <ul>
-          <li>Confirma que o terminal MT5 está instalado neste computador.</li>
+          <li>Confirm the MT5 terminal is installed on this computer.</li>
           <li>
-            Confirma que &quot;Allow algorithmic trading&quot; está ativado (ver
-            acima).
+            Confirm &quot;Allow algorithmic trading&quot; is enabled (see
+            above).
           </li>
-          <li>Confirma o login/password/servidor em Definições.</li>
+          <li>Confirm your login/password/server in Settings.</li>
         </ul>
         <p>
-          <b>&quot;Aparece um aviso sobre trading automático desligado&quot;</b>
+          <b>
+            &quot;A warning about automated trading being disabled appears&quot;
+          </b>
         </p>
         <ul>
           <li>
-            Vai ao terminal MT5 → Ferramentas → Opções → Expert Advisors → ativa
+            Go to the MT5 terminal → Tools → Options → Expert Advisors → enable
             &quot;Allow algorithmic trading&quot;.
           </li>
         </ul>
         <p>
-          <b>&quot;Instalei mas não abre nada no browser&quot;</b>
+          <b>&quot;I installed it but nothing opens in the browser&quot;</b>
         </p>
         <ul>
           <li>
-            Espera um minuto — os serviços podem demorar uns segundos a arrancar
-            após a instalação.
+            Wait a minute — the services may take a few seconds to start after
+            installation.
           </li>
           <li>
-            Se continuar sem abrir, tenta o atalho &quot;Start Atlas&quot; no menu
-            Iniciar.
+            If it still doesn&apos;t open, try the &quot;Start Atlas&quot;
+            shortcut in the Start menu.
           </li>
         </ul>
       </Doc>
 
-      <Doc title="Onde pedir ajuda" testId="help-report">
+      <Doc title="Where to get help" testId="help-report">
         <p>
-          Se as secções acima não resolverem, usa o botão{" "}
-          <b>&quot;Reportar problema&quot;</b> no painel. Ele junta
-          automaticamente o estado de saúde do sistema e os registos relevantes —
-          nunca as tuas credenciais — e envia diretamente para a Forge Factory
-          Lab, com um clique.
+          If the sections above don&apos;t solve it, use the{" "}
+          <b>&quot;Report Problem&quot;</b> button on the dashboard. It
+          automatically attaches the system&apos;s health status and relevant
+          logs — never your credentials — and sends it directly to Forge Factory
+          Lab, with one click.
         </p>
         <p className="doc-footnote">
-          Este documento explica o que o Sr. Atlas faz e não faz. Se algo aqui não
-          corresponder ao que vês no ecrã, é mais importante confiares no que vês
-          do que neste texto — e por favor avisa-nos.
+          This document explains what Sr. Atlas does and doesn&apos;t do. If
+          anything here doesn&apos;t match what you see on screen, trust what you
+          see over this text — and please let us know.
         </p>
       </Doc>
     </PageShell>

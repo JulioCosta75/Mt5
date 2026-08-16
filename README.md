@@ -14,7 +14,7 @@ an n8n health‑monitoring workflow orchestrated under the Sr. Atlas identity.
 
 ## 1. Architecture
 
-> **In-app Help** (`/docs`, `/help`) shows the end-user guide (Portuguese) —
+> **In-app Help** (`/docs`, `/help`) shows the end-user guide (English) —
 > what Atlas does / does not do, how to connect MT5, panel states, and common
 > issues. See `docs/user-guide.md`.
 >
