@@ -724,6 +724,27 @@ async def system_version():
 
 
 # ------------------------------------------------------------
+# /api/system/report-problem — one-click diagnostic email to Forge.
+# Never includes credentials. Requires RESEND_API_KEY (see problem_report.py).
+# ------------------------------------------------------------
+class ProblemReportBody(BaseModel):
+    note: Optional[str] = Field(default=None, max_length=1000)
+
+
+@app.post("/api/system/report-problem")
+async def report_problem(body: Optional[ProblemReportBody] = None):
+    from problem_report import ReportSendError, build_diagnostic_payload, send_problem_report
+
+    health = await system_health()
+    payload = build_diagnostic_payload(health, note=(body.note if body else None))
+    try:
+        result = await send_problem_report(payload)
+    except ReportSendError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.user_message) from e
+    return result
+
+
+# ------------------------------------------------------------
 # MT5 connection configuration — managed from the Dashboard.
 # (Replaces the one-time install wizard: credentials can now be
 #  set and changed at any time without reinstalling Atlas.)

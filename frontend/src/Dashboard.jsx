@@ -14,7 +14,10 @@ import { StrategiesView, RiskView, ReportsView, AuditView } from "@/components/T
 
 const TABS = ["Overview", "Strategies", "Risk", "Reports", "Audit"];
 
-function Header({ refreshing, onRefresh, sessionId, activeTab, onTabChange, buildInfo }) {
+function Header({
+  refreshing, onRefresh, sessionId, activeTab, onTabChange, buildInfo,
+  onReportProblem, reporting, reportBanner,
+}) {
   const versionLabel = buildInfo && buildInfo.version ? `v${buildInfo.version}` : "v…";
   const buildLabel = buildInfo && buildInfo.build && buildInfo.build !== "release"
     ? ` · ${buildInfo.build}` : "";
@@ -64,6 +67,17 @@ function Header({ refreshing, onRefresh, sessionId, activeTab, onTabChange, buil
           <Link to="/about" className="btn" data-testid="nav-about" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>About</Link>
           <Link to="/docs" className="btn" data-testid="nav-docs" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>Docs</Link>
           <Link to="/settings" className="btn" data-testid="nav-settings" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>Settings</Link>
+          <button
+            type="button"
+            className="btn"
+            data-testid="report-problem-button"
+            onClick={onReportProblem}
+            disabled={reporting}
+            style={{ border: "none", padding: "4px 10px" }}
+            title="Envia um diagnóstico automático à Forge Factory Lab (sem passwords nem tokens)"
+          >
+            {reporting ? "A enviar…" : "Reportar problema"}
+          </button>
         </nav>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -138,6 +152,8 @@ export default function Dashboard() {
   const [buildInfo, setBuildInfo] = useState(null);
   const [mt5Status, setMt5Status] = useState(null);
   const [healthMode, setHealthMode] = useState(null);
+  const [reporting, setReporting] = useState(false);
+  const [reportBanner, setReportBanner] = useState(null); // { type: "ok"|"error", text }
   const selectedIdRef = useRef(null);
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
 
@@ -222,11 +238,57 @@ export default function Dashboard() {
     dispatch({ type: "ACK_ALERT", id });
   };
 
+  const onReportProblem = async () => {
+    if (reporting) return;
+    setReporting(true);
+    setReportBanner(null);
+    try {
+      const res = await api.reportProblem();
+      setReportBanner({
+        type: "ok",
+        text: res?.message || "Relatório enviado, obrigado",
+      });
+    } catch (e) {
+      const detail = e?.response?.data?.detail;
+      const text = typeof detail === "string" && detail.trim()
+        ? detail
+        : "Não foi possível enviar — tenta mais tarde ou contacta diretamente.";
+      setReportBanner({ type: "error", text });
+    } finally {
+      setReporting(false);
+    }
+  };
+
   const selectedAccount = accounts.find(a => a.id === selectedId);
 
   return (
     <div className="App" data-testid="dashboard">
-      <Header refreshing={refreshing} onRefresh={onRefresh} sessionId={sessionId} activeTab={activeTab} onTabChange={setActiveTab} buildInfo={buildInfo} />
+      <Header
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        sessionId={sessionId}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        buildInfo={buildInfo}
+        onReportProblem={onReportProblem}
+        reporting={reporting}
+        reportBanner={reportBanner}
+      />
+      {reportBanner && (
+        <div
+          data-testid="report-problem-banner"
+          role="status"
+          style={{
+            padding: "10px 20px",
+            fontSize: 13,
+            borderBottom: "1px solid var(--bd-default)",
+            background: reportBanner.type === "error" ? "rgba(239,68,68,0.10)" : "rgba(245,166,35,0.10)",
+            color: reportBanner.type === "error" ? "var(--sig-neg)" : "var(--accent, #F5A623)",
+          }}
+        >
+          {reportBanner.text}
+        </div>
+      )}
       {isSample && (
         <div
           data-testid="config-mode-banner"
