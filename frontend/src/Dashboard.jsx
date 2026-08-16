@@ -60,7 +60,7 @@ function Header({ refreshing, onRefresh, sessionId, activeTab, onTabChange, buil
             </button>
           ))}
           <Link to="/about" className="btn" data-testid="nav-about" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>About</Link>
-          <Link to="/docs" className="btn" data-testid="nav-docs" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>Docs</Link>
+          <Link to="/docs" className="btn" data-testid="nav-docs" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>Help</Link>
           <Link to="/settings" className="btn" data-testid="nav-settings" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>Settings</Link>
         </nav>
       </div>
