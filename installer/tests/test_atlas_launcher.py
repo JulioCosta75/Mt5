@@ -123,7 +123,9 @@ def test_open_dashboard_once_per_session(tmp_path, monkeypatch):
     paths = al.resolve_paths(str(root))
     launcher = al.Launcher(paths, open_browser=False)
     opens: list[str] = []
-    monkeypatch.setattr(al.webbrowser, "open", lambda url: opens.append(url))
+    monkeypatch.setattr(
+        al, "open_dashboard_url", lambda url=al.BACKEND_URL: opens.append(url) or "default"
+    )
 
     assert launcher.open_dashboard(force=False) is True
     assert launcher.open_dashboard(force=False) is False
@@ -137,3 +139,50 @@ def test_open_dashboard_once_per_session(tmp_path, monkeypatch):
     launcher.restart_all()
     assert launcher.open_dashboard(force=False) is False
     assert opens == [al.BACKEND_URL, al.BACKEND_URL]
+
+
+def test_open_dashboard_url_falls_back_to_edge(tmp_path, monkeypatch):
+    edge = tmp_path / "msedge.exe"
+    edge.write_bytes(b"")
+    monkeypatch.setattr(al, "open_url_via_default_handler", lambda url: False)
+    monkeypatch.setattr(al, "edge_browser_candidates", lambda: [edge])
+    launches: list[list[str]] = []
+
+    def fake_popen(args, **kwargs):
+        launches.append(list(args))
+        return None
+
+    monkeypatch.setattr(al.subprocess, "Popen", fake_popen)
+    assert al.open_dashboard_url("http://localhost:8001/") == "edge"
+    assert launches == [[str(edge), "http://localhost:8001/"]]
+
+
+def test_open_dashboard_url_shows_message_when_default_and_edge_fail(monkeypatch):
+    monkeypatch.setattr(al, "open_url_via_default_handler", lambda url: False)
+    monkeypatch.setattr(al, "edge_browser_candidates", lambda: [])
+    shown: list[bool] = []
+    monkeypatch.setattr(al, "show_dashboard_open_hint", lambda: shown.append(True))
+    assert al.open_dashboard_url("http://localhost:8001/") == "message"
+    assert shown == [True]
+
+
+def test_open_dashboard_url_uses_default_when_available(monkeypatch):
+    monkeypatch.setattr(al, "open_url_via_default_handler", lambda url: True)
+    called = {"edge": False, "msg": False}
+    monkeypatch.setattr(
+        al, "open_url_via_edge", lambda url: called.__setitem__("edge", True) or True
+    )
+    monkeypatch.setattr(
+        al, "show_dashboard_open_hint", lambda: called.__setitem__("msg", True)
+    )
+    assert al.open_dashboard_url("http://localhost:8001/") == "default"
+    assert called == {"edge": False, "msg": False}
+
+
+def test_open_url_via_default_handler_oserror_is_failure(monkeypatch):
+    def boom(url):
+        raise OSError(1155, "No application is associated")
+
+    monkeypatch.setattr(al.sys, "platform", "win32")
+    monkeypatch.setattr(al.os, "startfile", boom, raising=False)
+    assert al.open_url_via_default_handler("http://localhost:8001/") is False

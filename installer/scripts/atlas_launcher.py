@@ -36,8 +36,77 @@ HEALTH_URL = "http://127.0.0.1:8001/api/system/health"
 POLL_INTERVAL_S = 1.0
 STARTUP_GRACE_S = 8.0
 DASHBOARD_WAIT_S = 45.0
+DASHBOARD_OPEN_HINT = (
+    "Atlas is running. Open http://localhost:8001 in your browser to view the dashboard."
+)
 
 log = logging.getLogger("atlas-launcher")
+
+
+def edge_browser_candidates() -> list[Path]:
+    """Known Edge install paths (x86 first, then Program Files)."""
+    out: list[Path] = []
+    for key in ("ProgramFiles(x86)", "ProgramFiles"):
+        base = os.environ.get(key)
+        if base:
+            out.append(Path(base) / "Microsoft" / "Edge" / "Application" / "msedge.exe")
+    return out
+
+
+def open_url_via_default_handler(url: str) -> bool:
+    """Try the OS default http handler (os.startfile / webbrowser)."""
+    try:
+        if sys.platform == "win32":
+            os.startfile(url)  # type: ignore[attr-defined]
+            return True
+        return bool(webbrowser.open(url))
+    except OSError as e:
+        log.warning("Default URL handler failed for %s: %s", url, e)
+        return False
+
+
+def open_url_via_edge(url: str) -> bool:
+    """Launch Microsoft Edge by known install path when the default handler fails."""
+    for exe in edge_browser_candidates():
+        if not exe.is_file():
+            continue
+        try:
+            subprocess.Popen([str(exe), url], close_fds=sys.platform != "win32")
+            log.info("Opened dashboard via Edge at %s", exe)
+            return True
+        except OSError as e:
+            log.warning("Edge launch failed (%s): %s", exe, e)
+    return False
+
+
+def show_dashboard_open_hint() -> None:
+    """Native message so the user is not left with only a bare OS dialog."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            # MB_OK | MB_ICONINFORMATION
+            ctypes.windll.user32.MessageBoxW(
+                None, DASHBOARD_OPEN_HINT, "Sr. Atlas", 0x00000040
+            )
+            return
+        except Exception as e:  # noqa: BLE001
+            log.warning("MessageBox failed: %s", e)
+    log.warning(DASHBOARD_OPEN_HINT)
+
+
+def open_dashboard_url(url: str = BACKEND_URL) -> str:
+    """Open the dashboard URL with fallbacks.
+
+    Order: default http handler → Edge → native hint message.
+    Returns which path was used: ``default``, ``edge``, or ``message``.
+    """
+    if open_url_via_default_handler(url):
+        return "default"
+    if open_url_via_edge(url):
+        return "edge"
+    show_dashboard_open_hint()
+    return "message"
 
 
 # ---------------------------------------------------------------------------
@@ -305,14 +374,16 @@ class Launcher:
     def open_dashboard(self, *, force: bool = False) -> bool:
         """Open the dashboard once per launcher session (unless force=True).
 
-        Returns True if webbrowser.open was called.
+        Uses default http handler, then Edge, then a native hint message.
+        Returns True if an open attempt was made this call.
         """
         with self._browser_lock:
             if self._browser_opened and not force:
                 log.info("Dashboard already opened this session; not opening another tab")
                 return False
             self._browser_opened = True
-        webbrowser.open(BACKEND_URL)
+        method = open_dashboard_url(BACKEND_URL)
+        log.info("Dashboard open attempt via %s", method)
         return True
 
     def start(self) -> None:
