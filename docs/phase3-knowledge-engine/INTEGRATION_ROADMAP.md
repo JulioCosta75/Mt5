@@ -21,6 +21,9 @@
       REPEATED_PATTERN (`KnowledgeEngineService.ingest_grouped_observation`)
 - [x] Block 3 review queue: `list_knowledge_records_by_state` +
       `python -m phase3_knowledge_engine.review --state …` (read-only)
+- [x] Block 4/5 EA version change: mandatory reason → `quarantine` +
+      `ChangeLogEntry`; `confirm_ea_version_safe` (human only);
+      `list_ea_profiles(status=…)`
 - No live streaming; no write-back to Phase 2
 - Validate on staging with `PHASE3_KNOWLEDGE_ENGINE_ENABLED=true` (flag still default OFF)
 
