@@ -145,6 +145,19 @@ class KnowledgeRepository:
             ).fetchone()
         if not row:
             return None
+        return self._row_to_ea_profile(row)
+
+    def get_ea_profile_by_ea_key(self, ea_key: str) -> EAKnowledgeProfile | None:
+        with self._connection() as cx:
+            row = cx.execute(
+                "SELECT * FROM ea_profiles WHERE ea_key = ?", (ea_key,),
+            ).fetchone()
+        if not row:
+            return None
+        return self._row_to_ea_profile(row)
+
+    @staticmethod
+    def _row_to_ea_profile(row: sqlite3.Row) -> EAKnowledgeProfile:
         return EAKnowledgeProfile(
             id=UUID(row["id"]),
             ea_key=row["ea_key"],
@@ -166,31 +179,67 @@ class KnowledgeRepository:
 
     # ---- Evidence ------------------------------------------------------------
     def save_evidence(self, item: EvidenceItem) -> EvidenceItem:
+        """Persist evidence. Idempotent on (source_system, external_id) when set."""
+        if item.external_id:
+            existing = self.get_evidence_by_external_id(
+                item.source_system, item.external_id
+            )
+            if existing is not None:
+                return existing
         context_id = None
         if item.context:
             context_id = str(self._save_context(item.context))
         with self._connection() as cx:
-            cx.execute(
-                """
-                INSERT INTO evidence_items (
-                    id, ea_profile_id, evidence_type, occurred_at, symbol,
-                    session, market_regime, volatility, spread, pnl, drawdown,
-                    entry_reason, exit_reason, ea_version, account_type, test_type,
-                    raw_payload_json, context_id, source_system, external_id,
-                    ingestion_batch_id, created_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                """,
-                (
-                    str(item.id), str(item.ea_profile_id), item.evidence_type,
-                    _iso(item.occurred_at), item.symbol, item.session,
-                    item.market_regime, item.volatility, item.spread,
-                    item.pnl, item.drawdown, item.entry_reason, item.exit_reason,
-                    item.ea_version, item.account_type, item.test_type,
-                    json.dumps(item.raw_payload), context_id, item.source_system,
-                    item.external_id, item.ingestion_batch_id, _iso(_utcnow()),
-                ),
-            )
+            try:
+                cx.execute(
+                    """
+                    INSERT INTO evidence_items (
+                        id, ea_profile_id, evidence_type, occurred_at, symbol,
+                        session, market_regime, volatility, spread, pnl, drawdown,
+                        entry_reason, exit_reason, ea_version, account_type, test_type,
+                        raw_payload_json, context_id, source_system, external_id,
+                        ingestion_batch_id, created_at
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    """,
+                    (
+                        str(item.id), str(item.ea_profile_id), item.evidence_type,
+                        _iso(item.occurred_at), item.symbol, item.session,
+                        item.market_regime, item.volatility, item.spread,
+                        item.pnl, item.drawdown, item.entry_reason, item.exit_reason,
+                        item.ea_version, item.account_type, item.test_type,
+                        json.dumps(item.raw_payload), context_id, item.source_system,
+                        item.external_id, item.ingestion_batch_id, _iso(_utcnow()),
+                    ),
+                )
+            except sqlite3.IntegrityError:
+                if item.external_id:
+                    existing = self.get_evidence_by_external_id(
+                        item.source_system, item.external_id
+                    )
+                    if existing is not None:
+                        return existing
+                raise
         return item
+
+    def has_evidence_by_external_id(
+        self, source_system: str, external_id: str
+    ) -> bool:
+        return self.get_evidence_by_external_id(source_system, external_id) is not None
+
+    def get_evidence_by_external_id(
+        self, source_system: str, external_id: str
+    ) -> EvidenceItem | None:
+        with self._connection() as cx:
+            row = cx.execute(
+                """
+                SELECT * FROM evidence_items
+                 WHERE source_system = ? AND external_id = ?
+                """,
+                (source_system, external_id),
+            ).fetchone()
+        if not row:
+            return None
+        return self._row_to_evidence(row)
 
     def get_evidence(self, evidence_id: UUID) -> EvidenceItem | None:
         with self._connection() as cx:

@@ -30,7 +30,8 @@ phase3_knowledge_engine/
 ├── application/           # use-cases (orchestration)
 │   └── state_transition_service.py  # sole FSM entry point
 ├── infrastructure/        # SQLite knowledge.db
-├── adapters/ingestion/    # EvidenceSourcePort stubs (no MT5 yet)
+├── adapters/ingestion/    # EvidenceSourcePort (stub + MT5 bridge Gate 1)
+├── ingest.py              # CLI: --file / --bridge-url (not wired to Phase 2)
 ├── api/contract.py        # future REST contract (NOT mounted)
 └── tests/                 # unit + lifecycle tests
 
@@ -51,6 +52,22 @@ docs/phase3-knowledge-engine/
 cd /path/to/repo
 python3 -m pytest phase3_knowledge_engine/tests/ -q
 ```
+
+## Gate 1 ingestion CLI (standalone)
+
+```bash
+# From bridge JSON/CSV export
+python3 -m phase3_knowledge_engine.ingest --file deals.json --db ./knowledge.db
+
+# Live bridge (read-only GET /deals — reuses backend/mt5_client.BridgeClient)
+python3 -m phase3_knowledge_engine.ingest \
+  --bridge-url http://127.0.0.1:8002 \
+  --bridge-token "$MT5_BRIDGE_TOKEN" \
+  --days 90 \
+  --db ./knowledge.db
+```
+
+Does **not** flip `PHASE3_KNOWLEDGE_ENGINE_ENABLED`. Never writes to the bridge or Phase 2 backend.
 
 ## Database
 

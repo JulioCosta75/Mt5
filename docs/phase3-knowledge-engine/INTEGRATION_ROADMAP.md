@@ -12,10 +12,13 @@
 
 ## Gate 1 — Read-only ingestion (staging)
 
-- Batch adapter: import closed trades from MT5 export or bridge JSON **into EvidenceItem**
+- [x] Batch adapter: closed trades from MT5 bridge `GET /deals` → `EvidenceItem`
+      (`adapters/ingestion/mt5_bridge_evidence_source.py`)
+- [x] Standalone CLI: `python -m phase3_knowledge_engine.ingest --file …`
+      or `--bridge-url` / `--bridge-token` (reuses `backend/mt5_client.BridgeClient`)
+- [x] Idempotent on ticket / `external_id`; auto-create incomplete EA profiles by magic
 - No live streaming; no write-back to Phase 2
-- Run as standalone CLI: `python -m phase3_knowledge_engine.ingest --file trades.csv`
-- Validate on staging with `PHASE3_KNOWLEDGE_ENGINE_ENABLED=true`
+- Validate on staging with `PHASE3_KNOWLEDGE_ENGINE_ENABLED=true` (flag still default OFF)
 
 ## Gate 2 — Internal API (staging only)
 
