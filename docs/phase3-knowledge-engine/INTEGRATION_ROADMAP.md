@@ -24,6 +24,8 @@
 - [x] Block 4/5 EA version change: mandatory reason → `quarantine` +
       `ChangeLogEntry`; `confirm_ea_version_safe` (human only);
       `list_ea_profiles(status=…)`
+- [x] Block 6 technical report: `build_technical_report` +
+      `python -m phase3_knowledge_engine.report [--ea …]` (KNOWLEDGE only)
 - No live streaming; no write-back to Phase 2
 - Validate on staging with `PHASE3_KNOWLEDGE_ENGINE_ENABLED=true` (flag still default OFF)
 

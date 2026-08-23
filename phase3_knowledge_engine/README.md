@@ -89,6 +89,17 @@ Service methods (not HTTP-mounted):
   `quarantine` → `active` (never automatic from evidence/confidence).
 - `list_ea_profiles(status=...)` / `list_change_log_for_ea(...)` on the repository.
 
+## Block 6 — technical report (supported conclusions)
+
+```bash
+python3 -m phase3_knowledge_engine.report --db ./knowledge.db
+python3 -m phase3_knowledge_engine.report --ea london-scalper
+```
+
+Presentation-only formatting of `ValidationState.KNOWLEDGE` records (statement,
+EA key/name/version, confidence, evidence/sample sizes, date range, review
+metadata). No state changes or promotion.
+
 ## Database
 
 Separate SQLite file: `knowledge.db` (never `atlas.db`).
