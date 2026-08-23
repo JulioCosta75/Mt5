@@ -26,6 +26,8 @@
       `list_ea_profiles(status=…)`
 - [x] Block 6 technical report: `build_technical_report` +
       `python -m phase3_knowledge_engine.report [--ea …]` (KNOWLEDGE only)
+- [x] End-to-end integration test: `tests/test_full_pipeline_integration.py`
+      (Blocks 1–6 on temp SQLite; flag untouched)
 - No live streaming; no write-back to Phase 2
 - Validate on staging with `PHASE3_KNOWLEDGE_ENGINE_ENABLED=true` (flag still default OFF)
 
