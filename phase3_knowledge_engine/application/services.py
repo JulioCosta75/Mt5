@@ -10,6 +10,7 @@ from phase3_knowledge_engine.config import MIN_OBSERVATIONS_FOR_PATTERN
 from phase3_knowledge_engine.domain.confidence import compute_confidence
 from phase3_knowledge_engine.domain.entities import (
     AuditTrailEntry,
+    ChangeLogEntry,
     EAKnowledgeProfile,
     EvidenceImpactRecord,
     EvidenceItem,
@@ -37,6 +38,209 @@ class KnowledgeEngineService:
 
     def register_ea_profile(self, profile: EAKnowledgeProfile) -> EAKnowledgeProfile:
         return self.repo.save_ea_profile(profile)
+
+    def record_ea_version_change(
+        self,
+        ea_profile_id: UUID,
+        *,
+        from_version: str,
+        to_version: str,
+        description: str,
+        actor: str,
+        effect_summary: str | None = None,
+    ) -> tuple[EAKnowledgeProfile, ChangeLogEntry]:
+        """Record an EA version change and place the EA in quarantine.
+
+        ``description`` (reason) is mandatory — same explicit-justification
+        pattern as other meaningful Phase 3 state changes. A version change
+        always starts in ``quarantine``; it never silently remains ``active``.
+        """
+        if not (description or "").strip():
+            raise DomainRuleViolation(
+                "EA version change requires a non-empty description (mandatory reason)."
+            )
+        if not (to_version or "").strip():
+            raise DomainRuleViolation("to_version must be non-empty.")
+        profile = self.repo.get_ea_profile(ea_profile_id)
+        if not profile:
+            raise DomainRuleViolation(f"EA profile {ea_profile_id} not found.")
+
+        now = datetime.now(timezone.utc)
+        entry = ChangeLogEntry(
+            id=uuid4(),
+            ea_profile_id=ea_profile_id,
+            changed_at=now,
+            from_version=(from_version or "").strip(),
+            to_version=to_version.strip(),
+            description=description.strip(),
+            effect_summary=effect_summary,
+        )
+        profile.version = to_version.strip()
+        profile.status = "quarantine"
+        profile.updated_at = now
+        saved = self.repo.save_ea_profile(profile)
+        entry = self.repo.append_change_log(entry)
+        return saved, entry
+
+    def confirm_ea_version_safe(
+        self,
+        ea_profile_id: UUID,
+        *,
+        actor: str,
+        justification: str,
+    ) -> EAKnowledgeProfile:
+        """Explicit human clearance: quarantine → active.
+
+        Never automatic — never triggered by evidence count or confidence
+        (same principle as Rule 3 for Hypothesis creation).
+        """
+        if not (justification or "").strip():
+            raise DomainRuleViolation(
+                "confirm_ea_version_safe requires a non-empty justification."
+            )
+        if not (actor or "").strip():
+            raise DomainRuleViolation("confirm_ea_version_safe requires an actor.")
+        profile = self.repo.get_ea_profile(ea_profile_id)
+        if not profile:
+            raise DomainRuleViolation(f"EA profile {ea_profile_id} not found.")
+        if profile.status != "quarantine":
+            raise DomainRuleViolation(
+                f"confirm_ea_version_safe only allowed when status is quarantine "
+                f"(found {profile.status!r})."
+            )
+        profile.status = "active"
+        return self.repo.save_ea_profile(profile)
+
+    @staticmethod
+    def compute_context_signature(
+        ea_profile_id: UUID,
+        ea_version: str | None,
+        session: str | None,
+        symbol: str,
+    ) -> str:
+        """Grouping key: ea_profile_id-ea_version-session-symbol."""
+        return f"{ea_profile_id}-{ea_version or ''}-{session or ''}-{symbol}"
+
+    @staticmethod
+    def _evidence_session(evidence: EvidenceItem) -> str | None:
+        if evidence.session:
+            return evidence.session
+        if evidence.context and evidence.context.session:
+            return evidence.context.session
+        return None
+
+    def ingest_grouped_observation(self, evidence: EvidenceItem) -> KnowledgeRecord:
+        """Persist evidence and group it into a pre-hypothesis knowledge record.
+
+        Computes ``context_signature`` from ea_profile_id, ea_version, session,
+        and symbol. Matching RAW_OBSERVATION / REPEATED_PATTERN records are
+        extended (and promoted to REPEATED_PATTERN when the threshold is met).
+
+        If a record with the same signature already sits in HYPOTHESIS or later,
+        the original record is left untouched and
+        ``register_evidence_impact_on_knowledge`` is called with impact
+        ``"confirm"``. That impact string is a deliberate placeholder default —
+        no contradiction-detection logic exists yet; a human may reclassify.
+        """
+        self.repo.save_evidence(evidence)
+        signature = self.compute_context_signature(
+            evidence.ea_profile_id,
+            evidence.ea_version,
+            self._evidence_session(evidence),
+            evidence.symbol,
+        )
+
+        pre = self.repo.find_knowledge_record_by_signature(signature)
+        if pre is not None:
+            return self._append_to_pre_hypothesis_group(pre, evidence)
+
+        post = self.repo.find_post_hypothesis_record_by_signature(signature)
+        if post is not None:
+            self.register_evidence_impact_on_knowledge(
+                post.id,
+                evidence.id,
+                impact="confirm",
+                actor="system",
+                notes=(
+                    "Auto-classified as confirm; new matching evidence, no "
+                    "contradiction detection yet — human may reclassify."
+                ),
+            )
+            return post
+
+        return self._open_raw_observation_group(evidence, signature)
+
+    def _open_raw_observation_group(
+        self,
+        evidence: EvidenceItem,
+        signature: str,
+    ) -> KnowledgeRecord:
+        record = KnowledgeRecord(
+            id=uuid4(),
+            ea_profile_id=evidence.ea_profile_id,
+            validation_state=ValidationState.RAW_OBSERVATION.value,
+            statement=f"Raw observation recorded for {evidence.symbol}",
+            evidence_count=1,
+            sample_size=1,
+            supporting_evidence_ids=[evidence.id],
+            confidence_score=0.0,
+            context_signature=signature,
+        )
+        assert_single_observation_not_knowledge(1, ValidationState.RAW_OBSERVATION)
+        self.repo.save_knowledge_record(record)
+        self.repo.append_audit(AuditTrailEntry(
+            id=uuid4(),
+            knowledge_record_id=record.id,
+            from_state="",
+            to_state=ValidationState.RAW_OBSERVATION.value,
+            transitioned_at=datetime.now(timezone.utc),
+            actor="system",
+            justification="Initial raw observation registered (grouped ingest).",
+            evidence_ids=[evidence.id],
+        ))
+        if 1 >= MIN_OBSERVATIONS_FOR_PATTERN:
+            return self.promote_to_repeated_pattern(
+                record.id,
+                similar_observation_count=1,
+                actor="system",
+                justification="Configurable pattern threshold met; not validation.",
+            )
+        return record
+
+    def _append_to_pre_hypothesis_group(
+        self,
+        record: KnowledgeRecord,
+        evidence: EvidenceItem,
+    ) -> KnowledgeRecord:
+        if evidence.id not in record.supporting_evidence_ids:
+            record.supporting_evidence_ids.append(evidence.id)
+        record.evidence_count = len(record.supporting_evidence_ids)
+        record.sample_size = record.evidence_count
+        self.repo.save_knowledge_record(record)
+        self.repo.append_audit(AuditTrailEntry(
+            id=uuid4(),
+            knowledge_record_id=record.id,
+            from_state=record.validation_state,
+            to_state=record.validation_state,
+            transitioned_at=datetime.now(timezone.utc),
+            actor="system",
+            justification=(
+                "Additional matching observation appended to pre-hypothesis group."
+            ),
+            evidence_ids=[evidence.id],
+        ))
+        if (
+            record.validation_state == ValidationState.RAW_OBSERVATION.value
+            and record.sample_size >= MIN_OBSERVATIONS_FOR_PATTERN
+        ):
+            assert_repeated_pattern_threshold(record.sample_size)
+            return self.promote_to_repeated_pattern(
+                record.id,
+                similar_observation_count=record.sample_size,
+                actor="system",
+                justification="Configurable pattern threshold met; not validation.",
+            )
+        return record
 
     def record_observation(
         self,

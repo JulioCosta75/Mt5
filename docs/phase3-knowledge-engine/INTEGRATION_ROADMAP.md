@@ -12,10 +12,24 @@
 
 ## Gate 1 — Read-only ingestion (staging)
 
-- Batch adapter: import closed trades from MT5 export or bridge JSON **into EvidenceItem**
+- [x] Batch adapter: closed trades from MT5 bridge `GET /deals` → `EvidenceItem`
+      (`adapters/ingestion/mt5_bridge_evidence_source.py`)
+- [x] Standalone CLI: `python -m phase3_knowledge_engine.ingest --file …`
+      or `--bridge-url` / `--bridge-token` (reuses `backend/mt5_client.BridgeClient`)
+- [x] Idempotent on ticket / `external_id`; auto-create incomplete EA profiles by magic
+- [x] Block 2 pattern grouping via `context_signature` → RAW_OBSERVATION /
+      REPEATED_PATTERN (`KnowledgeEngineService.ingest_grouped_observation`)
+- [x] Block 3 review queue: `list_knowledge_records_by_state` +
+      `python -m phase3_knowledge_engine.review --state …` (read-only)
+- [x] Block 4/5 EA version change: mandatory reason → `quarantine` +
+      `ChangeLogEntry`; `confirm_ea_version_safe` (human only);
+      `list_ea_profiles(status=…)`
+- [x] Block 6 technical report: `build_technical_report` +
+      `python -m phase3_knowledge_engine.report [--ea …]` (KNOWLEDGE only)
+- [x] End-to-end integration test: `tests/test_full_pipeline_integration.py`
+      (Blocks 1–6 on temp SQLite; flag untouched)
 - No live streaming; no write-back to Phase 2
-- Run as standalone CLI: `python -m phase3_knowledge_engine.ingest --file trades.csv`
-- Validate on staging with `PHASE3_KNOWLEDGE_ENGINE_ENABLED=true`
+- Validate on staging with `PHASE3_KNOWLEDGE_ENGINE_ENABLED=true` (flag still default OFF)
 
 ## Gate 2 — Internal API (staging only)
 

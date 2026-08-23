@@ -4,19 +4,22 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
 from phase3_knowledge_engine.domain.entities import (
     AuditTrailEntry,
+    ChangeLogEntry,
     EAKnowledgeProfile,
+    EAStatus,
     EvidenceItem,
     EvidenceImpactRecord,
     KnowledgeRecord,
     MarketContext,
 )
+from phase3_knowledge_engine.domain.validation_states import ValidationState
 
 
 def _utcnow() -> datetime:
@@ -68,35 +71,56 @@ class KnowledgeRepository:
         return int(row["value"]) if row else 1
 
     def _run_migrations(self) -> None:
-        if self._schema_version() >= 2:
-            return
-        with self._connection() as cx:
-            columns = {
-                r[1] for r in cx.execute("PRAGMA table_info(evidence_items)").fetchall()
-            }
-            if "source_system" not in columns:
+        version = self._schema_version()
+        if version < 2:
+            with self._connection() as cx:
+                columns = {
+                    r[1] for r in cx.execute("PRAGMA table_info(evidence_items)").fetchall()
+                }
+                if "source_system" not in columns:
+                    cx.execute(
+                        "ALTER TABLE evidence_items ADD COLUMN "
+                        "source_system TEXT NOT NULL DEFAULT 'manual'"
+                    )
+                if "external_id" not in columns:
+                    cx.execute(
+                        "ALTER TABLE evidence_items ADD COLUMN external_id TEXT"
+                    )
+                if "ingestion_batch_id" not in columns:
+                    cx.execute(
+                        "ALTER TABLE evidence_items ADD COLUMN ingestion_batch_id TEXT"
+                    )
                 cx.execute(
-                    "ALTER TABLE evidence_items ADD COLUMN "
-                    "source_system TEXT NOT NULL DEFAULT 'manual'"
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_evidence_source_external
+                    ON evidence_items(source_system, external_id)
+                    WHERE external_id IS NOT NULL
+                    """
                 )
-            if "external_id" not in columns:
                 cx.execute(
-                    "ALTER TABLE evidence_items ADD COLUMN external_id TEXT"
+                    "UPDATE schema_meta SET value = '2' WHERE key = 'schema_version'"
                 )
-            if "ingestion_batch_id" not in columns:
+            version = 2
+        if version < 3:
+            with self._connection() as cx:
+                columns = {
+                    r[1]
+                    for r in cx.execute("PRAGMA table_info(knowledge_records)").fetchall()
+                }
+                if "context_signature" not in columns:
+                    cx.execute(
+                        "ALTER TABLE knowledge_records ADD COLUMN context_signature TEXT"
+                    )
                 cx.execute(
-                    "ALTER TABLE evidence_items ADD COLUMN ingestion_batch_id TEXT"
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_knowledge_context_signature
+                    ON knowledge_records(context_signature)
+                    WHERE context_signature IS NOT NULL
+                    """
                 )
-            cx.execute(
-                """
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_evidence_source_external
-                ON evidence_items(source_system, external_id)
-                WHERE external_id IS NOT NULL
-                """
-            )
-            cx.execute(
-                "UPDATE schema_meta SET value = '2' WHERE key = 'schema_version'"
-            )
+                cx.execute(
+                    "UPDATE schema_meta SET value = '3' WHERE key = 'schema_version'"
+                )
 
     # ---- EA profiles ---------------------------------------------------------
     def save_ea_profile(self, profile: EAKnowledgeProfile) -> EAKnowledgeProfile:
@@ -145,6 +169,39 @@ class KnowledgeRepository:
             ).fetchone()
         if not row:
             return None
+        return self._row_to_ea_profile(row)
+
+    def get_ea_profile_by_ea_key(self, ea_key: str) -> EAKnowledgeProfile | None:
+        with self._connection() as cx:
+            row = cx.execute(
+                "SELECT * FROM ea_profiles WHERE ea_key = ?", (ea_key,),
+            ).fetchone()
+        if not row:
+            return None
+        return self._row_to_ea_profile(row)
+
+    def list_ea_profiles(
+        self, status: EAStatus | None = None
+    ) -> list[EAKnowledgeProfile]:
+        """List EA dossiers; optional status filter (e.g. quarantine)."""
+        with self._connection() as cx:
+            if status is None:
+                rows = cx.execute(
+                    "SELECT * FROM ea_profiles ORDER BY ea_key ASC"
+                ).fetchall()
+            else:
+                rows = cx.execute(
+                    """
+                    SELECT * FROM ea_profiles
+                     WHERE status = ?
+                     ORDER BY ea_key ASC
+                    """,
+                    (status,),
+                ).fetchall()
+        return [self._row_to_ea_profile(r) for r in rows]
+
+    @staticmethod
+    def _row_to_ea_profile(row: sqlite3.Row) -> EAKnowledgeProfile:
         return EAKnowledgeProfile(
             id=UUID(row["id"]),
             ea_key=row["ea_key"],
@@ -166,31 +223,67 @@ class KnowledgeRepository:
 
     # ---- Evidence ------------------------------------------------------------
     def save_evidence(self, item: EvidenceItem) -> EvidenceItem:
+        """Persist evidence. Idempotent on (source_system, external_id) when set."""
+        if item.external_id:
+            existing = self.get_evidence_by_external_id(
+                item.source_system, item.external_id
+            )
+            if existing is not None:
+                return existing
         context_id = None
         if item.context:
             context_id = str(self._save_context(item.context))
         with self._connection() as cx:
-            cx.execute(
-                """
-                INSERT INTO evidence_items (
-                    id, ea_profile_id, evidence_type, occurred_at, symbol,
-                    session, market_regime, volatility, spread, pnl, drawdown,
-                    entry_reason, exit_reason, ea_version, account_type, test_type,
-                    raw_payload_json, context_id, source_system, external_id,
-                    ingestion_batch_id, created_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                """,
-                (
-                    str(item.id), str(item.ea_profile_id), item.evidence_type,
-                    _iso(item.occurred_at), item.symbol, item.session,
-                    item.market_regime, item.volatility, item.spread,
-                    item.pnl, item.drawdown, item.entry_reason, item.exit_reason,
-                    item.ea_version, item.account_type, item.test_type,
-                    json.dumps(item.raw_payload), context_id, item.source_system,
-                    item.external_id, item.ingestion_batch_id, _iso(_utcnow()),
-                ),
-            )
+            try:
+                cx.execute(
+                    """
+                    INSERT INTO evidence_items (
+                        id, ea_profile_id, evidence_type, occurred_at, symbol,
+                        session, market_regime, volatility, spread, pnl, drawdown,
+                        entry_reason, exit_reason, ea_version, account_type, test_type,
+                        raw_payload_json, context_id, source_system, external_id,
+                        ingestion_batch_id, created_at
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    """,
+                    (
+                        str(item.id), str(item.ea_profile_id), item.evidence_type,
+                        _iso(item.occurred_at), item.symbol, item.session,
+                        item.market_regime, item.volatility, item.spread,
+                        item.pnl, item.drawdown, item.entry_reason, item.exit_reason,
+                        item.ea_version, item.account_type, item.test_type,
+                        json.dumps(item.raw_payload), context_id, item.source_system,
+                        item.external_id, item.ingestion_batch_id, _iso(_utcnow()),
+                    ),
+                )
+            except sqlite3.IntegrityError:
+                if item.external_id:
+                    existing = self.get_evidence_by_external_id(
+                        item.source_system, item.external_id
+                    )
+                    if existing is not None:
+                        return existing
+                raise
         return item
+
+    def has_evidence_by_external_id(
+        self, source_system: str, external_id: str
+    ) -> bool:
+        return self.get_evidence_by_external_id(source_system, external_id) is not None
+
+    def get_evidence_by_external_id(
+        self, source_system: str, external_id: str
+    ) -> EvidenceItem | None:
+        with self._connection() as cx:
+            row = cx.execute(
+                """
+                SELECT * FROM evidence_items
+                 WHERE source_system = ? AND external_id = ?
+                """,
+                (source_system, external_id),
+            ).fetchone()
+        if not row:
+            return None
+        return self._row_to_evidence(row)
 
     def get_evidence(self, evidence_id: UUID) -> EvidenceItem | None:
         with self._connection() as cx:
@@ -253,12 +346,19 @@ class KnowledgeRepository:
         return int(row["c"])
 
     # ---- Knowledge records ---------------------------------------------------
-    def save_knowledge_record(self, record: KnowledgeRecord) -> KnowledgeRecord:
+    def save_knowledge_record(
+        self,
+        record: KnowledgeRecord,
+        *,
+        _connection: sqlite3.Connection | None = None,
+    ) -> KnowledgeRecord:
         now = _utcnow()
         if record.created_at is None:
             record.created_at = now
         record.updated_at = now
-        with self._connection() as cx:
+        with (
+            nullcontext(_connection) if _connection is not None else self._connection()
+        ) as cx:
             cx.execute(
                 """
                 INSERT INTO knowledge_records (
@@ -267,8 +367,9 @@ class KnowledgeRepository:
                     confidence_score, supporting_evidence_ids_json,
                     contradictory_evidence_ids_json, last_reviewed_at, reviewed_by,
                     relevance_for_decisions, context_documented,
-                    material_contradictions_resolved, created_at, updated_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    material_contradictions_resolved, context_signature,
+                    created_at, updated_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(id) DO UPDATE SET
                     validation_state=excluded.validation_state,
                     statement=excluded.statement,
@@ -284,6 +385,7 @@ class KnowledgeRepository:
                     relevance_for_decisions=excluded.relevance_for_decisions,
                     context_documented=excluded.context_documented,
                     material_contradictions_resolved=excluded.material_contradictions_resolved,
+                    context_signature=excluded.context_signature,
                     updated_at=excluded.updated_at
                 """,
                 (
@@ -298,6 +400,7 @@ class KnowledgeRepository:
                     record.reviewed_by, record.relevance_for_decisions,
                     1 if record.context_documented else 0,
                     1 if record.material_contradictions_resolved else 0,
+                    record.context_signature,
                     _iso(record.created_at), _iso(record.updated_at),
                 ),
             )
@@ -312,7 +415,87 @@ class KnowledgeRepository:
             return None
         return self._row_to_record(row)
 
+    def find_knowledge_record_by_signature(
+        self, context_signature: str
+    ) -> KnowledgeRecord | None:
+        """Match RAW_OBSERVATION / REPEATED_PATTERN only (pre-hypothesis grouping)."""
+        if not context_signature:
+            return None
+        with self._connection() as cx:
+            row = cx.execute(
+                """
+                SELECT * FROM knowledge_records
+                 WHERE context_signature = ?
+                   AND validation_state IN (?, ?)
+                 ORDER BY created_at ASC
+                 LIMIT 1
+                """,
+                (
+                    context_signature,
+                    ValidationState.RAW_OBSERVATION.value,
+                    ValidationState.REPEATED_PATTERN.value,
+                ),
+            ).fetchone()
+        if not row:
+            return None
+        return self._row_to_record(row)
+
+    def find_post_hypothesis_record_by_signature(
+        self, context_signature: str
+    ) -> KnowledgeRecord | None:
+        """Match HYPOTHESIS or later for evidence-impact routing (not grouping)."""
+        if not context_signature:
+            return None
+        with self._connection() as cx:
+            row = cx.execute(
+                """
+                SELECT * FROM knowledge_records
+                 WHERE context_signature = ?
+                   AND validation_state NOT IN (?, ?)
+                 ORDER BY updated_at DESC
+                 LIMIT 1
+                """,
+                (
+                    context_signature,
+                    ValidationState.RAW_OBSERVATION.value,
+                    ValidationState.REPEATED_PATTERN.value,
+                ),
+            ).fetchone()
+        if not row:
+            return None
+        return self._row_to_record(row)
+
+    def list_knowledge_records_by_state(
+        self,
+        validation_state: ValidationState,
+        ea_profile_id: UUID | None = None,
+        limit: int = 100,
+    ) -> list[KnowledgeRecord]:
+        """List records in one validation state; oldest updated_at first."""
+        limit = max(1, min(int(limit or 100), 1000))
+        state_value = (
+            validation_state.value
+            if isinstance(validation_state, ValidationState)
+            else str(validation_state)
+        )
+        sql = """
+            SELECT * FROM knowledge_records
+             WHERE validation_state = ?
+        """
+        params: list[object] = [state_value]
+        if ea_profile_id is not None:
+            sql += " AND ea_profile_id = ?"
+            params.append(str(ea_profile_id))
+        sql += " ORDER BY updated_at ASC LIMIT ?"
+        params.append(limit)
+        with self._connection() as cx:
+            rows = cx.execute(sql, params).fetchall()
+        return [self._row_to_record(r) for r in rows]
+
     def _row_to_record(self, row: sqlite3.Row) -> KnowledgeRecord:
+        # context_signature may be absent on pre-migration rows loaded mid-flight
+        keys = row.keys()
+        signature = row["context_signature"] if "context_signature" in keys else None
         return KnowledgeRecord(
             id=UUID(row["id"]),
             ea_profile_id=UUID(row["ea_profile_id"]),
@@ -339,13 +522,31 @@ class KnowledgeRepository:
             relevance_for_decisions=row["relevance_for_decisions"],
             context_documented=bool(row["context_documented"]),
             material_contradictions_resolved=bool(row["material_contradictions_resolved"]),
+            context_signature=signature,
             created_at=datetime.fromisoformat(row["created_at"]),
             updated_at=datetime.fromisoformat(row["updated_at"]),
         )
 
     # ---- Audit trail ---------------------------------------------------------
-    def append_audit(self, entry: AuditTrailEntry) -> AuditTrailEntry:
+    def save_transition_with_audit(
+        self,
+        record: KnowledgeRecord,
+        entry: AuditTrailEntry,
+    ) -> KnowledgeRecord:
         with self._connection() as cx:
+            self.save_knowledge_record(record, _connection=cx)
+            self.append_audit(entry, _connection=cx)
+        return record
+
+    def append_audit(
+        self,
+        entry: AuditTrailEntry,
+        *,
+        _connection: sqlite3.Connection | None = None,
+    ) -> AuditTrailEntry:
+        with (
+            nullcontext(_connection) if _connection is not None else self._connection()
+        ) as cx:
             cx.execute(
                 """
                 INSERT INTO audit_trail (
@@ -398,3 +599,48 @@ class KnowledgeRepository:
                 ),
             )
         return impact
+
+    # ---- EA version change log -----------------------------------------------
+    def append_change_log(self, entry: ChangeLogEntry) -> ChangeLogEntry:
+        with self._connection() as cx:
+            cx.execute(
+                """
+                INSERT INTO change_log (
+                    id, ea_profile_id, changed_at, from_version, to_version,
+                    description, effect_summary
+                ) VALUES (?,?,?,?,?,?,?)
+                """,
+                (
+                    str(entry.id),
+                    str(entry.ea_profile_id),
+                    _iso(entry.changed_at),
+                    entry.from_version,
+                    entry.to_version,
+                    entry.description,
+                    entry.effect_summary,
+                ),
+            )
+        return entry
+
+    def list_change_log_for_ea(self, ea_profile_id: UUID) -> list[ChangeLogEntry]:
+        with self._connection() as cx:
+            rows = cx.execute(
+                """
+                SELECT * FROM change_log
+                 WHERE ea_profile_id = ?
+                 ORDER BY changed_at ASC
+                """,
+                (str(ea_profile_id),),
+            ).fetchall()
+        return [
+            ChangeLogEntry(
+                id=UUID(r["id"]),
+                ea_profile_id=UUID(r["ea_profile_id"]),
+                changed_at=datetime.fromisoformat(r["changed_at"]),
+                from_version=r["from_version"],
+                to_version=r["to_version"],
+                description=r["description"],
+                effect_summary=r["effect_summary"],
+            )
+            for r in rows
+        ]

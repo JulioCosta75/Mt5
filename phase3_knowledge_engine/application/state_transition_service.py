@@ -40,8 +40,8 @@ class StateTransitionService:
         if human_review_recorded:
             record.last_reviewed_at = datetime.now(timezone.utc)
             record.reviewed_by = actor
-        self._repo.save_knowledge_record(record)
-        self._repo.append_audit(
+        self._repo.save_transition_with_audit(
+            record,
             AuditTrailEntry(
                 id=uuid4(),
                 knowledge_record_id=record_id,
@@ -51,6 +51,6 @@ class StateTransitionService:
                 actor=actor,
                 justification=justification,
                 evidence_ids=evidence_ids or [],
-            )
+            ),
         )
         return record
