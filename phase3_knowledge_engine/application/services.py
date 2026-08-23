@@ -10,6 +10,7 @@ from phase3_knowledge_engine.config import MIN_OBSERVATIONS_FOR_PATTERN
 from phase3_knowledge_engine.domain.confidence import compute_confidence
 from phase3_knowledge_engine.domain.entities import (
     AuditTrailEntry,
+    ChangeLogEntry,
     EAKnowledgeProfile,
     EvidenceImpactRecord,
     EvidenceItem,
@@ -36,6 +37,78 @@ class KnowledgeEngineService:
         self._transitions = StateTransitionService(repository)
 
     def register_ea_profile(self, profile: EAKnowledgeProfile) -> EAKnowledgeProfile:
+        return self.repo.save_ea_profile(profile)
+
+    def record_ea_version_change(
+        self,
+        ea_profile_id: UUID,
+        *,
+        from_version: str,
+        to_version: str,
+        description: str,
+        actor: str,
+        effect_summary: str | None = None,
+    ) -> tuple[EAKnowledgeProfile, ChangeLogEntry]:
+        """Record an EA version change and place the EA in quarantine.
+
+        ``description`` (reason) is mandatory — same explicit-justification
+        pattern as other meaningful Phase 3 state changes. A version change
+        always starts in ``quarantine``; it never silently remains ``active``.
+        """
+        if not (description or "").strip():
+            raise DomainRuleViolation(
+                "EA version change requires a non-empty description (mandatory reason)."
+            )
+        if not (to_version or "").strip():
+            raise DomainRuleViolation("to_version must be non-empty.")
+        profile = self.repo.get_ea_profile(ea_profile_id)
+        if not profile:
+            raise DomainRuleViolation(f"EA profile {ea_profile_id} not found.")
+
+        now = datetime.now(timezone.utc)
+        entry = ChangeLogEntry(
+            id=uuid4(),
+            ea_profile_id=ea_profile_id,
+            changed_at=now,
+            from_version=(from_version or "").strip(),
+            to_version=to_version.strip(),
+            description=description.strip(),
+            effect_summary=effect_summary,
+        )
+        profile.version = to_version.strip()
+        profile.status = "quarantine"
+        profile.updated_at = now
+        saved = self.repo.save_ea_profile(profile)
+        entry = self.repo.append_change_log(entry)
+        return saved, entry
+
+    def confirm_ea_version_safe(
+        self,
+        ea_profile_id: UUID,
+        *,
+        actor: str,
+        justification: str,
+    ) -> EAKnowledgeProfile:
+        """Explicit human clearance: quarantine → active.
+
+        Never automatic — never triggered by evidence count or confidence
+        (same principle as Rule 3 for Hypothesis creation).
+        """
+        if not (justification or "").strip():
+            raise DomainRuleViolation(
+                "confirm_ea_version_safe requires a non-empty justification."
+            )
+        if not (actor or "").strip():
+            raise DomainRuleViolation("confirm_ea_version_safe requires an actor.")
+        profile = self.repo.get_ea_profile(ea_profile_id)
+        if not profile:
+            raise DomainRuleViolation(f"EA profile {ea_profile_id} not found.")
+        if profile.status != "quarantine":
+            raise DomainRuleViolation(
+                f"confirm_ea_version_safe only allowed when status is quarantine "
+                f"(found {profile.status!r})."
+            )
+        profile.status = "active"
         return self.repo.save_ea_profile(profile)
 
     @staticmethod

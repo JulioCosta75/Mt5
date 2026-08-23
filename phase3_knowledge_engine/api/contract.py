@@ -33,7 +33,7 @@ class EAProfileDTO(BaseModel):
     permitted_symbols: list[str] = Field(default_factory=list)
     permitted_sessions: list[str] = Field(default_factory=list)
     market_conditions: dict[str, Any] = Field(default_factory=dict)
-    status: Literal["active", "restricted", "stopped", "testing"] = "testing"
+    status: Literal["active", "restricted", "stopped", "testing", "quarantine"] = "testing"
 
 
 class EvidenceDTO(BaseModel):

@@ -12,7 +12,7 @@ EvidenceType = Literal["trade", "backtest_run", "incident", "metric_snapshot"]
 SourceSystem = Literal["manual", "mt5_bridge", "backtest_export", "metric_feed", "api", "stub"]
 AccountType = Literal["demo", "live"]
 TestType = Literal["forward", "backtest", "paper"]
-EAStatus = Literal["active", "restricted", "stopped", "testing"]
+EAStatus = Literal["active", "restricted", "stopped", "testing", "quarantine"]
 EvidenceImpact = Literal["confirm", "weaken", "review", "invalidate"]
 
 
@@ -71,6 +71,10 @@ class PerformanceMetrics:
 
 @dataclass
 class ChangeLogEntry:
+    """Immutable record of an EA version change (persisted in change_log)."""
+
+    id: UUID
+    ea_profile_id: UUID
     changed_at: datetime
     from_version: str
     to_version: str

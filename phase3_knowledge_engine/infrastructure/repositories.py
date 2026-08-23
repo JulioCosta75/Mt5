@@ -11,7 +11,9 @@ from uuid import UUID, uuid4
 
 from phase3_knowledge_engine.domain.entities import (
     AuditTrailEntry,
+    ChangeLogEntry,
     EAKnowledgeProfile,
+    EAStatus,
     EvidenceItem,
     EvidenceImpactRecord,
     KnowledgeRecord,
@@ -177,6 +179,26 @@ class KnowledgeRepository:
         if not row:
             return None
         return self._row_to_ea_profile(row)
+
+    def list_ea_profiles(
+        self, status: EAStatus | None = None
+    ) -> list[EAKnowledgeProfile]:
+        """List EA dossiers; optional status filter (e.g. quarantine)."""
+        with self._connection() as cx:
+            if status is None:
+                rows = cx.execute(
+                    "SELECT * FROM ea_profiles ORDER BY ea_key ASC"
+                ).fetchall()
+            else:
+                rows = cx.execute(
+                    """
+                    SELECT * FROM ea_profiles
+                     WHERE status = ?
+                     ORDER BY ea_key ASC
+                    """,
+                    (status,),
+                ).fetchall()
+        return [self._row_to_ea_profile(r) for r in rows]
 
     @staticmethod
     def _row_to_ea_profile(row: sqlite3.Row) -> EAKnowledgeProfile:
@@ -577,3 +599,48 @@ class KnowledgeRepository:
                 ),
             )
         return impact
+
+    # ---- EA version change log -----------------------------------------------
+    def append_change_log(self, entry: ChangeLogEntry) -> ChangeLogEntry:
+        with self._connection() as cx:
+            cx.execute(
+                """
+                INSERT INTO change_log (
+                    id, ea_profile_id, changed_at, from_version, to_version,
+                    description, effect_summary
+                ) VALUES (?,?,?,?,?,?,?)
+                """,
+                (
+                    str(entry.id),
+                    str(entry.ea_profile_id),
+                    _iso(entry.changed_at),
+                    entry.from_version,
+                    entry.to_version,
+                    entry.description,
+                    entry.effect_summary,
+                ),
+            )
+        return entry
+
+    def list_change_log_for_ea(self, ea_profile_id: UUID) -> list[ChangeLogEntry]:
+        with self._connection() as cx:
+            rows = cx.execute(
+                """
+                SELECT * FROM change_log
+                 WHERE ea_profile_id = ?
+                 ORDER BY changed_at ASC
+                """,
+                (str(ea_profile_id),),
+            ).fetchall()
+        return [
+            ChangeLogEntry(
+                id=UUID(r["id"]),
+                ea_profile_id=UUID(r["ea_profile_id"]),
+                changed_at=datetime.fromisoformat(r["changed_at"]),
+                from_version=r["from_version"],
+                to_version=r["to_version"],
+                description=r["description"],
+                effect_summary=r["effect_summary"],
+            )
+            for r in rows
+        ]

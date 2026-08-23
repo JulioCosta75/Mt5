@@ -79,6 +79,16 @@ python3 -m phase3_knowledge_engine.review --state repeated_pattern --ea london-s
 Lists pending `KnowledgeRecord`s for human action (e.g. decide which id to pass to
 `create_hypothesis`). No automatic promotion.
 
+## Block 4/5 — EA version change + quarantine
+
+Service methods (not HTTP-mounted):
+
+- `record_ea_version_change(...)` — mandatory non-empty `description`; sets
+  `version` and status `quarantine`; appends `ChangeLogEntry`.
+- `confirm_ea_version_safe(...)` — explicit human clearance only when status is
+  `quarantine` → `active` (never automatic from evidence/confidence).
+- `list_ea_profiles(status=...)` / `list_change_log_for_ea(...)` on the repository.
+
 ## Database
 
 Separate SQLite file: `knowledge.db` (never `atlas.db`).

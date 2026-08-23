@@ -7,7 +7,9 @@ from uuid import UUID
 
 from phase3_knowledge_engine.domain.entities import (
     AuditTrailEntry,
+    ChangeLogEntry,
     EAKnowledgeProfile,
+    EAStatus,
     EvidenceImpactRecord,
     EvidenceItem,
     KnowledgeRecord,
@@ -24,6 +26,10 @@ class KnowledgeRepositoryPort(Protocol):
     def get_ea_profile(self, profile_id: UUID) -> EAKnowledgeProfile | None: ...
 
     def get_ea_profile_by_ea_key(self, ea_key: str) -> EAKnowledgeProfile | None: ...
+
+    def list_ea_profiles(
+        self, status: EAStatus | None = None
+    ) -> list[EAKnowledgeProfile]: ...
 
     def save_evidence(self, item: EvidenceItem) -> EvidenceItem: ...
 
@@ -73,3 +79,7 @@ class KnowledgeRepositoryPort(Protocol):
     def list_audit_trail(self, knowledge_record_id: UUID) -> list[AuditTrailEntry]: ...
 
     def append_evidence_impact(self, impact: EvidenceImpactRecord) -> EvidenceImpactRecord: ...
+
+    def append_change_log(self, entry: ChangeLogEntry) -> ChangeLogEntry: ...
+
+    def list_change_log_for_ea(self, ea_profile_id: UUID) -> list[ChangeLogEntry]: ...
