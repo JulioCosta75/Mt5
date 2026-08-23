@@ -40,6 +40,18 @@ class KnowledgeRepositoryPort(Protocol):
 
     def get_knowledge_record(self, record_id: UUID) -> KnowledgeRecord | None: ...
 
+    def find_knowledge_record_by_signature(
+        self, context_signature: str
+    ) -> KnowledgeRecord | None:
+        """Pre-hypothesis only: RAW_OBSERVATION or REPEATED_PATTERN."""
+        ...
+
+    def find_post_hypothesis_record_by_signature(
+        self, context_signature: str
+    ) -> KnowledgeRecord | None:
+        """HYPOTHESIS or later — for evidence-impact routing, not grouping."""
+        ...
+
     def save_transition_with_audit(
         self,
         record: KnowledgeRecord,

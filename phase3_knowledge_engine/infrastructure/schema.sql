@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS schema_meta (
     value TEXT NOT NULL
 );
 
-INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '2');
+INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '3');
 
 CREATE TABLE IF NOT EXISTS ea_profiles (
     id                  TEXT PRIMARY KEY,
@@ -91,12 +91,16 @@ CREATE TABLE IF NOT EXISTS knowledge_records (
     relevance_for_decisions         TEXT,
     context_documented              INTEGER NOT NULL DEFAULT 0,
     material_contradictions_resolved INTEGER NOT NULL DEFAULT 0,
+    context_signature               TEXT,
     created_at                      TEXT NOT NULL,
     updated_at                      TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_knowledge_ea ON knowledge_records(ea_profile_id);
 CREATE INDEX IF NOT EXISTS idx_knowledge_state ON knowledge_records(validation_state);
+CREATE INDEX IF NOT EXISTS idx_knowledge_context_signature
+    ON knowledge_records(context_signature)
+    WHERE context_signature IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS audit_trail (
     id                  TEXT PRIMARY KEY,

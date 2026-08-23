@@ -17,6 +17,8 @@
 - [x] Standalone CLI: `python -m phase3_knowledge_engine.ingest --file …`
       or `--bridge-url` / `--bridge-token` (reuses `backend/mt5_client.BridgeClient`)
 - [x] Idempotent on ticket / `external_id`; auto-create incomplete EA profiles by magic
+- [x] Block 2 pattern grouping via `context_signature` → RAW_OBSERVATION /
+      REPEATED_PATTERN (`KnowledgeEngineService.ingest_grouped_observation`)
 - No live streaming; no write-back to Phase 2
 - Validate on staging with `PHASE3_KNOWLEDGE_ENGINE_ENABLED=true` (flag still default OFF)
 

@@ -122,6 +122,9 @@ class KnowledgeRecord:
     relevance_for_decisions: str | None = None
     context_documented: bool = False
     material_contradictions_resolved: bool = False
+    # Grouping key for pre-hypothesis pattern detection (Block 2).
+    # Format: "{ea_profile_id}-{ea_version}-{session}-{symbol}"
+    context_signature: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

@@ -26,6 +26,7 @@ from phase3_knowledge_engine.adapters.ingestion.mt5_bridge_evidence_source impor
     resolve_account_type,
     ensure_ea_profile_for_magic,
 )
+from phase3_knowledge_engine.application.services import KnowledgeEngineService
 from phase3_knowledge_engine.config import DEFAULT_KNOWLEDGE_DB_PATH
 from phase3_knowledge_engine.infrastructure.repositories import KnowledgeRepository
 
@@ -77,7 +78,8 @@ def _load_deals_file(path: Path) -> list[dict]:
 
 
 def _persist_batch(repo: KnowledgeRepository, items) -> tuple[int, int]:
-    """Save items; count new vs already-present by external_id."""
+    """Save items via grouped ingest; count new vs already-present by external_id."""
+    engine = KnowledgeEngineService(repo)
     saved = 0
     skipped = 0
     for item in items:
@@ -86,7 +88,7 @@ def _persist_batch(repo: KnowledgeRepository, items) -> tuple[int, int]:
         ):
             skipped += 1
             continue
-        repo.save_evidence(item)
+        engine.ingest_grouped_observation(item)
         saved += 1
     return saved, skipped
 
