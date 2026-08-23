@@ -19,6 +19,8 @@
 - [x] Idempotent on ticket / `external_id`; auto-create incomplete EA profiles by magic
 - [x] Block 2 pattern grouping via `context_signature` → RAW_OBSERVATION /
       REPEATED_PATTERN (`KnowledgeEngineService.ingest_grouped_observation`)
+- [x] Block 3 review queue: `list_knowledge_records_by_state` +
+      `python -m phase3_knowledge_engine.review --state …` (read-only)
 - No live streaming; no write-back to Phase 2
 - Validate on staging with `PHASE3_KNOWLEDGE_ENGINE_ENABLED=true` (flag still default OFF)
 

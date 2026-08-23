@@ -443,6 +443,33 @@ class KnowledgeRepository:
             return None
         return self._row_to_record(row)
 
+    def list_knowledge_records_by_state(
+        self,
+        validation_state: ValidationState,
+        ea_profile_id: UUID | None = None,
+        limit: int = 100,
+    ) -> list[KnowledgeRecord]:
+        """List records in one validation state; oldest updated_at first."""
+        limit = max(1, min(int(limit or 100), 1000))
+        state_value = (
+            validation_state.value
+            if isinstance(validation_state, ValidationState)
+            else str(validation_state)
+        )
+        sql = """
+            SELECT * FROM knowledge_records
+             WHERE validation_state = ?
+        """
+        params: list[object] = [state_value]
+        if ea_profile_id is not None:
+            sql += " AND ea_profile_id = ?"
+            params.append(str(ea_profile_id))
+        sql += " ORDER BY updated_at ASC LIMIT ?"
+        params.append(limit)
+        with self._connection() as cx:
+            rows = cx.execute(sql, params).fetchall()
+        return [self._row_to_record(r) for r in rows]
+
     def _row_to_record(self, row: sqlite3.Row) -> KnowledgeRecord:
         # context_signature may be absent on pre-migration rows loaded mid-flight
         keys = row.keys()

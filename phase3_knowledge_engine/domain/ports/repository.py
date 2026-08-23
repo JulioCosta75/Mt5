@@ -12,6 +12,7 @@ from phase3_knowledge_engine.domain.entities import (
     EvidenceItem,
     KnowledgeRecord,
 )
+from phase3_knowledge_engine.domain.validation_states import ValidationState
 
 
 @runtime_checkable
@@ -50,6 +51,15 @@ class KnowledgeRepositoryPort(Protocol):
         self, context_signature: str
     ) -> KnowledgeRecord | None:
         """HYPOTHESIS or later — for evidence-impact routing, not grouping."""
+        ...
+
+    def list_knowledge_records_by_state(
+        self,
+        validation_state: ValidationState,
+        ea_profile_id: UUID | None = None,
+        limit: int = 100,
+    ) -> list[KnowledgeRecord]:
+        """Read-only queue for human review. Oldest updated_at first."""
         ...
 
     def save_transition_with_audit(

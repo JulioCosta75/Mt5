@@ -69,6 +69,16 @@ python3 -m phase3_knowledge_engine.ingest \
 
 Does **not** flip `PHASE3_KNOWLEDGE_ENGINE_ENABLED`. Never writes to the bridge or Phase 2 backend.
 
+## Block 3 review queue (read-only)
+
+```bash
+python3 -m phase3_knowledge_engine.review --state repeated_pattern --db ./knowledge.db
+python3 -m phase3_knowledge_engine.review --state repeated_pattern --ea london-scalper
+```
+
+Lists pending `KnowledgeRecord`s for human action (e.g. decide which id to pass to
+`create_hypothesis`). No automatic promotion.
+
 ## Database
 
 Separate SQLite file: `knowledge.db` (never `atlas.db`).
