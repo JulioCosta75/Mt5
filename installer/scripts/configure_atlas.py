@@ -227,7 +227,12 @@ def write_bridge_env(paths: dict, cfg: dict) -> Path:
         f"MT5_SERVER={cfg['server']}",
     ]
     if cfg.get("terminal_path"):
-        lines.append(f"MT5_TERMINAL_PATH={cfg['terminal_path']}")
+        # Unquoted: python-dotenv takes everything after '=' (spaces OK).
+        # Do NOT wrap in quotes — escapes like \b in \bridge or \t in \terminal
+        # would corrupt the path under quoted dotenv parsing.
+        # Strip outside the f-string: Python 3.11 forbids backslashes in f-expr.
+        terminal_path = str(cfg["terminal_path"]).strip().strip('"')
+        lines.append(f"MT5_TERMINAL_PATH={terminal_path}")
     lines += [
         f"BRIDGE_TOKEN={cfg['bridge_token']}",
         f"BRIDGE_HOST={cfg.get('bridge_host', '127.0.0.1')}",
