@@ -144,6 +144,7 @@ def test_open_dashboard_once_per_session(tmp_path, monkeypatch):
 def test_open_dashboard_url_falls_back_to_edge(tmp_path, monkeypatch):
     edge = tmp_path / "msedge.exe"
     edge.write_bytes(b"")
+    monkeypatch.setattr(al, "has_default_http_handler", lambda: True)
     monkeypatch.setattr(al, "open_url_via_default_handler", lambda url: False)
     monkeypatch.setattr(al, "edge_browser_candidates", lambda: [edge])
     launches: list[list[str]] = []
@@ -157,7 +158,29 @@ def test_open_dashboard_url_falls_back_to_edge(tmp_path, monkeypatch):
     assert launches == [[str(edge), "http://localhost:8001/"]]
 
 
+def test_open_dashboard_url_skips_default_when_no_userchoice(tmp_path, monkeypatch):
+    """No http UserChoice ProgId → never call startfile; go straight to Edge."""
+    edge = tmp_path / "msedge.exe"
+    edge.write_bytes(b"")
+    default_calls: list[str] = []
+    monkeypatch.setattr(al, "has_default_http_handler", lambda: False)
+    monkeypatch.setattr(
+        al,
+        "open_url_via_default_handler",
+        lambda url: default_calls.append(url) or True,
+    )
+    monkeypatch.setattr(al, "edge_browser_candidates", lambda: [edge])
+    launches: list[list[str]] = []
+    monkeypatch.setattr(
+        al.subprocess, "Popen", lambda args, **kwargs: launches.append(list(args))
+    )
+    assert al.open_dashboard_url("http://localhost:8001/") == "edge"
+    assert default_calls == []
+    assert launches == [[str(edge), "http://localhost:8001/"]]
+
+
 def test_open_dashboard_url_shows_message_when_default_and_edge_fail(monkeypatch):
+    monkeypatch.setattr(al, "has_default_http_handler", lambda: True)
     monkeypatch.setattr(al, "open_url_via_default_handler", lambda url: False)
     monkeypatch.setattr(al, "edge_browser_candidates", lambda: [])
     shown: list[bool] = []
@@ -167,6 +190,7 @@ def test_open_dashboard_url_shows_message_when_default_and_edge_fail(monkeypatch
 
 
 def test_open_dashboard_url_uses_default_when_available(monkeypatch):
+    monkeypatch.setattr(al, "has_default_http_handler", lambda: True)
     monkeypatch.setattr(al, "open_url_via_default_handler", lambda url: True)
     called = {"edge": False, "msg": False}
     monkeypatch.setattr(
@@ -186,3 +210,66 @@ def test_open_url_via_default_handler_oserror_is_failure(monkeypatch):
     monkeypatch.setattr(al.sys, "platform", "win32")
     monkeypatch.setattr(al.os, "startfile", boom, raising=False)
     assert al.open_url_via_default_handler("http://localhost:8001/") is False
+
+
+def test_has_default_http_handler_non_windows(monkeypatch):
+    monkeypatch.setattr(al.sys, "platform", "linux")
+    assert al.has_default_http_handler() is True
+
+
+def test_has_default_http_handler_missing_userchoice(monkeypatch):
+    class FakeWinreg:
+        HKEY_CURRENT_USER = object()
+
+        def OpenKey(self, *_args, **_kwargs):
+            raise OSError(2, "The system cannot find the file specified")
+
+    monkeypatch.setattr(al.sys, "platform", "win32")
+    monkeypatch.setitem(sys.modules, "winreg", FakeWinreg())
+    assert al.has_default_http_handler() is False
+
+
+def test_has_default_http_handler_empty_progid(monkeypatch):
+    class FakeKey:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    class FakeWinreg:
+        HKEY_CURRENT_USER = object()
+
+        def OpenKey(self, *_args, **_kwargs):
+            return FakeKey()
+
+        def QueryValueEx(self, _key, name):
+            assert name == "ProgId"
+            return ("", 1)
+
+    monkeypatch.setattr(al.sys, "platform", "win32")
+    monkeypatch.setitem(sys.modules, "winreg", FakeWinreg())
+    assert al.has_default_http_handler() is False
+
+
+def test_has_default_http_handler_with_progid(monkeypatch):
+    class FakeKey:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    class FakeWinreg:
+        HKEY_CURRENT_USER = object()
+
+        def OpenKey(self, *_args, **_kwargs):
+            return FakeKey()
+
+        def QueryValueEx(self, _key, name):
+            assert name == "ProgId"
+            return ("MSEdgeHTM", 1)
+
+    monkeypatch.setattr(al.sys, "platform", "win32")
+    monkeypatch.setitem(sys.modules, "winreg", FakeWinreg())
+    assert al.has_default_http_handler() is True
