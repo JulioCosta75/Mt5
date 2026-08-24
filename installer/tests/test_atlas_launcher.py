@@ -124,7 +124,7 @@ def test_open_dashboard_once_per_session(tmp_path, monkeypatch):
     launcher = al.Launcher(paths, open_browser=False)
     opens: list[str] = []
     monkeypatch.setattr(
-        al, "open_dashboard_url", lambda url=al.BACKEND_URL: opens.append(url) or "default"
+        al, "open_dashboard_url", lambda url=al.BACKEND_URL: opens.append(url) or "edge"
     )
 
     assert launcher.open_dashboard(force=False) is True
@@ -141,47 +141,25 @@ def test_open_dashboard_once_per_session(tmp_path, monkeypatch):
     assert opens == [al.BACKEND_URL, al.BACKEND_URL]
 
 
-def test_open_dashboard_url_falls_back_to_edge(tmp_path, monkeypatch):
+def test_open_dashboard_url_uses_edge_first(tmp_path, monkeypatch):
     edge = tmp_path / "msedge.exe"
     edge.write_bytes(b"")
-    monkeypatch.setattr(al, "has_default_http_handler", lambda: True)
-    monkeypatch.setattr(al, "open_url_via_default_handler", lambda url: False)
     monkeypatch.setattr(al, "edge_browser_candidates", lambda: [edge])
     launches: list[list[str]] = []
+    shown: list[bool] = []
 
     def fake_popen(args, **kwargs):
         launches.append(list(args))
         return None
 
     monkeypatch.setattr(al.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(al, "show_dashboard_open_hint", lambda: shown.append(True))
     assert al.open_dashboard_url("http://localhost:8001/") == "edge"
     assert launches == [[str(edge), "http://localhost:8001/"]]
+    assert shown == []
 
 
-def test_open_dashboard_url_skips_default_when_no_userchoice(tmp_path, monkeypatch):
-    """No http UserChoice ProgId → never call startfile; go straight to Edge."""
-    edge = tmp_path / "msedge.exe"
-    edge.write_bytes(b"")
-    default_calls: list[str] = []
-    monkeypatch.setattr(al, "has_default_http_handler", lambda: False)
-    monkeypatch.setattr(
-        al,
-        "open_url_via_default_handler",
-        lambda url: default_calls.append(url) or True,
-    )
-    monkeypatch.setattr(al, "edge_browser_candidates", lambda: [edge])
-    launches: list[list[str]] = []
-    monkeypatch.setattr(
-        al.subprocess, "Popen", lambda args, **kwargs: launches.append(list(args))
-    )
-    assert al.open_dashboard_url("http://localhost:8001/") == "edge"
-    assert default_calls == []
-    assert launches == [[str(edge), "http://localhost:8001/"]]
-
-
-def test_open_dashboard_url_shows_message_when_default_and_edge_fail(monkeypatch):
-    monkeypatch.setattr(al, "has_default_http_handler", lambda: True)
-    monkeypatch.setattr(al, "open_url_via_default_handler", lambda url: False)
+def test_open_dashboard_url_shows_message_when_edge_missing(monkeypatch):
     monkeypatch.setattr(al, "edge_browser_candidates", lambda: [])
     shown: list[bool] = []
     monkeypatch.setattr(al, "show_dashboard_open_hint", lambda: shown.append(True))
@@ -189,87 +167,25 @@ def test_open_dashboard_url_shows_message_when_default_and_edge_fail(monkeypatch
     assert shown == [True]
 
 
-def test_open_dashboard_url_uses_default_when_available(monkeypatch):
-    monkeypatch.setattr(al, "has_default_http_handler", lambda: True)
-    monkeypatch.setattr(al, "open_url_via_default_handler", lambda url: True)
-    called = {"edge": False, "msg": False}
+def test_open_dashboard_url_shows_message_when_edge_paths_missing_files(
+    tmp_path, monkeypatch
+):
+    missing = tmp_path / "does-not-exist" / "msedge.exe"
+    monkeypatch.setattr(al, "edge_browser_candidates", lambda: [missing])
+    shown: list[bool] = []
+    monkeypatch.setattr(al, "show_dashboard_open_hint", lambda: shown.append(True))
+    assert al.open_dashboard_url("http://localhost:8001/") == "message"
+    assert shown == [True]
+
+
+def test_open_url_via_edge_skips_missing_then_uses_next(tmp_path, monkeypatch):
+    missing = tmp_path / "missing" / "msedge.exe"
+    edge = tmp_path / "msedge.exe"
+    edge.write_bytes(b"")
+    monkeypatch.setattr(al, "edge_browser_candidates", lambda: [missing, edge])
+    launches: list[list[str]] = []
     monkeypatch.setattr(
-        al, "open_url_via_edge", lambda url: called.__setitem__("edge", True) or True
+        al.subprocess, "Popen", lambda args, **kwargs: launches.append(list(args))
     )
-    monkeypatch.setattr(
-        al, "show_dashboard_open_hint", lambda: called.__setitem__("msg", True)
-    )
-    assert al.open_dashboard_url("http://localhost:8001/") == "default"
-    assert called == {"edge": False, "msg": False}
-
-
-def test_open_url_via_default_handler_oserror_is_failure(monkeypatch):
-    def boom(url):
-        raise OSError(1155, "No application is associated")
-
-    monkeypatch.setattr(al.sys, "platform", "win32")
-    monkeypatch.setattr(al.os, "startfile", boom, raising=False)
-    assert al.open_url_via_default_handler("http://localhost:8001/") is False
-
-
-def test_has_default_http_handler_non_windows(monkeypatch):
-    monkeypatch.setattr(al.sys, "platform", "linux")
-    assert al.has_default_http_handler() is True
-
-
-def test_has_default_http_handler_missing_userchoice(monkeypatch):
-    class FakeWinreg:
-        HKEY_CURRENT_USER = object()
-
-        def OpenKey(self, *_args, **_kwargs):
-            raise OSError(2, "The system cannot find the file specified")
-
-    monkeypatch.setattr(al.sys, "platform", "win32")
-    monkeypatch.setitem(sys.modules, "winreg", FakeWinreg())
-    assert al.has_default_http_handler() is False
-
-
-def test_has_default_http_handler_empty_progid(monkeypatch):
-    class FakeKey:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return False
-
-    class FakeWinreg:
-        HKEY_CURRENT_USER = object()
-
-        def OpenKey(self, *_args, **_kwargs):
-            return FakeKey()
-
-        def QueryValueEx(self, _key, name):
-            assert name == "ProgId"
-            return ("", 1)
-
-    monkeypatch.setattr(al.sys, "platform", "win32")
-    monkeypatch.setitem(sys.modules, "winreg", FakeWinreg())
-    assert al.has_default_http_handler() is False
-
-
-def test_has_default_http_handler_with_progid(monkeypatch):
-    class FakeKey:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return False
-
-    class FakeWinreg:
-        HKEY_CURRENT_USER = object()
-
-        def OpenKey(self, *_args, **_kwargs):
-            return FakeKey()
-
-        def QueryValueEx(self, _key, name):
-            assert name == "ProgId"
-            return ("MSEdgeHTM", 1)
-
-    monkeypatch.setattr(al.sys, "platform", "win32")
-    monkeypatch.setitem(sys.modules, "winreg", FakeWinreg())
-    assert al.has_default_http_handler() is True
+    assert al.open_url_via_edge("http://localhost:8001/") is True
+    assert launches == [[str(edge), "http://localhost:8001/"]]

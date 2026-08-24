@@ -25,7 +25,6 @@ import subprocess
 import sys
 import threading
 import time
-import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
@@ -53,48 +52,8 @@ def edge_browser_candidates() -> list[Path]:
     return out
 
 
-_HTTP_USERCHOICE_SUBKEY = (
-    r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice"
-)
-
-
-def has_default_http_handler() -> bool:
-    """Return True if a default http:// handler appears registered.
-
-    On Windows, ``os.startfile(url)`` / ``Start-Process`` do **not** raise when
-    no browser is associated — the shell shows an async unbranded dialog. So we
-    must pre-check HKCU ``…\\http\\UserChoice`` ``ProgId`` before attempting
-    the default open. Non-Windows: treat as available (webbrowser path).
-    """
-    if sys.platform != "win32":
-        return True
-    try:
-        import winreg
-
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _HTTP_USERCHOICE_SUBKEY) as key:
-            prog_id, _ = winreg.QueryValueEx(key, "ProgId")
-        return bool(str(prog_id or "").strip())
-    except OSError:
-        return False
-
-
-def open_url_via_default_handler(url: str) -> bool:
-    """Try the OS default http handler (os.startfile / webbrowser).
-
-    Callers on Windows should gate with ``has_default_http_handler()`` first.
-    """
-    try:
-        if sys.platform == "win32":
-            os.startfile(url)  # type: ignore[attr-defined]
-            return True
-        return bool(webbrowser.open(url))
-    except OSError as e:
-        log.warning("Default URL handler failed for %s: %s", url, e)
-        return False
-
-
 def open_url_via_edge(url: str) -> bool:
-    """Launch Microsoft Edge by known install path when the default handler fails."""
+    """Launch Microsoft Edge by known install path with the URL as an argument."""
     for exe in edge_browser_candidates():
         if not exe.is_file():
             continue
@@ -124,16 +83,14 @@ def show_dashboard_open_hint() -> None:
 
 
 def open_dashboard_url(url: str = BACKEND_URL) -> str:
-    """Open the dashboard URL with fallbacks.
+    """Open the dashboard URL with a simple, reliable chain.
 
-    Order: default http handler (only if UserChoice ProgId exists) → Edge →
-    native hint message.
-    Returns which path was used: ``default``, ``edge``, or ``message``.
+    Order: launch ``msedge.exe`` with the URL argument → native hint message.
+    The OS default http handler is intentionally unused: Start-Process /
+    os.startfile on a bare URL is unreliable on fresh Windows (async unbranded
+    dialog even when Edge is registered as ProgId).
+    Returns which path was used: ``edge`` or ``message``.
     """
-    # Pre-check: never call startfile when no http handler is registered —
-    # that path cannot be caught via try/except on real Windows.
-    if has_default_http_handler() and open_url_via_default_handler(url):
-        return "default"
     if open_url_via_edge(url):
         return "edge"
     show_dashboard_open_hint()
@@ -405,8 +362,8 @@ class Launcher:
     def open_dashboard(self, *, force: bool = False) -> bool:
         """Open the dashboard once per launcher session (unless force=True).
 
-        Uses default http handler (only if registered), then Edge, then a
-        native hint message.
+        Uses Microsoft Edge (msedge.exe + URL argument), then a native hint
+        message if Edge is not installed at a known path.
         Returns True if an open attempt was made this call.
         """
         with self._browser_lock:
