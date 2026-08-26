@@ -99,7 +99,7 @@ echo Installing service: AtlasBackend
 "%NSSM%" set AtlasBackend DisplayName       "Atlas Backend"
 "%NSSM%" set AtlasBackend Description        "Atlas API + dashboard server."
 "%NSSM%" set AtlasBackend Start             SERVICE_AUTO_START
-"%NSSM%" set AtlasBackend AppEnvironmentExtra "ATLAS_STORE=sqlite" "ATLAS_SQLITE_PATH=%DATA_DIR%\atlas.db" "SERVE_FRONTEND=true" "FRONTEND_BUILD=%FRONTEND_BUILD%"
+"%NSSM%" set AtlasBackend AppEnvironmentExtra "ATLAS_STORE=sqlite" "ATLAS_SQLITE_PATH=%DATA_DIR%\atlas.db" "ATLAS_AUTO_SNAPSHOT_INTERVAL_SEC=1800" "ATLAS_REPORT_RETENTION_DAYS=90" "SERVE_FRONTEND=true" "FRONTEND_BUILD=%FRONTEND_BUILD%"
 
 echo.
 echo ============================================================

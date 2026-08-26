@@ -254,6 +254,8 @@ def write_backend_env(paths: dict, cfg: dict) -> Path:
         f"MT5_BRIDGE_TOKEN={cfg['bridge_token']}",
         "ATLAS_STORE=sqlite",
         f"ATLAS_SQLITE_PATH={paths['data'] / 'atlas.db'}",
+        "ATLAS_AUTO_SNAPSHOT_INTERVAL_SEC=1800",
+        "ATLAS_REPORT_RETENTION_DAYS=90",
         "SERVE_FRONTEND=true",
         f"FRONTEND_BUILD={frontend_build_dir(paths['root'])}",
         "CORS_ORIGINS=*",
