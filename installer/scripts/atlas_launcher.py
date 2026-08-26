@@ -271,6 +271,8 @@ class Launcher:
         backend_env = base_env.copy()
         backend_env["ATLAS_STORE"] = "sqlite"
         backend_env["ATLAS_SQLITE_PATH"] = str(self.paths.data / "atlas.db")
+        backend_env.setdefault("ATLAS_AUTO_SNAPSHOT_INTERVAL_SEC", "1800")
+        backend_env.setdefault("ATLAS_REPORT_RETENTION_DAYS", "90")
         backend_env["SERVE_FRONTEND"] = "true"
         backend_env["FRONTEND_BUILD"] = str(self.paths.frontend_build)
 

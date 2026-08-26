@@ -309,6 +309,8 @@ class WizardApp(tk.Tk):
                 f"MT5_BRIDGE_TOKEN={self.bridge_token.get()}\n"
                 f"ATLAS_STORE=sqlite\n"
                 f"ATLAS_SQLITE_PATH={DATA_DIR / 'atlas.db'}\n"
+                f"ATLAS_AUTO_SNAPSHOT_INTERVAL_SEC=1800\n"
+                f"ATLAS_REPORT_RETENTION_DAYS=90\n"
                 f"SERVE_FRONTEND=true\n"
                 f"FRONTEND_BUILD={ATLAS_DIR / 'frontend_build'}\n"
                 f"CORS_ORIGINS=*\n"

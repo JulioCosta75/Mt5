@@ -72,13 +72,21 @@ BUILD_INFO = _load_build_info()
 ATLAS_STORE = os.environ.get("ATLAS_STORE", "mongo").lower()
 
 # Phase 2 — automatic supervision snapshot scheduler.
-# When > 0, a background task persists a supervision report (source="auto")
-# every N seconds. Default 0 (disabled) so the preview DB stays clean; the
-# capability is always available on-demand via POST /api/supervision/auto-snapshot.
+# When > 0, a background task persists a per-account supervision report
+# (source="auto") every N seconds. Preview default stays 0 (disabled) so
+# the preview DB stays clean; Windows installer sets 1800 (30 minutes).
+# On-demand capture remains available via POST /api/supervision/auto-snapshot.
 try:
     AUTO_SNAPSHOT_INTERVAL_SEC = int(os.environ.get("ATLAS_AUTO_SNAPSHOT_INTERVAL_SEC", "0"))
 except ValueError:
     AUTO_SNAPSHOT_INTERVAL_SEC = 0
+
+# How long to keep persisted Sr. Atlas reports (days). Purge runs in the
+# background and never blocks backend startup.
+try:
+    REPORT_RETENTION_DAYS = int(os.environ.get("ATLAS_REPORT_RETENTION_DAYS", "90"))
+except ValueError:
+    REPORT_RETENTION_DAYS = 90
 
 mongo_db = None
 if ATLAS_STORE == "mongo":
@@ -92,10 +100,19 @@ api_router = APIRouter(prefix="/api")
 
 # ------------------------------------------------------------
 # Phase 2 — Sr. Atlas supervision report store.
-# Uses Mongo when available (preview/Linux), in-memory otherwise.
+# Mongo (preview), SQLite (Windows installer — same atlas.db as MT5 cache),
+# or in-memory fallback. Every report is scoped to one account_id.
 # ------------------------------------------------------------
 from atlas_store import AtlasReportStore
-_atlas_store = AtlasReportStore(mongo_db)
+from atlas_reports import account_report_status, build_account_report
+
+_sqlite_path = os.environ.get("ATLAS_SQLITE_PATH", str(ROOT_DIR / "data" / "atlas.db"))
+if ATLAS_STORE == "sqlite":
+    _atlas_store = AtlasReportStore(sqlite_path=_sqlite_path)
+elif mongo_db is not None:
+    _atlas_store = AtlasReportStore(mongo_db)
+else:
+    _atlas_store = AtlasReportStore()
 
 # ------------------------------------------------------------
 # Operating mode: if any MT5_BRIDGE_URL is configured we serve
@@ -280,6 +297,7 @@ class AtlasReportIn(BaseModel):
     message: Optional[str] = None
     source: str = "manual"
     metrics: Optional[dict] = None
+    account_id: Optional[str] = None  # when set, only that account is snapshotted
 
 
 # ------------------------------------------------------------
@@ -798,64 +816,136 @@ async def supervision_snapshot():
     return await _live_supervision_snapshot()
 
 
-@app.post("/api/atlas/report")
-async def create_atlas_report(payload: AtlasReportIn):
-    snap = await _live_supervision_snapshot()
-    report = {
-        "supervisor": payload.supervisor,
-        "ecosystem": payload.ecosystem,
-        "status": (payload.status or snap["status"]).upper(),
-        "backend_ok": payload.backend_ok if payload.backend_ok is not None else snap["services"]["backend_ok"],
-        "bridge_ok": payload.bridge_ok if payload.bridge_ok is not None else snap["services"]["bridge_ok"],
-        "dashboard_ok": payload.dashboard_ok if payload.dashboard_ok is not None else snap["services"]["dashboard_ok"],
-        "message": payload.message or snap["message"],
-        "source": payload.source,
-        "metrics": payload.metrics or {
-            "total_equity": snap["kpis"]["total_equity"],
-            "daily_pnl": snap["kpis"]["daily_pnl"],
-            "accounts_live": snap["accounts"]["live"],
-            "active_alerts": snap["alerts"]["active"],
-            "critical_alerts": snap["alerts"]["critical"],
-            "avg_drawdown": snap["risk"]["avg_drawdown"],
-        },
-    }
-    stored = await _atlas_store.add(report)
+def _account_report_status(acc: dict, *, bridge_ok: bool | None) -> str:
+    return account_report_status(acc, bridge_ok=bridge_ok)
+
+
+def _build_account_report(
+    acc: dict,
+    *,
+    source: str,
+    bridge_ok: bool | None,
+    supervisor: str = "Sr. Atlas",
+    ecosystem: str = "Forge Factory Lab",
+    message_override: str | None = None,
+    status_override: str | None = None,
+    backend_ok: bool | None = None,
+    dashboard_ok: bool | None = None,
+) -> dict:
+    return build_account_report(
+        acc,
+        source=source,
+        bridge_ok=bridge_ok,
+        supervisor=supervisor,
+        ecosystem=ecosystem,
+        message_override=message_override,
+        status_override=status_override,
+        backend_ok=backend_ok,
+        dashboard_ok=dashboard_ok,
+    )
+
+
+async def _accounts_for_reports() -> tuple[list[dict], bool | None]:
+    """Accounts to snapshot + bridge_ok flag (None in mock mode)."""
+    if not MT5_MODE:
+        return [_account_public(a) for a in ACCOUNTS], None
+    accounts, bridge_ok = await _mt5_live_accounts()
+    return accounts, bridge_ok
+
+
+async def _capture_snapshot_reports(
+    source: str = "auto",
+    *,
+    account_id: str | None = None,
+    message_override: str | None = None,
+    status_override: str | None = None,
+    backend_ok: bool | None = None,
+    dashboard_ok: bool | None = None,
+) -> list[dict]:
+    """Persist one report per configured/reachable account (never a sum)."""
+    accounts, bridge_ok = await _accounts_for_reports()
+    if account_id:
+        accounts = [a for a in accounts if a.get("id") == account_id]
+        if not accounts:
+            raise HTTPException(status_code=404, detail=f"Account not found: {account_id}")
+    stored: list[dict] = []
+    for acc in accounts:
+        report = _build_account_report(
+            acc,
+            source=source,
+            bridge_ok=bridge_ok,
+            message_override=message_override,
+            status_override=status_override,
+            backend_ok=backend_ok,
+            dashboard_ok=dashboard_ok,
+        )
+        stored.append(await _atlas_store.add(report))
     return stored
 
 
+@app.post("/api/atlas/report")
+async def create_atlas_report(payload: AtlasReportIn):
+    """Generate and persist one report per account (or a single account_id)."""
+    accounts, bridge_ok = await _accounts_for_reports()
+    if payload.bridge_ok is not None:
+        bridge_ok = payload.bridge_ok
+    if payload.account_id:
+        accounts = [a for a in accounts if a.get("id") == payload.account_id]
+        if not accounts:
+            raise HTTPException(
+                status_code=404, detail=f"Account not found: {payload.account_id}"
+            )
+    stored: list[dict] = []
+    for acc in accounts:
+        report = _build_account_report(
+            acc,
+            source=payload.source or "manual",
+            bridge_ok=bridge_ok,
+            supervisor=payload.supervisor,
+            ecosystem=payload.ecosystem,
+            message_override=payload.message,
+            status_override=payload.status,
+            backend_ok=payload.backend_ok,
+            dashboard_ok=payload.dashboard_ok,
+        )
+        if payload.metrics is not None and payload.account_id:
+            # Caller-supplied metrics only apply when targeting one account.
+            report["metrics"] = payload.metrics
+        stored.append(await _atlas_store.add(report))
+    return {"count": len(stored), "reports": stored}
+
+
 @app.get("/api/atlas/reports")
-async def list_atlas_reports(limit: int = 50, status: Optional[str] = None):
-    reports = await _atlas_store.list(limit=limit, status=status)
-    total = await _atlas_store.count()
+async def list_atlas_reports(
+    limit: int = 50,
+    status: Optional[str] = None,
+    account_id: Optional[str] = None,
+):
+    reports = await _atlas_store.list(
+        limit=limit, status=status, account_id=account_id
+    )
+    total = await _atlas_store.count(status=status, account_id=account_id)
     return {"count": len(reports), "total": total, "reports": reports}
 
 
 # ------------------------------------------------------------
-# Phase 2 — automatic supervision snapshot support.
-# Captures the live snapshot and persists it as a report. Reused by the
-# background scheduler and the on-demand endpoint below.
+# Phase 2 — automatic per-account supervision snapshot support.
 # ------------------------------------------------------------
 async def _capture_snapshot_report(source: str = "auto") -> dict:
-    snap = await _live_supervision_snapshot()
-    report = {
-        "supervisor": snap["supervisor"],
-        "ecosystem": snap["ecosystem"],
-        "status": snap["status"],
-        "backend_ok": snap["services"]["backend_ok"],
-        "bridge_ok": snap["services"]["bridge_ok"],
-        "dashboard_ok": snap["services"]["dashboard_ok"],
-        "message": snap["message"],
-        "source": source,
-        "metrics": {
-            "total_equity": snap["kpis"]["total_equity"],
-            "daily_pnl": snap["kpis"]["daily_pnl"],
-            "accounts_live": snap["accounts"]["live"],
-            "active_alerts": snap["alerts"]["active"],
-            "critical_alerts": snap["alerts"]["critical"],
-            "avg_drawdown": snap["risk"]["avg_drawdown"],
-        },
-    }
-    return await _atlas_store.add(report)
+    """Backward-compatible wrapper: returns first report + full list meta."""
+    reports = await _capture_snapshot_reports(source=source)
+    if not reports:
+        return {
+            "count": 0,
+            "reports": [],
+            "source": source,
+            "message": "No accounts available to snapshot.",
+        }
+    # Keep previous single-object shape fields for older clients, plus list.
+    first = dict(reports[0])
+    first["count"] = len(reports)
+    first["reports"] = reports
+    return first
 
 
 @app.get("/api/supervision/config")
@@ -863,6 +953,7 @@ async def supervision_config():
     return {
         "auto_snapshot_enabled": AUTO_SNAPSHOT_INTERVAL_SEC > 0,
         "interval_sec": AUTO_SNAPSHOT_INTERVAL_SEC,
+        "retention_days": REPORT_RETENTION_DAYS,
         "store_backend": _atlas_store.backend,
         "mode": "mt5" if MT5_MODE else "mock",
     }
@@ -870,18 +961,59 @@ async def supervision_config():
 
 @app.post("/api/supervision/auto-snapshot")
 async def trigger_auto_snapshot():
-    """On-demand automatic snapshot capture (source='auto')."""
+    """On-demand automatic snapshot capture (source='auto'), one report per account."""
     return await _capture_snapshot_report(source="auto")
+
+
+async def _purge_old_reports_loop():
+    """Background retention purge — never blocks startup."""
+    log = logging.getLogger("server")
+    # Small delay so uvicorn finishes boot before first purge.
+    await asyncio.sleep(2)
+    try:
+        deleted = await _atlas_store.purge_older_than(REPORT_RETENTION_DAYS)
+        if deleted:
+            log.info(
+                "Purged %s atlas report(s) older than %s day(s)",
+                deleted,
+                REPORT_RETENTION_DAYS,
+            )
+    except Exception as e:  # noqa: BLE001
+        log.warning("Initial report retention purge failed: %s", e)
+
+    while True:
+        try:
+            # Re-check roughly once a day (also after each auto-snapshot interval
+            # when that is longer — but keep a sane upper bound).
+            await asyncio.sleep(max(3600, AUTO_SNAPSHOT_INTERVAL_SEC or 3600))
+            deleted = await _atlas_store.purge_older_than(REPORT_RETENTION_DAYS)
+            if deleted:
+                log.info(
+                    "Purged %s atlas report(s) older than %s day(s)",
+                    deleted,
+                    REPORT_RETENTION_DAYS,
+                )
+        except asyncio.CancelledError:
+            break
+        except Exception as e:  # noqa: BLE001
+            log.warning("Report retention purge failed: %s", e)
 
 
 async def _auto_snapshot_loop():
     logging.getLogger("server").info(
-        "Auto-snapshot scheduler ENABLED — every %ss", AUTO_SNAPSHOT_INTERVAL_SEC
+        "Auto-snapshot scheduler ENABLED — every %ss (per account)",
+        AUTO_SNAPSHOT_INTERVAL_SEC,
     )
     while True:
         try:
             await asyncio.sleep(AUTO_SNAPSHOT_INTERVAL_SEC)
-            await _capture_snapshot_report(source="auto")
+            await _capture_snapshot_reports(source="auto")
+            try:
+                await _atlas_store.purge_older_than(REPORT_RETENTION_DAYS)
+            except Exception as pe:  # noqa: BLE001
+                logging.getLogger("server").warning(
+                    "Post-snapshot retention purge failed: %s", pe
+                )
         except asyncio.CancelledError:  # graceful shutdown
             break
         except Exception as e:  # noqa: BLE001
@@ -890,15 +1022,17 @@ async def _auto_snapshot_loop():
 
 @app.on_event("startup")
 async def _start_auto_snapshot():
+    app.state.report_purge_task = asyncio.create_task(_purge_old_reports_loop())
     if AUTO_SNAPSHOT_INTERVAL_SEC > 0:
         app.state.auto_snapshot_task = asyncio.create_task(_auto_snapshot_loop())
 
 
 @app.on_event("shutdown")
 async def _stop_auto_snapshot():
-    task = getattr(app.state, "auto_snapshot_task", None)
-    if task:
-        task.cancel()
+    for name in ("auto_snapshot_task", "report_purge_task"):
+        task = getattr(app.state, name, None)
+        if task:
+            task.cancel()
 
 
 # ------------------------------------------------------------
