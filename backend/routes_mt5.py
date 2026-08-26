@@ -22,6 +22,7 @@ from mt5_adapter import (
     trades_from_deals,
 )
 from mt5_client import BridgeClient, clients
+from atlas_alerts import to_api_alert, to_api_alerts
 
 logger = logging.getLogger("mt5-routes")
 
@@ -44,8 +45,8 @@ class EaLabelPayload(BaseModel):
     label: Optional[str] = None  # empty/null clears the manual override
 
 
-def build_router(cache) -> APIRouter:
-    """Factory that wires the routes against the provided cache."""
+def build_router(cache, alert_store=None) -> APIRouter:
+    """Factory that wires the routes against the provided cache / alert store."""
     router = APIRouter(prefix="/api")
 
     async def _try_account(client: BridgeClient) -> dict | None:
@@ -355,14 +356,22 @@ def build_router(cache) -> APIRouter:
         open_positions = sum(a.get("open_positions", 0) for a in accs)
         live = sum(1 for a in accs if a.get("status") == "LIVE")
         avg_dd = round(sum(a.get("current_drawdown", 0) for a in accs) / max(len(accs), 1), 2) if accs else 0.0
+        open_alerts = await alert_store.list_open() if alert_store is not None else []
+        # KPI "active" matches unacknowledged (state == active), same as mock.
+        active_alerts = sum(1 for a in open_alerts if a.get("state") == "active")
+        critical_alerts = sum(
+            1
+            for a in open_alerts
+            if a.get("severity") == "CRITICAL" and a.get("state") == "active"
+        )
         return {
             "total_equity": round(total_equity, 2),
             "total_balance": round(total_balance, 2),
             "daily_pnl": round(daily_pnl, 2),
             "daily_pnl_pct": round(daily_pnl / total_equity * 100, 2) if total_equity else 0.0,
             "open_positions": open_positions,
-            "active_alerts": 0,           # Phase 2
-            "critical_alerts": 0,
+            "active_alerts": active_alerts,
+            "critical_alerts": critical_alerts,
             "accounts_total": len(accs),
             "accounts_live": live,
             "avg_drawdown": avg_dd,
@@ -375,14 +384,26 @@ def build_router(cache) -> APIRouter:
         severity: Optional[str] = None,
         unacknowledged_only: bool = False,
     ):
-        # Live path: no mock alert catalogue. Empty until Phase 2 alert engine.
-        # Query params kept for contract parity with the mock router.
-        del severity, unacknowledged_only
-        return {"count": 0, "alerts": []}
+        # Live path: fixed-rule engine store (never mock catalogue).
+        if alert_store is None:
+            return {"count": 0, "alerts": []}
+        items = await alert_store.list_open()
+        if severity:
+            sev = severity.upper()
+            items = [a for a in items if a.get("severity") == sev]
+        if unacknowledged_only:
+            items = [a for a in items if a.get("state") == "active"]
+        api_items = to_api_alerts(items)
+        return {"count": len(api_items), "alerts": api_items}
 
     @router.post("/alerts/{alert_id}/ack")
     async def ack_alert(alert_id: str, payload: AckAlertPayload):
-        raise HTTPException(status_code=404, detail=f"Alert not found: {alert_id}")
+        if alert_store is None:
+            raise HTTPException(status_code=404, detail=f"Alert not found: {alert_id}")
+        updated = await alert_store.acknowledge(alert_id, payload.acknowledged)
+        if updated is None:
+            raise HTTPException(status_code=404, detail=f"Alert not found: {alert_id}")
+        return to_api_alert(updated)
 
     @router.get("/bridge/health")
     async def bridge_health():
