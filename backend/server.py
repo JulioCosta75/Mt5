@@ -488,8 +488,12 @@ async def _mt5_live_accounts() -> tuple[list[dict], bool]:
             current_dd=current_dd,
             daily_pnl_anchor=anchor,
         )
+        # Keep raw positions for per-account report enrichment (Part 3).
+        # Leading underscore: not part of the public account API contract.
+        acc["_positions"] = positions
         if _cache is not None:
-            await _cache.put(f"account:{login}", acc)
+            await _cache.put(f"account:{login}", {k: v for k, v in acc.items() if not k.startswith("_")})
+            await _cache.put(f"positions:{login}", positions)
         out.append(acc)
 
     if not any_reachable and _cache is not None:
@@ -831,6 +835,10 @@ def _build_account_report(
     status_override: str | None = None,
     backend_ok: bool | None = None,
     dashboard_ok: bool | None = None,
+    positions: list | None = None,
+    deals: list | None = None,
+    previous_report: dict | None = None,
+    label_overrides: dict | None = None,
 ) -> dict:
     return build_account_report(
         acc,
@@ -842,15 +850,75 @@ def _build_account_report(
         status_override=status_override,
         backend_ok=backend_ok,
         dashboard_ok=dashboard_ok,
+        positions=positions,
+        deals=deals,
+        previous_report=previous_report,
+        label_overrides=label_overrides,
     )
 
 
 async def _accounts_for_reports() -> tuple[list[dict], bool | None]:
     """Accounts to snapshot + bridge_ok flag (None in mock mode)."""
     if not MT5_MODE:
-        return [_account_public(a) for a in ACCOUNTS], None
+        # Full mock accounts (incl. _trades) — builder only emits safe fields.
+        return list(ACCOUNTS), None
     accounts, bridge_ok = await _mt5_live_accounts()
     return accounts, bridge_ok
+
+
+async def _deals_and_labels_for_account(acc: dict) -> tuple[list[dict], dict[int, str]]:
+    """Fetch deals + EA label overrides for one account (live or cache)."""
+    import httpx
+    from mt5_client import clients
+
+    login = int(acc.get("login") or 0)
+    labels: dict[int, str] = {}
+    if _cache is not None:
+        try:
+            labels = await _cache.get_ea_labels(login)
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger("server").warning("ea labels load failed: %s", e)
+
+    if not MT5_MODE:
+        return [], labels
+
+    for client in clients():
+        try:
+            bridge_acc = await client.account()
+        except (httpx.HTTPError, httpx.HTTPStatusError):
+            continue
+        if not bridge_acc or int(bridge_acc.get("login") or 0) != login:
+            continue
+        try:
+            deals = await client.deals(days=90)
+            if _cache is not None:
+                await _cache.put(f"deals:{login}", deals)
+            return list(deals or []), labels
+        except httpx.HTTPError as e:
+            logging.getLogger("server").warning(
+                "deals fetch failed for login %s: %s", login, e
+            )
+            break
+
+    if _cache is not None:
+        cached = await _cache.get(f"deals:{login}")
+        if cached and cached.get("payload") is not None:
+            return list(cached["payload"]), labels
+    return [], labels
+
+
+async def _positions_for_account(acc: dict) -> list[dict]:
+    """Prefer positions attached during live fetch; else cache; else empty."""
+    attached = acc.get("_positions")
+    if isinstance(attached, list):
+        return attached
+    if not MT5_MODE or _cache is None:
+        return []
+    login = int(acc.get("login") or 0)
+    cached = await _cache.get(f"positions:{login}")
+    if cached and cached.get("payload") is not None:
+        return list(cached["payload"])
+    return []
 
 
 async def _capture_snapshot_reports(
@@ -861,24 +929,41 @@ async def _capture_snapshot_reports(
     status_override: str | None = None,
     backend_ok: bool | None = None,
     dashboard_ok: bool | None = None,
+    bridge_ok_override: bool | None = None,
+    supervisor: str = "Sr. Atlas",
+    ecosystem: str = "Forge Factory Lab",
+    metrics_override: dict | None = None,
 ) -> list[dict]:
-    """Persist one report per configured/reachable account (never a sum)."""
+    """Persist one enriched report per configured/reachable account."""
     accounts, bridge_ok = await _accounts_for_reports()
+    if bridge_ok_override is not None:
+        bridge_ok = bridge_ok_override
     if account_id:
         accounts = [a for a in accounts if a.get("id") == account_id]
         if not accounts:
             raise HTTPException(status_code=404, detail=f"Account not found: {account_id}")
     stored: list[dict] = []
     for acc in accounts:
+        previous = await _atlas_store.latest_for_account(acc["id"])
+        positions = await _positions_for_account(acc)
+        deals, labels = await _deals_and_labels_for_account(acc)
         report = _build_account_report(
             acc,
             source=source,
             bridge_ok=bridge_ok,
+            supervisor=supervisor,
+            ecosystem=ecosystem,
             message_override=message_override,
             status_override=status_override,
             backend_ok=backend_ok,
             dashboard_ok=dashboard_ok,
+            positions=positions if (positions or MT5_MODE) else None,
+            deals=deals if MT5_MODE else None,
+            previous_report=previous,
+            label_overrides=labels,
         )
+        if metrics_override is not None and account_id:
+            report["metrics"] = metrics_override
         stored.append(await _atlas_store.add(report))
     return stored
 
@@ -886,33 +971,19 @@ async def _capture_snapshot_reports(
 @app.post("/api/atlas/report")
 async def create_atlas_report(payload: AtlasReportIn):
     """Generate and persist one report per account (or a single account_id)."""
-    accounts, bridge_ok = await _accounts_for_reports()
-    if payload.bridge_ok is not None:
-        bridge_ok = payload.bridge_ok
-    if payload.account_id:
-        accounts = [a for a in accounts if a.get("id") == payload.account_id]
-        if not accounts:
-            raise HTTPException(
-                status_code=404, detail=f"Account not found: {payload.account_id}"
-            )
-    stored: list[dict] = []
-    for acc in accounts:
-        report = _build_account_report(
-            acc,
-            source=payload.source or "manual",
-            bridge_ok=bridge_ok,
-            supervisor=payload.supervisor,
-            ecosystem=payload.ecosystem,
-            message_override=payload.message,
-            status_override=payload.status,
-            backend_ok=payload.backend_ok,
-            dashboard_ok=payload.dashboard_ok,
-        )
-        if payload.metrics is not None and payload.account_id:
-            # Caller-supplied metrics only apply when targeting one account.
-            report["metrics"] = payload.metrics
-        stored.append(await _atlas_store.add(report))
-    return {"count": len(stored), "reports": stored}
+    reports = await _capture_snapshot_reports(
+        source=payload.source or "manual",
+        account_id=payload.account_id,
+        message_override=payload.message,
+        status_override=payload.status,
+        backend_ok=payload.backend_ok,
+        dashboard_ok=payload.dashboard_ok,
+        bridge_ok_override=payload.bridge_ok,
+        supervisor=payload.supervisor,
+        ecosystem=payload.ecosystem,
+        metrics_override=payload.metrics,
+    )
+    return {"count": len(reports), "reports": reports}
 
 
 @app.get("/api/atlas/reports")
