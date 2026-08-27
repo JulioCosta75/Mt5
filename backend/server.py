@@ -104,7 +104,11 @@ api_router = APIRouter(prefix="/api")
 # or in-memory fallback. Every report is scoped to one account_id.
 # ------------------------------------------------------------
 from atlas_store import AtlasAlertStore, AtlasReportStore
-from atlas_alerts import evaluate_and_persist_account_alerts, to_api_alerts
+from atlas_alerts import (
+    evaluate_and_persist_account_alerts,
+    load_alerts_since_previous,
+    to_api_alerts,
+)
 from atlas_reports import account_report_status, build_account_report
 
 _sqlite_path = os.environ.get("ATLAS_SQLITE_PATH", str(ROOT_DIR / "data" / "atlas.db"))
@@ -827,8 +831,15 @@ async def supervision_snapshot():
     return await _live_supervision_snapshot()
 
 
-def _account_report_status(acc: dict, *, bridge_ok: bool | None) -> str:
-    return account_report_status(acc, bridge_ok=bridge_ok)
+def _account_report_status(
+    acc: dict,
+    *,
+    bridge_ok: bool | None,
+    open_positions: list | None = None,
+) -> str:
+    return account_report_status(
+        acc, bridge_ok=bridge_ok, open_positions=open_positions
+    )
 
 
 def _build_account_report(
@@ -846,6 +857,7 @@ def _build_account_report(
     deals: list | None = None,
     previous_report: dict | None = None,
     label_overrides: dict | None = None,
+    alerts_since_previous: list | None = None,
 ) -> dict:
     return build_account_report(
         acc,
@@ -861,6 +873,7 @@ def _build_account_report(
         deals=deals,
         previous_report=previous_report,
         label_overrides=label_overrides,
+        alerts_since_previous=alerts_since_previous,
     )
 
 
@@ -954,6 +967,23 @@ async def _capture_snapshot_reports(
         previous = await _atlas_store.latest_for_account(acc["id"])
         positions = await _positions_for_account(acc)
         deals, labels = await _deals_and_labels_for_account(acc)
+        pos_for_rules = positions if (positions or MT5_MODE) else None
+        # Reconcile alerts *before* building the report so creates/resolves in
+        # this snapshot appear in alerts_since_previous (same cadence).
+        await evaluate_and_persist_account_alerts(
+            _atlas_alert_store,
+            acc,
+            bridge_ok=bridge_ok,
+            open_positions=pos_for_rules,
+        )
+        since = (previous or {}).get("created_at") if previous else None
+        if previous and previous.get("account_id") not in (None, acc.get("id")):
+            since = None
+        alert_events = await load_alerts_since_previous(
+            _atlas_alert_store,
+            account_id=str(acc["id"]),
+            since_iso=since,
+        )
         report = _build_account_report(
             acc,
             source=source,
@@ -964,22 +994,15 @@ async def _capture_snapshot_reports(
             status_override=status_override,
             backend_ok=backend_ok,
             dashboard_ok=dashboard_ok,
-            positions=positions if (positions or MT5_MODE) else None,
+            positions=pos_for_rules,
             deals=deals if MT5_MODE else None,
             previous_report=previous,
             label_overrides=labels,
+            alerts_since_previous=alert_events,
         )
         if metrics_override is not None and account_id:
             report["metrics"] = metrics_override
         stored.append(await _atlas_store.add(report))
-        # Fixed-rule alert engine — same cadence as snapshots; never recreates
-        # an open (account_id, rule_key) while still active/acknowledged.
-        await evaluate_and_persist_account_alerts(
-            _atlas_alert_store,
-            acc,
-            bridge_ok=bridge_ok,
-            open_positions=positions if (positions or MT5_MODE) else None,
-        )
     return stored
 
 

@@ -190,6 +190,7 @@ class TestBuildEnrichedReport:
         assert report["open_positions"][0]["symbol"] == "XAUUSD"
         assert len(report["closed_trades_since_previous"]) == 1
         assert report["closed_trades_since_previous"][0]["pnl"] == 25.0
+        assert report["alerts_since_previous"] == []
         assert "limits_status" in report
         assert report["comparison_to_previous"]["equity"]["delta"] == 500.0
         assert "conclusion" in report and report["conclusion"]
