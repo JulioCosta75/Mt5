@@ -13,6 +13,7 @@ acknowledged.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -168,6 +169,78 @@ def to_api_alert(doc: dict) -> dict[str, Any]:
 
 def to_api_alerts(docs: list[dict]) -> list[dict[str, Any]]:
     return [to_api_alert(d) for d in docs]
+
+
+def _parse_iso(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        text = str(value).replace("Z", "+00:00")
+        dt = datetime.fromisoformat(text)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def alerts_events_since(
+    alerts: list[dict],
+    *,
+    since_iso: str | None,
+    account_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Factual alert events after ``since_iso`` — same window as closed trades.
+
+    Emits one row per timestamp (created / acknowledged / resolved) that falls
+    strictly after the previous report. ``state`` is the state *at that event*
+    (active on create, acknowledged, resolved). Empty when there is no prior
+    report (``since_iso`` is None) — never invents data.
+    """
+    if not since_iso:
+        return []
+    since = _parse_iso(since_iso)
+    if since is None:
+        return []
+
+    events: list[dict[str, Any]] = []
+    for alert in alerts or []:
+        if account_id and alert.get("account_id") not in (None, account_id):
+            continue
+        base = {
+            "rule_key": alert.get("rule_key"),
+            "severity": alert.get("severity"),
+            "message": alert.get("message"),
+        }
+        for field, state_at_event in (
+            ("created_at", "active"),
+            ("acknowledged_at", "acknowledged"),
+            ("resolved_at", "resolved"),
+        ):
+            ts = _parse_iso(alert.get(field))
+            if ts is None or ts <= since:
+                continue
+            events.append({
+                **base,
+                "state": state_at_event,
+                "event_at": alert.get(field),
+            })
+
+    events.sort(key=lambda e: str(e.get("event_at") or ""))
+    return events
+
+
+async def load_alerts_since_previous(
+    store: Any,
+    *,
+    account_id: str,
+    since_iso: str | None,
+) -> list[dict[str, Any]]:
+    """Load account alerts via the existing store ``list`` API, then window them."""
+    if not since_iso or not account_id:
+        return []
+    rows = await store.list(account_id=account_id, limit=500)
+    return alerts_events_since(rows, since_iso=since_iso, account_id=account_id)
 
 
 async def evaluate_and_persist_account_alerts(

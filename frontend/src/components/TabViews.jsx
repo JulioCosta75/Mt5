@@ -319,6 +319,7 @@ function ReportExpanded({ report }) {
   const comparison = report.comparison_to_previous;
   const openPos = report.open_positions || [];
   const closed = report.closed_trades_since_previous || [];
+  const alertEvents = report.alerts_since_previous || [];
   const metrics = report.metrics || {};
 
   return (
@@ -440,6 +441,24 @@ function ReportExpanded({ report }) {
             {closed.slice(0, 40).map((t, i) => (
               <div key={`${t.close_time || i}-${t.symbol}`}>
                 {t.symbol} {t.side} {t.lots} · PnL {t.pnl} · {fmt.timeShort(t.close_time)}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div style={{ color: "var(--text-tertiary)", fontSize: 10, marginBottom: 4 }}>
+          Alerts since previous ({alertEvents.length})
+        </div>
+        {alertEvents.length === 0 ? (
+          <div style={{ color: "var(--text-tertiary)", fontSize: 11 }}>None</div>
+        ) : (
+          <div className="mono" style={{ display: "grid", gap: 2, maxHeight: 120, overflow: "auto" }} data-testid="reports-alerts-since-previous">
+            {alertEvents.slice(0, 40).map((a, i) => (
+              <div key={`${a.event_at || i}-${a.rule_key}-${a.state}`}>
+                <span className={a.severity === "CRITICAL" ? "cell-neg" : "cell-warn"}>{a.severity}</span>
+                {" "}{a.state} · {a.rule_key} · {a.message} · {fmt.timeShort(a.event_at)}
               </div>
             ))}
           </div>

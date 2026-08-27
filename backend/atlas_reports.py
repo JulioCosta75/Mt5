@@ -254,6 +254,7 @@ def build_account_report(
     previous_report: dict | None = None,
     label_overrides: dict[int, str] | None = None,
     generated_at: str | None = None,
+    alerts_since_previous: list[dict] | None = None,
 ) -> dict[str, Any]:
     """Build one report document for a single account (no secrets)."""
     if acc.get("stale"):
@@ -288,6 +289,8 @@ def build_account_report(
         since = None
 
     closed_rows = closed_trades_since(all_trades, since_iso=since)
+    # Caller supplies windowed events (via alert store). No previous → empty.
+    alert_rows = list(alerts_since_previous or []) if since else []
     limits = limits_status(acc, open_positions=positions_for_limits)
     comparison = compare_with_previous(acc, previous_report, bridge_ok=bridge_ok)
 
@@ -353,6 +356,7 @@ def build_account_report(
         },
         "open_positions": open_rows,
         "closed_trades_since_previous": closed_rows,
+        "alerts_since_previous": alert_rows,
         "limits_status": limits,
         "comparison_to_previous": comparison,
         "eas": [
