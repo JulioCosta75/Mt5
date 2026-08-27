@@ -121,6 +121,7 @@ class TestSqliteAtlasReports:
         assert "mt5_cache" in tables
         assert "mt5_overrides" in tables
         assert "atlas_reports" in tables
+        assert "atlas_alerts" in tables
 
         # Cache row still readable.
         doc = _run(cache.get("account:42"))

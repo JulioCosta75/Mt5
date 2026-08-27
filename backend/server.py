@@ -103,16 +103,20 @@ api_router = APIRouter(prefix="/api")
 # Mongo (preview), SQLite (Windows installer — same atlas.db as MT5 cache),
 # or in-memory fallback. Every report is scoped to one account_id.
 # ------------------------------------------------------------
-from atlas_store import AtlasReportStore
+from atlas_store import AtlasAlertStore, AtlasReportStore
+from atlas_alerts import evaluate_and_persist_account_alerts, to_api_alerts
 from atlas_reports import account_report_status, build_account_report
 
 _sqlite_path = os.environ.get("ATLAS_SQLITE_PATH", str(ROOT_DIR / "data" / "atlas.db"))
 if ATLAS_STORE == "sqlite":
     _atlas_store = AtlasReportStore(sqlite_path=_sqlite_path)
+    _atlas_alert_store = AtlasAlertStore(sqlite_path=_sqlite_path)
 elif mongo_db is not None:
     _atlas_store = AtlasReportStore(mongo_db)
+    _atlas_alert_store = AtlasAlertStore(mongo_db)
 else:
     _atlas_store = AtlasReportStore()
+    _atlas_alert_store = AtlasAlertStore()
 
 # ------------------------------------------------------------
 # Operating mode: if any MT5_BRIDGE_URL is configured we serve
@@ -518,9 +522,12 @@ async def _live_supervision_snapshot() -> dict:
     if not MT5_MODE:
         return _supervision_snapshot()
     accounts, bridge_ok = await _mt5_live_accounts()
-    # Do not mix mock ALERTS into live MT5 supervision — that would be untruthful.
+    # Live alerts come from the fixed-rule engine store — never mock ALERTS.
+    open_alerts = await _atlas_alert_store.list_open()
     return _supervision_snapshot_from_accounts(
-        accounts, bridge_ok=bridge_ok, alerts=[]
+        accounts,
+        bridge_ok=bridge_ok,
+        alerts=to_api_alerts(open_alerts),
     )
 
 
@@ -677,7 +684,7 @@ if MT5_MODE:
     else:
         from mt5_cache import MT5Cache
         _cache = MT5Cache(mongo_db)
-    app.include_router(build_mt5_router(_cache))
+    app.include_router(build_mt5_router(_cache, alert_store=_atlas_alert_store))
     logging.getLogger("server").info("MT5 mode ENABLED — store=%s", ATLAS_STORE)
 else:
     app.include_router(api_router)
@@ -965,6 +972,14 @@ async def _capture_snapshot_reports(
         if metrics_override is not None and account_id:
             report["metrics"] = metrics_override
         stored.append(await _atlas_store.add(report))
+        # Fixed-rule alert engine — same cadence as snapshots; never recreates
+        # an open (account_id, rule_key) while still active/acknowledged.
+        await evaluate_and_persist_account_alerts(
+            _atlas_alert_store,
+            acc,
+            bridge_ok=bridge_ok,
+            open_positions=positions if (positions or MT5_MODE) else None,
+        )
     return stored
 
 
