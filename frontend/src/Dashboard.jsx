@@ -295,7 +295,10 @@ export default function Dashboard() {
 
           {/* RIGHT COLUMN */}
           <aside style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
-            <SupervisionPanel serverTime={kpis?.server_time} />
+            <SupervisionPanel
+              serverTime={kpis?.server_time}
+              onAfterGenerate={loadGlobals}
+            />
             <AlertsPanel alerts={alerts} onAck={onAckAlert} isSample={isSample} />
             <div className="panel" data-testid="system-panel">
               <div className="panel-header">
