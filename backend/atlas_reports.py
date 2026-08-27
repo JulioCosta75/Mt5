@@ -16,19 +16,29 @@ from typing import Any
 from mt5_adapter import eas_from_bridge, positions_passthrough, trades_from_deals
 
 
-def account_report_status(acc: dict, *, bridge_ok: bool | None) -> str:
-    """Per-account OK/WARNING/ALERT — never OK when bridge is down."""
+def account_report_status(
+    acc: dict,
+    *,
+    bridge_ok: bool | None,
+    open_positions: list[dict] | None = None,
+) -> str:
+    """Per-account OK/WARNING/ALERT — never OK when bridge is down.
+
+    Limit breaches reuse ``limits_status`` (drawdown, open positions, and
+    volume) so the top-level status cannot contradict the factual limits block.
+    """
     if acc.get("status") == "ERROR":
         status = "ALERT"
     elif acc.get("status") == "PAUSED":
         status = "WARNING"
     else:
-        limits = acc.get("risk_limits") or {}
-        max_dd = float(limits.get("max_daily_loss_pct", 5.0))
-        if abs(float(acc.get("current_drawdown", 0.0))) >= max_dd:
-            status = "WARNING"
-        else:
-            status = "OK"
+        limits = limits_status(acc, open_positions=open_positions)
+        any_breach = (
+            bool(limits.get("drawdown", {}).get("breached"))
+            or bool(limits.get("open_positions", {}).get("breached"))
+            or bool(limits.get("position_volume", {}).get("breached"))
+        )
+        status = "WARNING" if any_breach else "OK"
     if bridge_ok is False and status == "OK":
         status = "WARNING"
     if acc.get("stale") and status == "OK":
@@ -246,7 +256,6 @@ def build_account_report(
     generated_at: str | None = None,
 ) -> dict[str, Any]:
     """Build one report document for a single account (no secrets)."""
-    status = (status_override or account_report_status(acc, bridge_ok=bridge_ok)).upper()
     if acc.get("stale"):
         data_origin = "cache"
     elif bridge_ok:
@@ -259,6 +268,13 @@ def build_account_report(
     snapshot_at = generated_at or datetime.now(timezone.utc).isoformat()
 
     open_rows = summarize_open_positions(positions)
+    positions_for_limits = open_rows if positions is not None else None
+    status = (
+        status_override
+        or account_report_status(
+            acc, bridge_ok=bridge_ok, open_positions=positions_for_limits
+        )
+    ).upper()
     # Prefer live mapped trades from deals; fall back to pre-mapped trades on mock.
     if deals is not None:
         all_trades = trades_from_deals(deals, label_overrides=label_overrides)
@@ -272,7 +288,7 @@ def build_account_report(
         since = None
 
     closed_rows = closed_trades_since(all_trades, since_iso=since)
-    limits = limits_status(acc, open_positions=open_rows if positions is not None else None)
+    limits = limits_status(acc, open_positions=positions_for_limits)
     comparison = compare_with_previous(acc, previous_report, bridge_ok=bridge_ok)
 
     ea_rows: list[dict] = []

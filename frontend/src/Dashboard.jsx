@@ -203,7 +203,14 @@ export default function Dashboard() {
   const onRefresh = async () => {
     dispatch({ type: "REFRESHING", value: true });
     try {
-      await api.tick();
+      // /sim/tick exists only in mock mode. Never let a 404 abort the real
+      // feed refresh — otherwise Alerts/KPIs stay stale while relative times
+      // still update from the refreshing state re-render.
+      try {
+        await api.tick();
+      } catch (_) {
+        /* live MT5: ignore */
+      }
       await loadGlobals();
       const sid = selectedIdRef.current;
       if (sid) await loadAccountDetail(sid);
@@ -335,7 +342,12 @@ export default function Dashboard() {
               isSample={isSample}
             />
           )}
-          {activeTab === "Reports" && <ReportsView />}
+          {activeTab === "Reports" && (
+            <ReportsView
+              accounts={accounts}
+              onAfterGenerate={loadGlobals}
+            />
+          )}
           {activeTab === "Audit" && <AuditView alerts={alerts} onAck={onAckAlert} isSample={isSample} />}
         </main>
       )}

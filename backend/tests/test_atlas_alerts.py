@@ -239,6 +239,34 @@ class TestAlertStoreLifecycle:
         assert len(r5["created"]) == 1
         assert r5["created"][0]["id"] != alert_id
 
+    def test_limit_raise_resolves_on_same_evaluation(self, tmp_path: Path):
+        """Engine sees the same risk_limits as the report on one snapshot.
+
+        Documents that a one-cycle UI lag is not caused by stale overrides
+        inside evaluate_and_persist when the account dict already has the
+        updated limit (live path loads get_overrides before both report and
+        alerts on the same capture).
+        """
+        store = AtlasAlertStore(sqlite_path=tmp_path / "atlas.db")
+        positions = [{"ticket": i, "volume": 0.1} for i in range(5)]
+        breached = _acc(max_open_positions=5, open_positions=5)
+        _run(
+            evaluate_and_persist_account_alerts(
+                store, breached, bridge_ok=True, open_positions=positions
+            )
+        )
+        assert len(_run(store.list_open(account_id="MT5-100"))) == 1
+
+        # Same snapshot moment: limit raised to 20 with only 5 positions.
+        cleared = _acc(max_open_positions=20, open_positions=5)
+        result = _run(
+            evaluate_and_persist_account_alerts(
+                store, cleared, bridge_ok=True, open_positions=positions
+            )
+        )
+        assert len(result["resolved"]) == 1
+        assert _run(store.list_open(account_id="MT5-100")) == []
+
     def test_bridge_down_persists_critical_alert(self, tmp_path: Path):
         store = AtlasAlertStore(sqlite_path=tmp_path / "atlas.db")
         result = _run(

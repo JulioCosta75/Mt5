@@ -827,8 +827,15 @@ async def supervision_snapshot():
     return await _live_supervision_snapshot()
 
 
-def _account_report_status(acc: dict, *, bridge_ok: bool | None) -> str:
-    return account_report_status(acc, bridge_ok=bridge_ok)
+def _account_report_status(
+    acc: dict,
+    *,
+    bridge_ok: bool | None,
+    open_positions: list | None = None,
+) -> str:
+    return account_report_status(
+        acc, bridge_ok=bridge_ok, open_positions=open_positions
+    )
 
 
 def _build_account_report(
