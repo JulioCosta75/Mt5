@@ -25,7 +25,6 @@ import subprocess
 import sys
 import threading
 import time
-import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
@@ -36,8 +35,66 @@ HEALTH_URL = "http://127.0.0.1:8001/api/system/health"
 POLL_INTERVAL_S = 1.0
 STARTUP_GRACE_S = 8.0
 DASHBOARD_WAIT_S = 45.0
+DASHBOARD_OPEN_HINT = (
+    "Atlas is running. Open http://localhost:8001 in your browser to view the dashboard."
+)
 
 log = logging.getLogger("atlas-launcher")
+
+
+def edge_browser_candidates() -> list[Path]:
+    """Known Edge install paths (x86 first, then Program Files)."""
+    out: list[Path] = []
+    for key in ("ProgramFiles(x86)", "ProgramFiles"):
+        base = os.environ.get(key)
+        if base:
+            out.append(Path(base) / "Microsoft" / "Edge" / "Application" / "msedge.exe")
+    return out
+
+
+def open_url_via_edge(url: str) -> bool:
+    """Launch Microsoft Edge by known install path with the URL as an argument."""
+    for exe in edge_browser_candidates():
+        if not exe.is_file():
+            continue
+        try:
+            subprocess.Popen([str(exe), url], close_fds=sys.platform != "win32")
+            log.info("Opened dashboard via Edge at %s", exe)
+            return True
+        except OSError as e:
+            log.warning("Edge launch failed (%s): %s", exe, e)
+    return False
+
+
+def show_dashboard_open_hint() -> None:
+    """Native message so the user is not left with only a bare OS dialog."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            # MB_OK | MB_ICONINFORMATION
+            ctypes.windll.user32.MessageBoxW(
+                None, DASHBOARD_OPEN_HINT, "Sr. Atlas", 0x00000040
+            )
+            return
+        except Exception as e:  # noqa: BLE001
+            log.warning("MessageBox failed: %s", e)
+    log.warning(DASHBOARD_OPEN_HINT)
+
+
+def open_dashboard_url(url: str = BACKEND_URL) -> str:
+    """Open the dashboard URL with a simple, reliable chain.
+
+    Order: launch ``msedge.exe`` with the URL argument → native hint message.
+    The OS default http handler is intentionally unused: Start-Process /
+    os.startfile / webbrowser.open on a bare URL is unreliable on fresh Windows
+    (async unbranded dialog even when Edge is registered as ProgId).
+    Returns which path was used: ``edge`` or ``message``.
+    """
+    if open_url_via_edge(url):
+        return "edge"
+    show_dashboard_open_hint()
+    return "message"
 
 
 # ---------------------------------------------------------------------------
@@ -307,14 +364,17 @@ class Launcher:
     def open_dashboard(self, *, force: bool = False) -> bool:
         """Open the dashboard once per launcher session (unless force=True).
 
-        Returns True if webbrowser.open was called.
+        Uses Microsoft Edge (msedge.exe + URL argument), then a native hint
+        message if Edge is not installed at a known path.
+        Returns True if an open attempt was made this call.
         """
         with self._browser_lock:
             if self._browser_opened and not force:
                 log.info("Dashboard already opened this session; not opening another tab")
                 return False
             self._browser_opened = True
-        webbrowser.open(BACKEND_URL)
+        method = open_dashboard_url(BACKEND_URL)
+        log.info("Dashboard open attempt via %s", method)
         return True
 
     def start(self) -> None:

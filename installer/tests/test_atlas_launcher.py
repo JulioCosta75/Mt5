@@ -123,7 +123,9 @@ def test_open_dashboard_once_per_session(tmp_path, monkeypatch):
     paths = al.resolve_paths(str(root))
     launcher = al.Launcher(paths, open_browser=False)
     opens: list[str] = []
-    monkeypatch.setattr(al.webbrowser, "open", lambda url: opens.append(url))
+    monkeypatch.setattr(
+        al, "open_dashboard_url", lambda url=al.BACKEND_URL: opens.append(url) or "edge"
+    )
 
     assert launcher.open_dashboard(force=False) is True
     assert launcher.open_dashboard(force=False) is False
@@ -137,3 +139,53 @@ def test_open_dashboard_once_per_session(tmp_path, monkeypatch):
     launcher.restart_all()
     assert launcher.open_dashboard(force=False) is False
     assert opens == [al.BACKEND_URL, al.BACKEND_URL]
+
+
+def test_open_dashboard_url_uses_edge_first(tmp_path, monkeypatch):
+    edge = tmp_path / "msedge.exe"
+    edge.write_bytes(b"")
+    monkeypatch.setattr(al, "edge_browser_candidates", lambda: [edge])
+    launches: list[list[str]] = []
+    shown: list[bool] = []
+
+    def fake_popen(args, **kwargs):
+        launches.append(list(args))
+        return None
+
+    monkeypatch.setattr(al.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(al, "show_dashboard_open_hint", lambda: shown.append(True))
+    assert al.open_dashboard_url("http://localhost:8001/") == "edge"
+    assert launches == [[str(edge), "http://localhost:8001/"]]
+    assert shown == []
+
+
+def test_open_dashboard_url_shows_message_when_edge_missing(monkeypatch):
+    monkeypatch.setattr(al, "edge_browser_candidates", lambda: [])
+    shown: list[bool] = []
+    monkeypatch.setattr(al, "show_dashboard_open_hint", lambda: shown.append(True))
+    assert al.open_dashboard_url("http://localhost:8001/") == "message"
+    assert shown == [True]
+
+
+def test_open_dashboard_url_shows_message_when_edge_paths_missing_files(
+    tmp_path, monkeypatch
+):
+    missing = tmp_path / "does-not-exist" / "msedge.exe"
+    monkeypatch.setattr(al, "edge_browser_candidates", lambda: [missing])
+    shown: list[bool] = []
+    monkeypatch.setattr(al, "show_dashboard_open_hint", lambda: shown.append(True))
+    assert al.open_dashboard_url("http://localhost:8001/") == "message"
+    assert shown == [True]
+
+
+def test_open_url_via_edge_skips_missing_then_uses_next(tmp_path, monkeypatch):
+    missing = tmp_path / "missing" / "msedge.exe"
+    edge = tmp_path / "msedge.exe"
+    edge.write_bytes(b"")
+    monkeypatch.setattr(al, "edge_browser_candidates", lambda: [missing, edge])
+    launches: list[list[str]] = []
+    monkeypatch.setattr(
+        al.subprocess, "Popen", lambda args, **kwargs: launches.append(list(args))
+    )
+    assert al.open_url_via_edge("http://localhost:8001/") is True
+    assert launches == [[str(edge), "http://localhost:8001/"]]
