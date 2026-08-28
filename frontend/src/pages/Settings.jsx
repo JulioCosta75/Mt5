@@ -92,7 +92,7 @@ export default function Settings() {
   const state = status?.state || "unconfigured";
   const stateMeta = {
     connected: { label: "Connected", color: "#22C55E", desc: "Atlas is connected to your MetaTrader 5 account." },
-    pending_restart: { label: "Applying / Pending restart", color: "#F59E0B", desc: "Settings saved. Atlas is (re)starting its services to connect." },
+    pending_restart: { label: "Applying / Pending restart", color: "#F59E0B", desc: "Settings saved. Atlas is restarting to connect to MetaTrader 5." },
     unconfigured: { label: "Configuration Mode", color: "#F59E0B", desc: "No MetaTrader 5 account connected yet. Enter your credentials below." },
   }[state] || { label: state, color: "#A1A1AA", desc: "" };
 

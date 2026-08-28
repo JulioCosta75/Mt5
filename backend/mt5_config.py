@@ -198,6 +198,8 @@ def _write_backend_env(mt5_bridge_url: str, token: str) -> None:
         f"MT5_BRIDGE_TOKEN={token}",
         "ATLAS_STORE=sqlite",
         f"ATLAS_SQLITE_PATH={data_dir / 'atlas.db'}",
+        "ATLAS_AUTO_SNAPSHOT_INTERVAL_SEC=1800",
+        "ATLAS_REPORT_RETENTION_DAYS=90",
         "SERVE_FRONTEND=true",
         f"FRONTEND_BUILD={frontend_build}",
         "CORS_ORIGINS=*",
@@ -206,7 +208,7 @@ def _write_backend_env(mt5_bridge_url: str, token: str) -> None:
 
 
 def _restart_services() -> None:
-    """Fire-and-forget restart of the Atlas services (Windows only).
+    """Fire-and-forget restart of Atlas via the tray launcher (Windows only).
 
     Runs a detached helper so this backend process can finish responding to the
     HTTP request before it is itself restarted.

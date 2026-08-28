@@ -57,7 +57,12 @@ class TestAtlasReports:
     def test_create_report_defaults(self, session):
         r = session.post(f"{API}/atlas/report", json={"source": "pytest"}, timeout=15)
         assert r.status_code == 200, r.text
-        d = r.json()
+        body = r.json()
+        # Parts 1+2: one report per account — response is {count, reports}.
+        assert "reports" in body and "count" in body
+        assert body["count"] == len(body["reports"])
+        assert body["count"] >= 1
+        d = body["reports"][0]
         assert d["supervisor"] == "Sr. Atlas"
         assert d["ecosystem"] == "Forge Factory Lab"
         assert d["status"] in VALID_STATUS
@@ -66,6 +71,7 @@ class TestAtlasReports:
         assert "created_at" in d
         assert "message" in d
         assert "metrics" in d
+        assert "account_id" in d and d["account_id"]
 
     def test_create_report_custom_fields(self, session):
         payload = {
@@ -78,20 +84,25 @@ class TestAtlasReports:
         }
         r = session.post(f"{API}/atlas/report", json=payload, timeout=15)
         assert r.status_code == 200, r.text
-        d = r.json()
+        body = r.json()
+        assert body["count"] >= 1
+        d = body["reports"][0]
         assert d["status"] == "ALERT"
         assert d["message"] == "Manual drill from pytest"
         assert d["bridge_ok"] is False
 
     def test_reports_list_contains_created(self, session):
-        created = session.post(f"{API}/atlas/report", json={"source": "pytest-list"}, timeout=15).json()
+        created_body = session.post(
+            f"{API}/atlas/report", json={"source": "pytest-list"}, timeout=15
+        ).json()
+        created_ids = {rep["id"] for rep in created_body["reports"]}
         r = session.get(f"{API}/atlas/reports", timeout=15)
         assert r.status_code == 200, r.text
         d = r.json()
         assert "reports" in d and "count" in d and "total" in d
         assert d["count"] == len(d["reports"])
         ids = {rep["id"] for rep in d["reports"]}
-        assert created["id"] in ids, "newly created report should appear in the list"
+        assert created_ids.issubset(ids), "newly created reports should appear in the list"
 
     def test_reports_list_limit(self, session):
         r = session.get(f"{API}/atlas/reports", params={"limit": 2}, timeout=15)
@@ -113,7 +124,7 @@ class TestAutoSnapshot:
         d = r.json()
         assert "auto_snapshot_enabled" in d
         assert "interval_sec" in d
-        assert d["store_backend"] in ("mongo", "memory")
+        assert d["store_backend"] in ("mongo", "memory", "sqlite")
         assert d["mode"] in ("mock", "mt5")
 
     def test_trigger_auto_snapshot(self, session):
@@ -125,8 +136,13 @@ class TestAutoSnapshot:
         assert d["status"] in VALID_STATUS
         assert "id" in d and d["id"]
         assert "created_at" in d
+        assert "account_id" in d
+        assert d.get("count", 1) >= 1
         # the auto report should be retrievable from the list
         lst = session.get(f"{API}/atlas/reports", timeout=15).json()
         ids = {rep["id"] for rep in lst["reports"]}
         assert d["id"] in ids
+        if "reports" in d:
+            for rep in d["reports"]:
+                assert rep["id"] in ids
 

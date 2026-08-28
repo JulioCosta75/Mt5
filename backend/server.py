@@ -72,13 +72,21 @@ BUILD_INFO = _load_build_info()
 ATLAS_STORE = os.environ.get("ATLAS_STORE", "mongo").lower()
 
 # Phase 2 — automatic supervision snapshot scheduler.
-# When > 0, a background task persists a supervision report (source="auto")
-# every N seconds. Default 0 (disabled) so the preview DB stays clean; the
-# capability is always available on-demand via POST /api/supervision/auto-snapshot.
+# When > 0, a background task persists a per-account supervision report
+# (source="auto") every N seconds. Preview default stays 0 (disabled) so
+# the preview DB stays clean; Windows installer sets 1800 (30 minutes).
+# On-demand capture remains available via POST /api/supervision/auto-snapshot.
 try:
     AUTO_SNAPSHOT_INTERVAL_SEC = int(os.environ.get("ATLAS_AUTO_SNAPSHOT_INTERVAL_SEC", "0"))
 except ValueError:
     AUTO_SNAPSHOT_INTERVAL_SEC = 0
+
+# How long to keep persisted Sr. Atlas reports (days). Purge runs in the
+# background and never blocks backend startup.
+try:
+    REPORT_RETENTION_DAYS = int(os.environ.get("ATLAS_REPORT_RETENTION_DAYS", "90"))
+except ValueError:
+    REPORT_RETENTION_DAYS = 90
 
 mongo_db = None
 if ATLAS_STORE == "mongo":
@@ -92,10 +100,27 @@ api_router = APIRouter(prefix="/api")
 
 # ------------------------------------------------------------
 # Phase 2 — Sr. Atlas supervision report store.
-# Uses Mongo when available (preview/Linux), in-memory otherwise.
+# Mongo (preview), SQLite (Windows installer — same atlas.db as MT5 cache),
+# or in-memory fallback. Every report is scoped to one account_id.
 # ------------------------------------------------------------
-from atlas_store import AtlasReportStore
-_atlas_store = AtlasReportStore(mongo_db)
+from atlas_store import AtlasAlertStore, AtlasReportStore
+from atlas_alerts import (
+    evaluate_and_persist_account_alerts,
+    load_alerts_since_previous,
+    to_api_alerts,
+)
+from atlas_reports import account_report_status, build_account_report
+
+_sqlite_path = os.environ.get("ATLAS_SQLITE_PATH", str(ROOT_DIR / "data" / "atlas.db"))
+if ATLAS_STORE == "sqlite":
+    _atlas_store = AtlasReportStore(sqlite_path=_sqlite_path)
+    _atlas_alert_store = AtlasAlertStore(sqlite_path=_sqlite_path)
+elif mongo_db is not None:
+    _atlas_store = AtlasReportStore(mongo_db)
+    _atlas_alert_store = AtlasAlertStore(mongo_db)
+else:
+    _atlas_store = AtlasReportStore()
+    _atlas_alert_store = AtlasAlertStore()
 
 # ------------------------------------------------------------
 # Operating mode: if any MT5_BRIDGE_URL is configured we serve
@@ -280,6 +305,7 @@ class AtlasReportIn(BaseModel):
     message: Optional[str] = None
     source: str = "manual"
     metrics: Optional[dict] = None
+    account_id: Optional[str] = None  # when set, only that account is snapshotted
 
 
 # ------------------------------------------------------------
@@ -301,28 +327,36 @@ def _find_account(account_id: str) -> dict:
 # Aggregates KPIs, account health, risk and alerts into a single
 # supervisor-oriented view with an overall OK / WARNING / ALERT status.
 # ------------------------------------------------------------
-def _supervision_snapshot() -> dict:
-    total_equity = sum(a["equity"] for a in ACCOUNTS)
-    total_balance = sum(a["balance"] for a in ACCOUNTS)
-    daily_pnl = sum(a["daily_pnl"] for a in ACCOUNTS)
-    open_positions = sum(a["open_positions"] for a in ACCOUNTS)
+def _supervision_snapshot_from_accounts(
+    accounts: list[dict],
+    *,
+    bridge_ok: bool | None = None,
+    alerts: list[dict] | None = None,
+) -> dict:
+    alert_rows = ALERTS if alerts is None else alerts
+    total_equity = sum(a.get("equity", 0.0) for a in accounts)
+    total_balance = sum(a.get("balance", 0.0) for a in accounts)
+    daily_pnl = sum(a.get("daily_pnl", 0.0) for a in accounts)
+    open_positions = sum(a.get("open_positions", 0) for a in accounts)
 
-    live = sum(1 for a in ACCOUNTS if a["status"] == "LIVE")
-    paused = sum(1 for a in ACCOUNTS if a["status"] == "PAUSED")
-    error = sum(1 for a in ACCOUNTS if a["status"] == "ERROR")
+    live = sum(1 for a in accounts if a.get("status") == "LIVE")
+    paused = sum(1 for a in accounts if a.get("status") == "PAUSED")
+    error = sum(1 for a in accounts if a.get("status") == "ERROR")
 
-    active_alerts = sum(1 for a in ALERTS if not a["acknowledged"])
-    critical = sum(1 for a in ALERTS if a["severity"] == "CRITICAL" and not a["acknowledged"])
-    warning = sum(1 for a in ALERTS if a["severity"] == "WARNING" and not a["acknowledged"])
+    active_alerts = sum(1 for a in alert_rows if not a.get("acknowledged"))
+    critical = sum(1 for a in alert_rows if a.get("severity") == "CRITICAL" and not a.get("acknowledged"))
+    warning = sum(1 for a in alert_rows if a.get("severity") == "WARNING" and not a.get("acknowledged"))
 
-    n = max(len(ACCOUNTS), 1)
-    avg_dd = round(sum(a["current_drawdown"] for a in ACCOUNTS) / n, 2)
-    worst_dd = round(min((a["current_drawdown"] for a in ACCOUNTS), default=0.0), 2)
+    n = max(len(accounts), 1)
+    avg_dd = round(sum(float(a.get("current_drawdown", 0.0)) for a in accounts) / n, 2) if accounts else 0.0
+    worst_dd = round(min((float(a.get("current_drawdown", 0.0)) for a in accounts), default=0.0), 2)
     accounts_over_limit = sum(
-        1 for a in ACCOUNTS
-        if abs(a["current_drawdown"]) >= float(a["risk_limits"]["max_daily_loss_pct"])
+        1 for a in accounts
+        if abs(float(a.get("current_drawdown", 0.0)))
+        >= float((a.get("risk_limits") or {}).get("max_daily_loss_pct", 5.0))
     )
 
+    # Account/alert severity first — ALERT must keep priority over bridge failure.
     if error > 0 or critical > 0:
         status = "ALERT"
     elif paused > 0 or warning > 0 or accounts_over_limit > 0:
@@ -330,14 +364,47 @@ def _supervision_snapshot() -> dict:
     else:
         status = "OK"
 
+    bridge_down = bridge_ok is False
+    # Historical real cache is not mock; still never report OK while the bridge is down.
+    if bridge_down and status == "OK":
+        status = "WARNING"
+
     services = {
         "backend_ok": True,
         "store_ok": True,
-        "bridge_ok": True if MT5_MODE else None,
+        "bridge_ok": bridge_ok if bridge_ok is not None else (True if MT5_MODE else None),
         "dashboard_ok": True,
     }
 
-    if status == "OK":
+    if bridge_down:
+        if accounts:
+            cache_note = (
+                "MT5 bridge is unavailable; displayed data comes from cache "
+                "and may be outdated."
+            )
+        else:
+            cache_note = (
+                "MT5 bridge is unavailable and no cached account data is available."
+            )
+        if status == "ALERT":
+            message = (
+                f"ALERT: {critical} critical alert(s), {error} account(s) in ERROR state. "
+                f"{cache_note}"
+            )
+        elif paused > 0 or warning > 0 or accounts_over_limit > 0:
+            message = (
+                f"Degraded: {warning} warning alert(s), {paused} paused account(s), "
+                f"{accounts_over_limit} account(s) near risk limits. {cache_note}"
+            )
+        else:
+            message = cache_note
+    elif not accounts and MT5_MODE:
+        if status == "OK":
+            status = "WARNING"
+        message = (
+            "MT5 mode is active but no live account data is available from the bridge yet."
+        )
+    elif status == "OK":
         message = "All Forge Factory Lab core services are online and healthy."
     elif status == "WARNING":
         message = (
@@ -360,7 +427,7 @@ def _supervision_snapshot() -> dict:
             "daily_pnl_pct": round(daily_pnl / total_equity * 100, 2) if total_equity else 0.0,
             "open_positions": open_positions,
         },
-        "accounts": {"total": len(ACCOUNTS), "live": live, "paused": paused, "error": error},
+        "accounts": {"total": len(accounts), "live": live, "paused": paused, "error": error},
         "risk": {
             "avg_drawdown": avg_dd,
             "worst_drawdown": worst_dd,
@@ -370,6 +437,102 @@ def _supervision_snapshot() -> dict:
         "services": services,
         "message": message,
     }
+
+
+def _supervision_snapshot() -> dict:
+    """Mock-mode snapshot (sync). Prefer `_live_supervision_snapshot` when serving HTTP."""
+    return _supervision_snapshot_from_accounts(ACCOUNTS, bridge_ok=None)
+
+
+async def _mt5_live_accounts() -> tuple[list[dict], bool]:
+    """Fetch enriched accounts from configured MT5 bridge(s). Returns (accounts, bridge_ok)."""
+    import httpx
+    from mt5_adapter import account_from_bridge, drawdown_from_equity
+    from mt5_client import clients
+
+    out: list[dict] = []
+    any_reachable = False
+    for client in clients():
+        try:
+            bridge_acc = await client.account()
+        except (httpx.HTTPError, httpx.HTTPStatusError) as e:
+            logging.getLogger("server").warning(
+                "bridge %s account fetch failed: %s", client.endpoint.url, e
+            )
+            continue
+        if not bridge_acc:
+            continue
+        any_reachable = True
+        try:
+            positions = await client.positions()
+        except httpx.HTTPError:
+            positions = []
+        login = int(bridge_acc["login"])
+        if _cache is not None:
+            overrides = await _cache.get_overrides(login)
+            anchor = await _cache.maybe_set_daily_anchor(
+                login, bridge_acc.get("balance", 0.0)
+            )
+            eq_doc = await _cache.get(f"equity:{login}")
+            series = (eq_doc or {}).get("payload", {}).get("series", []) or []
+        else:
+            overrides = {
+                "risk_limits": {
+                    "max_daily_loss_pct": 5.0,
+                    "max_position_size_lots": 1.0,
+                    "max_open_positions": 10,
+                },
+                "kill_switch": False,
+            }
+            anchor = None
+            series = []
+        _, max_dd, current_dd = drawdown_from_equity(series)
+        acc = account_from_bridge(
+            bridge_acc,
+            positions_count=len(positions),
+            risk_limits=overrides["risk_limits"],
+            kill_switch=overrides["kill_switch"],
+            max_dd=max_dd,
+            current_dd=current_dd,
+            daily_pnl_anchor=anchor,
+        )
+        # Keep raw positions for per-account report enrichment (Part 3).
+        # Leading underscore: not part of the public account API contract.
+        acc["_positions"] = positions
+        if _cache is not None:
+            await _cache.put(f"account:{login}", {k: v for k, v in acc.items() if not k.startswith("_")})
+            await _cache.put(f"positions:{login}", positions)
+        out.append(acc)
+
+    if not any_reachable and _cache is not None:
+        # Fall back to cached account snapshots (same strategy as routes_mt5).
+        try:
+            cached_keys = await _cache.cache.find(
+                {"_id": {"$regex": r"^account:"}}, {"_id": 0}
+            ).to_list(50)
+            for d in cached_keys:
+                payload = d.get("payload")
+                if payload:
+                    payload = dict(payload)
+                    payload["stale"] = True
+                    out.append(payload)
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger("server").warning("cache account fallback failed: %s", e)
+
+    return out, any_reachable
+
+
+async def _live_supervision_snapshot() -> dict:
+    if not MT5_MODE:
+        return _supervision_snapshot()
+    accounts, bridge_ok = await _mt5_live_accounts()
+    # Live alerts come from the fixed-rule engine store — never mock ALERTS.
+    open_alerts = await _atlas_alert_store.list_open()
+    return _supervision_snapshot_from_accounts(
+        accounts,
+        bridge_ok=bridge_ok,
+        alerts=to_api_alerts(open_alerts),
+    )
 
 
 # ------------------------------------------------------------
@@ -525,7 +688,7 @@ if MT5_MODE:
     else:
         from mt5_cache import MT5Cache
         _cache = MT5Cache(mongo_db)
-    app.include_router(build_mt5_router(_cache))
+    app.include_router(build_mt5_router(_cache, alert_store=_atlas_alert_store))
     logging.getLogger("server").info("MT5 mode ENABLED — store=%s", ATLAS_STORE)
 else:
     app.include_router(api_router)
@@ -569,9 +732,11 @@ async def system_health():
                     "server": h.get("server"),
                     "last_error": h.get("last_error"),
                     "trade_allowed": h.get("trade_allowed"),
+                    "message": h.get("message"),
                 })
             except (httpx.HTTPError, Exception) as e:  # noqa: BLE001
                 info["error"] = str(e)
+            out["bridge"] = info
     return out
 
 
@@ -663,67 +828,233 @@ async def delete_mt5_config():
 # ------------------------------------------------------------
 @app.get("/api/supervision/snapshot")
 async def supervision_snapshot():
-    return _supervision_snapshot()
+    return await _live_supervision_snapshot()
+
+
+def _account_report_status(
+    acc: dict,
+    *,
+    bridge_ok: bool | None,
+    open_positions: list | None = None,
+) -> str:
+    return account_report_status(
+        acc, bridge_ok=bridge_ok, open_positions=open_positions
+    )
+
+
+def _build_account_report(
+    acc: dict,
+    *,
+    source: str,
+    bridge_ok: bool | None,
+    supervisor: str = "Sr. Atlas",
+    ecosystem: str = "Forge Factory Lab",
+    message_override: str | None = None,
+    status_override: str | None = None,
+    backend_ok: bool | None = None,
+    dashboard_ok: bool | None = None,
+    positions: list | None = None,
+    deals: list | None = None,
+    previous_report: dict | None = None,
+    label_overrides: dict | None = None,
+    alerts_since_previous: list | None = None,
+) -> dict:
+    return build_account_report(
+        acc,
+        source=source,
+        bridge_ok=bridge_ok,
+        supervisor=supervisor,
+        ecosystem=ecosystem,
+        message_override=message_override,
+        status_override=status_override,
+        backend_ok=backend_ok,
+        dashboard_ok=dashboard_ok,
+        positions=positions,
+        deals=deals,
+        previous_report=previous_report,
+        label_overrides=label_overrides,
+        alerts_since_previous=alerts_since_previous,
+    )
+
+
+async def _accounts_for_reports() -> tuple[list[dict], bool | None]:
+    """Accounts to snapshot + bridge_ok flag (None in mock mode)."""
+    if not MT5_MODE:
+        # Full mock accounts (incl. _trades) — builder only emits safe fields.
+        return list(ACCOUNTS), None
+    accounts, bridge_ok = await _mt5_live_accounts()
+    return accounts, bridge_ok
+
+
+async def _deals_and_labels_for_account(acc: dict) -> tuple[list[dict], dict[int, str]]:
+    """Fetch deals + EA label overrides for one account (live or cache)."""
+    import httpx
+    from mt5_client import clients
+
+    login = int(acc.get("login") or 0)
+    labels: dict[int, str] = {}
+    if _cache is not None:
+        try:
+            labels = await _cache.get_ea_labels(login)
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger("server").warning("ea labels load failed: %s", e)
+
+    if not MT5_MODE:
+        return [], labels
+
+    for client in clients():
+        try:
+            bridge_acc = await client.account()
+        except (httpx.HTTPError, httpx.HTTPStatusError):
+            continue
+        if not bridge_acc or int(bridge_acc.get("login") or 0) != login:
+            continue
+        try:
+            deals = await client.deals(days=90)
+            if _cache is not None:
+                await _cache.put(f"deals:{login}", deals)
+            return list(deals or []), labels
+        except httpx.HTTPError as e:
+            logging.getLogger("server").warning(
+                "deals fetch failed for login %s: %s", login, e
+            )
+            break
+
+    if _cache is not None:
+        cached = await _cache.get(f"deals:{login}")
+        if cached and cached.get("payload") is not None:
+            return list(cached["payload"]), labels
+    return [], labels
+
+
+async def _positions_for_account(acc: dict) -> list[dict]:
+    """Prefer positions attached during live fetch; else cache; else empty."""
+    attached = acc.get("_positions")
+    if isinstance(attached, list):
+        return attached
+    if not MT5_MODE or _cache is None:
+        return []
+    login = int(acc.get("login") or 0)
+    cached = await _cache.get(f"positions:{login}")
+    if cached and cached.get("payload") is not None:
+        return list(cached["payload"])
+    return []
+
+
+async def _capture_snapshot_reports(
+    source: str = "auto",
+    *,
+    account_id: str | None = None,
+    message_override: str | None = None,
+    status_override: str | None = None,
+    backend_ok: bool | None = None,
+    dashboard_ok: bool | None = None,
+    bridge_ok_override: bool | None = None,
+    supervisor: str = "Sr. Atlas",
+    ecosystem: str = "Forge Factory Lab",
+    metrics_override: dict | None = None,
+) -> list[dict]:
+    """Persist one enriched report per configured/reachable account."""
+    accounts, bridge_ok = await _accounts_for_reports()
+    if bridge_ok_override is not None:
+        bridge_ok = bridge_ok_override
+    if account_id:
+        accounts = [a for a in accounts if a.get("id") == account_id]
+        if not accounts:
+            raise HTTPException(status_code=404, detail=f"Account not found: {account_id}")
+    stored: list[dict] = []
+    for acc in accounts:
+        previous = await _atlas_store.latest_for_account(acc["id"])
+        positions = await _positions_for_account(acc)
+        deals, labels = await _deals_and_labels_for_account(acc)
+        pos_for_rules = positions if (positions or MT5_MODE) else None
+        # Reconcile alerts *before* building the report so creates/resolves in
+        # this snapshot appear in alerts_since_previous (same cadence).
+        await evaluate_and_persist_account_alerts(
+            _atlas_alert_store,
+            acc,
+            bridge_ok=bridge_ok,
+            open_positions=pos_for_rules,
+        )
+        since = (previous or {}).get("created_at") if previous else None
+        if previous and previous.get("account_id") not in (None, acc.get("id")):
+            since = None
+        alert_events = await load_alerts_since_previous(
+            _atlas_alert_store,
+            account_id=str(acc["id"]),
+            since_iso=since,
+        )
+        report = _build_account_report(
+            acc,
+            source=source,
+            bridge_ok=bridge_ok,
+            supervisor=supervisor,
+            ecosystem=ecosystem,
+            message_override=message_override,
+            status_override=status_override,
+            backend_ok=backend_ok,
+            dashboard_ok=dashboard_ok,
+            positions=pos_for_rules,
+            deals=deals if MT5_MODE else None,
+            previous_report=previous,
+            label_overrides=labels,
+            alerts_since_previous=alert_events,
+        )
+        if metrics_override is not None and account_id:
+            report["metrics"] = metrics_override
+        stored.append(await _atlas_store.add(report))
+    return stored
 
 
 @app.post("/api/atlas/report")
 async def create_atlas_report(payload: AtlasReportIn):
-    snap = _supervision_snapshot()
-    report = {
-        "supervisor": payload.supervisor,
-        "ecosystem": payload.ecosystem,
-        "status": (payload.status or snap["status"]).upper(),
-        "backend_ok": payload.backend_ok if payload.backend_ok is not None else snap["services"]["backend_ok"],
-        "bridge_ok": payload.bridge_ok if payload.bridge_ok is not None else snap["services"]["bridge_ok"],
-        "dashboard_ok": payload.dashboard_ok if payload.dashboard_ok is not None else snap["services"]["dashboard_ok"],
-        "message": payload.message or snap["message"],
-        "source": payload.source,
-        "metrics": payload.metrics or {
-            "total_equity": snap["kpis"]["total_equity"],
-            "daily_pnl": snap["kpis"]["daily_pnl"],
-            "accounts_live": snap["accounts"]["live"],
-            "active_alerts": snap["alerts"]["active"],
-            "critical_alerts": snap["alerts"]["critical"],
-            "avg_drawdown": snap["risk"]["avg_drawdown"],
-        },
-    }
-    stored = await _atlas_store.add(report)
-    return stored
+    """Generate and persist one report per account (or a single account_id)."""
+    reports = await _capture_snapshot_reports(
+        source=payload.source or "manual",
+        account_id=payload.account_id,
+        message_override=payload.message,
+        status_override=payload.status,
+        backend_ok=payload.backend_ok,
+        dashboard_ok=payload.dashboard_ok,
+        bridge_ok_override=payload.bridge_ok,
+        supervisor=payload.supervisor,
+        ecosystem=payload.ecosystem,
+        metrics_override=payload.metrics,
+    )
+    return {"count": len(reports), "reports": reports}
 
 
 @app.get("/api/atlas/reports")
-async def list_atlas_reports(limit: int = 50, status: Optional[str] = None):
-    reports = await _atlas_store.list(limit=limit, status=status)
-    total = await _atlas_store.count()
+async def list_atlas_reports(
+    limit: int = 50,
+    status: Optional[str] = None,
+    account_id: Optional[str] = None,
+):
+    reports = await _atlas_store.list(
+        limit=limit, status=status, account_id=account_id
+    )
+    total = await _atlas_store.count(status=status, account_id=account_id)
     return {"count": len(reports), "total": total, "reports": reports}
 
 
 # ------------------------------------------------------------
-# Phase 2 — automatic supervision snapshot support.
-# Captures the live snapshot and persists it as a report. Reused by the
-# background scheduler and the on-demand endpoint below.
+# Phase 2 — automatic per-account supervision snapshot support.
 # ------------------------------------------------------------
 async def _capture_snapshot_report(source: str = "auto") -> dict:
-    snap = _supervision_snapshot()
-    report = {
-        "supervisor": snap["supervisor"],
-        "ecosystem": snap["ecosystem"],
-        "status": snap["status"],
-        "backend_ok": snap["services"]["backend_ok"],
-        "bridge_ok": snap["services"]["bridge_ok"],
-        "dashboard_ok": snap["services"]["dashboard_ok"],
-        "message": snap["message"],
-        "source": source,
-        "metrics": {
-            "total_equity": snap["kpis"]["total_equity"],
-            "daily_pnl": snap["kpis"]["daily_pnl"],
-            "accounts_live": snap["accounts"]["live"],
-            "active_alerts": snap["alerts"]["active"],
-            "critical_alerts": snap["alerts"]["critical"],
-            "avg_drawdown": snap["risk"]["avg_drawdown"],
-        },
-    }
-    return await _atlas_store.add(report)
+    """Backward-compatible wrapper: returns first report + full list meta."""
+    reports = await _capture_snapshot_reports(source=source)
+    if not reports:
+        return {
+            "count": 0,
+            "reports": [],
+            "source": source,
+            "message": "No accounts available to snapshot.",
+        }
+    # Keep previous single-object shape fields for older clients, plus list.
+    first = dict(reports[0])
+    first["count"] = len(reports)
+    first["reports"] = reports
+    return first
 
 
 @app.get("/api/supervision/config")
@@ -731,6 +1062,7 @@ async def supervision_config():
     return {
         "auto_snapshot_enabled": AUTO_SNAPSHOT_INTERVAL_SEC > 0,
         "interval_sec": AUTO_SNAPSHOT_INTERVAL_SEC,
+        "retention_days": REPORT_RETENTION_DAYS,
         "store_backend": _atlas_store.backend,
         "mode": "mt5" if MT5_MODE else "mock",
     }
@@ -738,18 +1070,59 @@ async def supervision_config():
 
 @app.post("/api/supervision/auto-snapshot")
 async def trigger_auto_snapshot():
-    """On-demand automatic snapshot capture (source='auto')."""
+    """On-demand automatic snapshot capture (source='auto'), one report per account."""
     return await _capture_snapshot_report(source="auto")
+
+
+async def _purge_old_reports_loop():
+    """Background retention purge — never blocks startup."""
+    log = logging.getLogger("server")
+    # Small delay so uvicorn finishes boot before first purge.
+    await asyncio.sleep(2)
+    try:
+        deleted = await _atlas_store.purge_older_than(REPORT_RETENTION_DAYS)
+        if deleted:
+            log.info(
+                "Purged %s atlas report(s) older than %s day(s)",
+                deleted,
+                REPORT_RETENTION_DAYS,
+            )
+    except Exception as e:  # noqa: BLE001
+        log.warning("Initial report retention purge failed: %s", e)
+
+    while True:
+        try:
+            # Re-check roughly once a day (also after each auto-snapshot interval
+            # when that is longer — but keep a sane upper bound).
+            await asyncio.sleep(max(3600, AUTO_SNAPSHOT_INTERVAL_SEC or 3600))
+            deleted = await _atlas_store.purge_older_than(REPORT_RETENTION_DAYS)
+            if deleted:
+                log.info(
+                    "Purged %s atlas report(s) older than %s day(s)",
+                    deleted,
+                    REPORT_RETENTION_DAYS,
+                )
+        except asyncio.CancelledError:
+            break
+        except Exception as e:  # noqa: BLE001
+            log.warning("Report retention purge failed: %s", e)
 
 
 async def _auto_snapshot_loop():
     logging.getLogger("server").info(
-        "Auto-snapshot scheduler ENABLED — every %ss", AUTO_SNAPSHOT_INTERVAL_SEC
+        "Auto-snapshot scheduler ENABLED — every %ss (per account)",
+        AUTO_SNAPSHOT_INTERVAL_SEC,
     )
     while True:
         try:
             await asyncio.sleep(AUTO_SNAPSHOT_INTERVAL_SEC)
-            await _capture_snapshot_report(source="auto")
+            await _capture_snapshot_reports(source="auto")
+            try:
+                await _atlas_store.purge_older_than(REPORT_RETENTION_DAYS)
+            except Exception as pe:  # noqa: BLE001
+                logging.getLogger("server").warning(
+                    "Post-snapshot retention purge failed: %s", pe
+                )
         except asyncio.CancelledError:  # graceful shutdown
             break
         except Exception as e:  # noqa: BLE001
@@ -758,15 +1131,17 @@ async def _auto_snapshot_loop():
 
 @app.on_event("startup")
 async def _start_auto_snapshot():
+    app.state.report_purge_task = asyncio.create_task(_purge_old_reports_loop())
     if AUTO_SNAPSHOT_INTERVAL_SEC > 0:
         app.state.auto_snapshot_task = asyncio.create_task(_auto_snapshot_loop())
 
 
 @app.on_event("shutdown")
 async def _stop_auto_snapshot():
-    task = getattr(app.state, "auto_snapshot_task", None)
-    if task:
-        task.cancel()
+    for name in ("auto_snapshot_task", "report_purge_task"):
+        task = getattr(app.state, name, None)
+        if task:
+            task.cancel()
 
 
 # ------------------------------------------------------------

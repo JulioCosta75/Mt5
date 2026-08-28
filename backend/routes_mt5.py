@@ -16,11 +16,13 @@ from pydantic import BaseModel
 from mt5_adapter import (
     account_from_bridge,
     drawdown_from_equity,
+    eas_from_bridge,
     orders_passthrough,
     positions_passthrough,
     trades_from_deals,
 )
 from mt5_client import BridgeClient, clients
+from atlas_alerts import to_api_alert, to_api_alerts
 
 logger = logging.getLogger("mt5-routes")
 
@@ -35,8 +37,16 @@ class RiskLimitsPayload(BaseModel):
     max_open_positions: Optional[int] = None
 
 
-def build_router(cache) -> APIRouter:
-    """Factory that wires the routes against the provided cache."""
+class AckAlertPayload(BaseModel):
+    acknowledged: bool = True
+
+
+class EaLabelPayload(BaseModel):
+    label: Optional[str] = None  # empty/null clears the manual override
+
+
+def build_router(cache, alert_store=None) -> APIRouter:
+    """Factory that wires the routes against the provided cache / alert store."""
     router = APIRouter(prefix="/api")
 
     async def _try_account(client: BridgeClient) -> dict | None:
@@ -164,14 +174,16 @@ def build_router(cache) -> APIRouter:
     @router.get("/accounts/{account_id}/trades")
     async def trades(account_id: str, limit: int = 50,
                      symbol: Optional[str] = None,
-                     side: Optional[Literal["BUY", "SELL"]] = None):
+                     side: Optional[Literal["BUY", "SELL"]] = None,
+                     magic: Optional[int] = None):
         login = int(account_id.removeprefix("MT5-"))
         client = await _resolve_login_to_client(login)
+        labels = await cache.get_ea_labels(login)
         rows: list[dict] = []
         if client:
             try:
                 deals_raw = await client.deals(days=90)
-                rows = trades_from_deals(deals_raw)
+                rows = trades_from_deals(deals_raw, label_overrides=labels)
                 await cache.put(f"trades:{login}", rows)
             except httpx.HTTPError as e:
                 logger.warning("deals fetch failed: %s", e)
@@ -182,6 +194,8 @@ def build_router(cache) -> APIRouter:
             rows = [t for t in rows if t["symbol"] == symbol]
         if side:
             rows = [t for t in rows if t["side"] == side]
+        if magic is not None:
+            rows = [t for t in rows if int(t.get("magic", 0) or 0) == int(magic)]
         return {"account_id": account_id, "count": len(rows), "trades": rows[:limit]}
 
     @router.get("/accounts/{account_id}/positions")
@@ -233,6 +247,106 @@ def build_router(cache) -> APIRouter:
         merged = await cache.update_risk_limits(login, payload.model_dump(exclude_none=True))
         return {"account_id": account_id, "risk_limits": merged}
 
+    async def _eas_for_login(login: int, client: BridgeClient | None) -> list[dict]:
+        account_id = f"MT5-{login}"
+        labels = await cache.get_ea_labels(login)
+        positions: list[dict] = []
+        deals: list[dict] = []
+        if client:
+            try:
+                positions = await client.positions()
+                await cache.put(f"positions:{login}", positions)
+            except httpx.HTTPError as e:
+                logger.warning("positions fetch failed: %s", e)
+                positions = (await cache.get(f"positions:{login}") or {}).get("payload", [])
+            try:
+                deals = await client.deals(days=90)
+                await cache.put(f"deals:{login}", deals)
+            except httpx.HTTPError as e:
+                logger.warning("deals fetch failed: %s", e)
+                deals = (await cache.get(f"deals:{login}") or {}).get("payload", [])
+        else:
+            positions = (await cache.get(f"positions:{login}") or {}).get("payload", [])
+            deals = (await cache.get(f"deals:{login}") or {}).get("payload", [])
+        return eas_from_bridge(
+            account_id=account_id,
+            login=login,
+            positions=positions,
+            deals=deals,
+            label_overrides=labels,
+        )
+
+    @router.get("/eas")
+    async def list_eas():
+        """List EAs (grouped by magic) across all configured MT5 accounts."""
+        out: list[dict] = []
+        seen_logins: set[int] = set()
+        for c in clients():
+            bridge_acc = await _try_account(c)
+            if not bridge_acc:
+                continue
+            login = int(bridge_acc["login"])
+            seen_logins.add(login)
+            out.extend(await _eas_for_login(login, c))
+        if not out:
+            # Fall back to cached account logins when bridge is down.
+            cached_keys = await cache.cache.find(
+                {"_id": {"$regex": r"^account:"}}, {"_id": 0}
+            ).to_list(50)
+            for d in cached_keys:
+                payload = d.get("payload") or {}
+                login = payload.get("login")
+                if login is None:
+                    continue
+                login = int(login)
+                if login in seen_logins:
+                    continue
+                out.extend(await _eas_for_login(login, None))
+        return {"count": len(out), "eas": out}
+
+    @router.get("/accounts/{account_id}/eas")
+    async def list_account_eas(account_id: str):
+        if not account_id.startswith("MT5-"):
+            raise HTTPException(404, "unknown account id")
+        login = int(account_id.removeprefix("MT5-"))
+        client = await _resolve_login_to_client(login)
+        rows = await _eas_for_login(login, client)
+        return {"account_id": account_id, "count": len(rows), "eas": rows}
+
+    @router.put("/accounts/{account_id}/eas/{magic}")
+    async def rename_ea(account_id: str, magic: int, payload: EaLabelPayload):
+        if not account_id.startswith("MT5-"):
+            raise HTTPException(404, "unknown account id")
+        login = int(account_id.removeprefix("MT5-"))
+        labels = await cache.set_ea_label(login, int(magic), payload.label)
+        client = await _resolve_login_to_client(login)
+        rows = await _eas_for_login(login, client)
+        match = next((r for r in rows if int(r["magic"]) == int(magic)), None)
+        if match is None:
+            # Still return the stored override even with no activity yet.
+            label = labels.get(int(magic))
+            match = {
+                "id": f"{account_id}:magic-{int(magic)}",
+                "account_id": account_id,
+                "login": login,
+                "magic": int(magic),
+                "label": label or (f"EA {int(magic)}" if int(magic) else "Manual / sem EA"),
+                "label_source": "manual" if label else ("manual_zero" if int(magic) == 0 else "fallback"),
+                "open_positions": 0,
+                "floating_pnl": 0.0,
+                "realized_pnl": 0.0,
+                "net_pnl": 0.0,
+                "trade_count": 0,
+                "win_rate": 0.0,
+                "max_drawdown": 0.0,
+                "current_drawdown": 0.0,
+                "max_drawdown_money": 0.0,
+                "current_drawdown_money": 0.0,
+                "drawdown_unit": "pct",
+                "symbols": [],
+            }
+        return match
+
     @router.get("/kpis")
     async def kpis():
         accs = await list_accounts()
@@ -242,20 +356,54 @@ def build_router(cache) -> APIRouter:
         open_positions = sum(a.get("open_positions", 0) for a in accs)
         live = sum(1 for a in accs if a.get("status") == "LIVE")
         avg_dd = round(sum(a.get("current_drawdown", 0) for a in accs) / max(len(accs), 1), 2) if accs else 0.0
+        open_alerts = await alert_store.list_open() if alert_store is not None else []
+        # KPI "active" matches unacknowledged (state == active), same as mock.
+        active_alerts = sum(1 for a in open_alerts if a.get("state") == "active")
+        critical_alerts = sum(
+            1
+            for a in open_alerts
+            if a.get("severity") == "CRITICAL" and a.get("state") == "active"
+        )
         return {
             "total_equity": round(total_equity, 2),
             "total_balance": round(total_balance, 2),
             "daily_pnl": round(daily_pnl, 2),
             "daily_pnl_pct": round(daily_pnl / total_equity * 100, 2) if total_equity else 0.0,
             "open_positions": open_positions,
-            "active_alerts": 0,           # Phase 2
-            "critical_alerts": 0,
+            "active_alerts": active_alerts,
+            "critical_alerts": critical_alerts,
             "accounts_total": len(accs),
             "accounts_live": live,
             "avg_drawdown": avg_dd,
             "server_time": (await _server_time()),
             "source": "mt5",
         }
+
+    @router.get("/alerts")
+    async def list_alerts(
+        severity: Optional[str] = None,
+        unacknowledged_only: bool = False,
+    ):
+        # Live path: fixed-rule engine store (never mock catalogue).
+        if alert_store is None:
+            return {"count": 0, "alerts": []}
+        items = await alert_store.list_open()
+        if severity:
+            sev = severity.upper()
+            items = [a for a in items if a.get("severity") == sev]
+        if unacknowledged_only:
+            items = [a for a in items if a.get("state") == "active"]
+        api_items = to_api_alerts(items)
+        return {"count": len(api_items), "alerts": api_items}
+
+    @router.post("/alerts/{alert_id}/ack")
+    async def ack_alert(alert_id: str, payload: AckAlertPayload):
+        if alert_store is None:
+            raise HTTPException(status_code=404, detail=f"Alert not found: {alert_id}")
+        updated = await alert_store.acknowledge(alert_id, payload.acknowledged)
+        if updated is None:
+            raise HTTPException(status_code=404, detail=f"Alert not found: {alert_id}")
+        return to_api_alert(updated)
 
     @router.get("/bridge/health")
     async def bridge_health():
