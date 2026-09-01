@@ -1,0 +1,4 @@
+# Local outbox / probe artifacts — never commit secrets or runtime queues.
+data/
+__pycache__/
+*.pyc
