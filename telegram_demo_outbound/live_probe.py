@@ -61,6 +61,18 @@ def _raw_private_chat_ids(body: str) -> list[str]:
             if key not in seen:
                 seen.add(key)
                 found.append(key)
+        member = update.get("my_chat_member") or {}
+        if isinstance(member, dict):
+            mchat = member.get("chat") or {}
+            if (
+                isinstance(mchat, dict)
+                and mchat.get("type") == "private"
+                and mchat.get("id") is not None
+            ):
+                key = str(mchat.get("id"))
+                if key not in seen:
+                    seen.add(key)
+                    found.append(key)
     return found
 
 
@@ -158,8 +170,8 @@ def run_live_probe(env: dict[str, str] | None = None) -> dict:
     # without printing them. The sanitized copy is what we persist.
     raw_updates = http.post(
         f"https://api.telegram.org/bot{token}/getUpdates",
-        {"timeout": "0", "limit": "100"},
-        30.0,
+        {"timeout": "25", "limit": "100"},
+        35.0,
     )
     try:
         updates_parsed = json.loads(raw_updates.body) if raw_updates.body else {}
