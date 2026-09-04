@@ -197,6 +197,19 @@ def run_live_probe(env: dict[str, str] | None = None) -> dict:
     except MissingAllowlistError as exc:
         report["error"] = str(exc)
         report["getUpdates"]["resolution"] = str(exc)
+        result = (
+            (updates_sanitized or {}).get("result")
+            if isinstance(updates_sanitized, dict)
+            else None
+        )
+        report["getUpdates"]["private_chats_in_updates"] = 0
+        report["getUpdates"]["pending_updates"] = (
+            len(result) if isinstance(result, list) else None
+        )
+        report["getUpdates"]["TELEGRAM_CHAT_ID_configured"] = bool(
+            (source.get(CHAT_ID_ENV) or "").strip()
+        )
+        report["getUpdates"]["chat_id_matched_updates"] = False
         return report
 
     report["getUpdates"]["resolution"] = resolution["resolution"]
@@ -255,6 +268,7 @@ def public_summary(report: dict) -> dict:
             "ok": updates.get("ok"),
             "resolution": updates.get("resolution"),
             "private_chats_in_updates": updates.get("private_chats_in_updates"),
+            "pending_updates": updates.get("pending_updates"),
             "TELEGRAM_CHAT_ID_configured": updates.get("TELEGRAM_CHAT_ID_configured"),
             "chat_id_matched_updates": updates.get("chat_id_matched_updates"),
         },
