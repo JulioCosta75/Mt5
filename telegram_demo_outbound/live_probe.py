@@ -30,10 +30,7 @@ from telegram_demo_outbound.redact import redact_text, sanitize_telegram_json
 from telegram_demo_outbound.transport import TelegramHttpTransport, UrlLibHttpClient
 
 REPORT_PATH = Path("telegram_demo_outbound/reports/live_probe_sanitized.json")
-LIVE_TEXT = (
-    f"{REQUIRED_PREFIX}\n"
-    "SYNTHETIC DATA — live outbound probe. Not connected to any trading account."
-)
+LIVE_TEXT = f"{REQUIRED_PREFIX} Ligação Telegram SUS-010 confirmada"
 
 
 def _raw_private_chat_ids(body: str) -> list[str]:
@@ -216,12 +213,62 @@ def run_live_probe(env: dict[str, str] | None = None) -> dict:
     return json.loads(dumped)
 
 
+def public_summary(report: dict) -> dict:
+    """Fields safe to print or put on a PR. No token, no chat_id, no personal names."""
+    get_me = report.get("getMe") or {}
+    get_me_body = get_me.get("body") if isinstance(get_me.get("body"), dict) else {}
+    get_me_result = (
+        get_me_body.get("result") if isinstance(get_me_body.get("result"), dict) else {}
+    )
+    updates = report.get("getUpdates") or {}
+    send = report.get("sendMessage") or {}
+    send_body = send.get("body") if isinstance(send.get("body"), dict) else {}
+    send_result = send_body.get("result") if isinstance(send_body.get("result"), dict) else {}
+    chat = send_result.get("chat") if isinstance(send_result.get("chat"), dict) else {}
+    return {
+        "probe": report.get("probe"),
+        "ran_at": report.get("ran_at"),
+        "app_mode_is_demo": report.get("app_mode_is_demo"),
+        "error": report.get("error"),
+        "getMe": {
+            "http_status": get_me.get("http_status"),
+            "ok": get_me_body.get("ok"),
+            "token_accepted": get_me.get("token_accepted"),
+            "is_bot": get_me.get("is_bot"),
+            "username_present": get_me.get("username_present"),
+            "bot_username": get_me_result.get("username"),
+        },
+        "getUpdates": {
+            "http_status": updates.get("http_status"),
+            "ok": updates.get("ok"),
+            "resolution": updates.get("resolution"),
+            "private_chats_in_updates": updates.get("private_chats_in_updates"),
+            "TELEGRAM_CHAT_ID_configured": updates.get("TELEGRAM_CHAT_ID_configured"),
+            "chat_id_matched_updates": updates.get("chat_id_matched_updates"),
+        },
+        "sendMessage": {
+            "http_status": send.get("http_status"),
+            "ok": send.get("ok"),
+            "telegram_ok": send_body.get("ok"),
+            "provider_message_id": send.get("provider_message_id"),
+            "message_id": send_result.get("message_id"),
+            "date": send_result.get("date"),
+            "chat_type": chat.get("type"),
+            "chat_id": "[REDACTED_CHAT_ID]",
+            "text": send_result.get("text"),
+            "text_startswith_required_prefix": send.get(
+                "text_startswith_required_prefix"
+            ),
+        },
+    }
+
+
 def main() -> int:
     report = run_live_probe()
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     REPORT_PATH.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    # Print sanitized report only.
-    sys.stdout.write(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    summary = public_summary(report)
+    sys.stdout.write(json.dumps(summary, indent=2, sort_keys=True) + "\n")
     if report.get("error"):
         return 2
     send = report.get("sendMessage") or {}
