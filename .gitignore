@@ -64,6 +64,9 @@ chainlit.md
 # Data and databases
 agenthub/agents/youtube/db
 
+# Isolated Telegram DEMO outbound queue (never commit runtime state)
+telegram_demo_outbound/data/
+
 # Archive files and large assets
 **/*.zip
 **/*.tar.gz
