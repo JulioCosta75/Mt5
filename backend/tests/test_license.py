@@ -100,6 +100,34 @@ class TestAtlasDbMigration:
                 risk_limits TEXT NOT NULL,
                 daily_pnl_anchor TEXT
             );
+            CREATE TABLE mt5_ea_labels (
+                login INTEGER NOT NULL,
+                magic INTEGER NOT NULL,
+                label TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (login, magic)
+            );
+            CREATE TABLE atlas_reports (
+                id TEXT PRIMARY KEY,
+                account_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                status TEXT,
+                source TEXT,
+                payload TEXT NOT NULL
+            );
+            CREATE TABLE atlas_alerts (
+                id TEXT PRIMARY KEY,
+                account_id TEXT NOT NULL,
+                rule_key TEXT NOT NULL,
+                state TEXT NOT NULL,
+                severity TEXT NOT NULL,
+                message TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                acknowledged_at TEXT,
+                resolved_at TEXT,
+                payload TEXT NOT NULL
+            );
             """
         )
         cx.execute(
@@ -110,6 +138,22 @@ class TestAtlasDbMigration:
             "INSERT INTO mt5_overrides (login, kill_switch, risk_limits, daily_pnl_anchor) "
             "VALUES (?,?,?,?)",
             (5609382, 1, '{"max_daily_loss_pct": 3.0}', None),
+        )
+        cx.execute(
+            "INSERT INTO mt5_ea_labels (login, magic, label, updated_at) VALUES (?,?,?,?)",
+            (5609382, 123, "Trend Follow", "2026-01-01T00:00:00+00:00"),
+        )
+        cx.execute(
+            "INSERT INTO atlas_reports (id, account_id, created_at, status, source, payload) "
+            "VALUES (?,?,?,?,?,?)",
+            ("rep-1", "MT5-5609382", "2026-01-01T00:00:00+00:00", "OK", "auto", "{}"),
+        )
+        cx.execute(
+            "INSERT INTO atlas_alerts "
+            "(id, account_id, rule_key, state, severity, message, created_at, updated_at, payload) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            ("alt-1", "MT5-5609382", "drawdown", "open", "WARNING", "dd",
+             "2026-01-01T00:00:00+00:00", "2026-01-01T00:00:00+00:00", "{}"),
         )
         cx.commit()
         cx.close()
@@ -122,13 +166,19 @@ class TestAtlasDbMigration:
         cx = sqlite3.connect(str(db))
         tables = {r[0] for r in cx.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert "atlas_license" in tables
-        assert "mt5_cache" in tables
-        assert "mt5_overrides" in tables
+        for existing in (
+            "mt5_cache", "mt5_overrides", "mt5_ea_labels",
+            "atlas_reports", "atlas_alerts",
+        ):
+            assert existing in tables
         cache_row = cx.execute("SELECT payload FROM mt5_cache WHERE id=?", ("account:5609382",)).fetchone()
         assert cache_row is not None
         assert "5609382" in cache_row[0]
         ov = cx.execute("SELECT kill_switch FROM mt5_overrides WHERE login=5609382").fetchone()
         assert ov[0] == 1
+        assert cx.execute("SELECT label FROM mt5_ea_labels WHERE login=5609382").fetchone()[0] == "Trend Follow"
+        assert cx.execute("SELECT id FROM atlas_reports WHERE id='rep-1'").fetchone()[0] == "rep-1"
+        assert cx.execute("SELECT id FROM atlas_alerts WHERE id='alt-1'").fetchone()[0] == "alt-1"
         cx.close()
 
 
