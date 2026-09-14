@@ -95,4 +95,15 @@ class BridgeClient:
 
 
 def clients() -> list[BridgeClient]:
-    return [BridgeClient(ep) for ep in configured_bridges()]
+    endpoints = configured_bridges()
+    try:
+        from license import apply_account_cap
+
+        endpoints = apply_account_cap(endpoints)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "License account cap failed (%s); limiting to 1 MT5 account",
+            type(exc).__name__,
+        )
+        endpoints = endpoints[:1]
+    return [BridgeClient(ep) for ep in endpoints]

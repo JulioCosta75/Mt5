@@ -755,6 +755,7 @@ async def system_version():
 #  set and changed at any time without reinstalling Atlas.)
 # ------------------------------------------------------------
 import mt5_config as _mt5cfg
+import license as _license
 
 
 class MT5ConfigIn(BaseModel):
@@ -790,6 +791,44 @@ def _connection_status(cfg: dict) -> dict:
 async def get_mt5_config():
     cfg = _mt5cfg.load()
     return {"config": _mt5cfg.masked(cfg), "status": _connection_status(cfg)}
+
+
+# ------------------------------------------------------------
+# License (Lemon Squeezy) — Free (1 MT5 account) vs Pro (unlimited).
+# Mounted on `app` so it is available in both mock and MT5 modes.
+# The license key is never included in these responses.
+# ------------------------------------------------------------
+class LicenseActivateIn(BaseModel):
+    license_key: str = ""
+
+
+def _license_response_is_safe(payload: dict) -> None:
+    """Refuse to return a body that contains the stored license key."""
+    stored = _license.load_record().get("license_key") or ""
+    if stored and stored in str(payload):
+        raise HTTPException(status_code=500, detail="License response omitted a sensitive field.")
+
+
+@app.get("/api/license")
+async def get_license():
+    state = await asyncio.to_thread(_license.public_state)
+    _license_response_is_safe(state)
+    return state
+
+
+@app.post("/api/license/activate")
+async def activate_license(payload: LicenseActivateIn):
+    key = (payload.license_key or "").strip()
+    if not key:
+        raise HTTPException(status_code=422, detail="A license key is required.")
+    try:
+        state = await asyncio.to_thread(_license.activate, key)
+    except _license.LicenseNetworkError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except _license.LicenseInvalidError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    _license_response_is_safe(state)
+    return state
 
 
 @app.put("/api/mt5/config")
