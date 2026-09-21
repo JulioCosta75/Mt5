@@ -100,6 +100,20 @@ Presentation-only formatting of `ValidationState.KNOWLEDGE` records (statement,
 EA key/name/version, confidence, evidence/sample sizes, date range, review
 metadata). No state changes or promotion.
 
+## Gate 5 Stage 1 — insights (Levels A+B, isolated)
+
+```bash
+python3 -m phase3_knowledge_engine.insights --account london-scalper --db ./knowledge.db
+python3 -m phase3_knowledge_engine.insights --account london-scalper \
+  --session London --symbol XAUUSD --db ./knowledge.db
+```
+
+`--account` is an EA profile UUID or `ea_key`. Level A formats validated
+`KNOWLEDGE` statements (sample size, confidence, last review). Level B sets
+`is_context_active_now` only when the record `context_signature` matches the
+supplied session/symbol. Empty list when nothing is validated. Not mounted on
+Phase 2. Flag untouched.
+
 ## Database
 
 Separate SQLite file: `knowledge.db` (never `atlas.db`).
