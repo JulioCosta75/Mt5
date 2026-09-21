@@ -127,6 +127,20 @@ python3 -m phase3_knowledge_engine.graveyard --account london-scalper --db ./kno
 deciding actor, and justification from the existing audit trail). Empty list
 when nothing is invalidated. Not mounted on Phase 2. Flag untouched.
 
+## Gate 5 — EA negative-day coincidence (isolated)
+
+```bash
+python3 -m phase3_knowledge_engine.correlation \
+  --account demo-1 --ea-a london-scalper --ea-b ny-scalper --db ./knowledge.db
+```
+
+`--ea-a` / `--ea-b` are EA profile UUIDs or `ea_key`s. Uses Block 1
+`evidence_items` from the last 90 days: calendar days with net-negative PnL,
+then intersection/union. At or above `EA_CORRELATION_FLAG_THRESHOLD` (default
+0.6; env `PHASE3_EA_CORRELATION_FLAG_THRESHOLD`) the pair is marked `paired`
+(observed fact only). Missing history → `dados insuficientes`; coincidence is
+omitted, never invented as 0%. Not mounted on Phase 2. Flag untouched.
+
 ## Database
 
 Separate SQLite file: `knowledge.db` (never `atlas.db`).
@@ -141,6 +155,7 @@ Environment variables (optional):
 | `PHASE3_MIN_EVIDENCE_FOR_KNOWLEDGE` | `10` | Minimum evidence count for Knowledge promotion (Rule 6) |
 | `PHASE3_MIN_SAMPLE_FOR_KNOWLEDGE` | `30` | Minimum sample size for Knowledge promotion (Rule 6) |
 | `PHASE3_KNOWLEDGE_STALENESS_DAYS` | `90` | Days after last review before an insight is flagged stale |
+| `PHASE3_EA_CORRELATION_FLAG_THRESHOLD` | `0.6` | Shared negative-day ratio that flags an EA pair |
 
 Knowledge promotion thresholds are defined in `config.py` and consumed by
 `domain/rules.py` and `application/services.py`. Adjust via environment

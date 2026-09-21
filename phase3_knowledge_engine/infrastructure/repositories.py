@@ -345,6 +345,27 @@ class KnowledgeRepository:
             ).fetchone()
         return int(row["c"])
 
+    def list_evidence_for_ea(
+        self,
+        ea_profile_id: UUID,
+        *,
+        occurred_after: datetime | None = None,
+        occurred_before: datetime | None = None,
+    ) -> list[EvidenceItem]:
+        """Read-only evidence for one EA; optional occurred_at window."""
+        sql = "SELECT * FROM evidence_items WHERE ea_profile_id = ?"
+        params: list[object] = [str(ea_profile_id)]
+        if occurred_after is not None:
+            sql += " AND occurred_at >= ?"
+            params.append(_iso(occurred_after))
+        if occurred_before is not None:
+            sql += " AND occurred_at <= ?"
+            params.append(_iso(occurred_before))
+        sql += " ORDER BY occurred_at ASC"
+        with self._connection() as cx:
+            rows = cx.execute(sql, params).fetchall()
+        return [self._row_to_evidence(r) for r in rows]
+
     # ---- Knowledge records ---------------------------------------------------
     def save_knowledge_record(
         self,

@@ -38,3 +38,9 @@ MIN_SAMPLE_FOR_KNOWLEDGE: int = int(
 KNOWLEDGE_STALENESS_DAYS: int = int(
     os.environ.get("PHASE3_KNOWLEDGE_STALENESS_DAYS", "90")
 )
+
+# Coincidence ratio of shared negative-PnL days at which a pair is flagged
+# "a par" (observed fact only — no recommendation). Default 0.6 = 60%.
+EA_CORRELATION_FLAG_THRESHOLD: float = float(
+    os.environ.get("PHASE3_EA_CORRELATION_FLAG_THRESHOLD", "0.6")
+)

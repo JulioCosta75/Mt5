@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Protocol, runtime_checkable
 from uuid import UUID
 
@@ -42,6 +43,16 @@ class KnowledgeRepositoryPort(Protocol):
     ) -> EvidenceItem | None: ...
 
     def count_observations_for_ea(self, ea_profile_id: UUID) -> int: ...
+
+    def list_evidence_for_ea(
+        self,
+        ea_profile_id: UUID,
+        *,
+        occurred_after: datetime | None = None,
+        occurred_before: datetime | None = None,
+    ) -> list[EvidenceItem]:
+        """Read-only evidence for one EA, optional occurred_at window."""
+        ...
 
     def save_knowledge_record(self, record: KnowledgeRecord) -> KnowledgeRecord: ...
 
