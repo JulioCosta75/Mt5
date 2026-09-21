@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -17,6 +17,7 @@ from phase3_knowledge_engine.insights import (
     CurrentContext,
     format_level_a,
     is_context_active_now,
+    is_knowledge_stale,
     list_insights,
     main,
     parse_context_signature,
@@ -214,7 +215,53 @@ def test_cli_account_empty_and_match(capsys):
         out = capsys.readouterr().out
         assert "Spread filter reduces London open losses" in out
         assert "is_context_active_now=True" in out
+        assert "is_stale=" in out
         assert "sample_size=" in out
+
+
+NOW = datetime(2026, 10, 13, 12, 0, tzinfo=timezone.utc)
+
+
+def test_recent_knowledge_is_not_stale():
+    reviewed = NOW - timedelta(days=89)
+    assert is_knowledge_stale(reviewed, now=NOW) is False
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = _repo(tmp)
+        profile = _profile(repo, key="london-scalper")
+        repo.save_knowledge_record(
+            _record(profile, statement="Recent review", reviewed_at=reviewed)
+        )
+        rows = list_insights(repository=repo, ea_profile_id=profile.id, now=NOW)
+        assert len(rows) == 1
+        assert rows[0].is_stale is False
+
+
+def test_knowledge_older_than_90_days_is_stale():
+    reviewed = NOW - timedelta(days=91)
+    assert is_knowledge_stale(reviewed, now=NOW) is True
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = _repo(tmp)
+        profile = _profile(repo, key="london-scalper")
+        repo.save_knowledge_record(
+            _record(profile, statement="Old review", reviewed_at=reviewed)
+        )
+        rows = list_insights(repository=repo, ea_profile_id=profile.id, now=NOW)
+        assert len(rows) == 1
+        assert rows[0].is_stale is True
+
+
+def test_knowledge_exactly_90_days_is_stale():
+    reviewed = NOW - timedelta(days=90)
+    assert is_knowledge_stale(reviewed, now=NOW) is True
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = _repo(tmp)
+        profile = _profile(repo, key="london-scalper")
+        repo.save_knowledge_record(
+            _record(profile, statement="Boundary review", reviewed_at=reviewed)
+        )
+        rows = list_insights(repository=repo, ea_profile_id=profile.id, now=NOW)
+        assert len(rows) == 1
+        assert rows[0].is_stale is True
 
 
 def test_phase2_server_has_no_phase3_reference():

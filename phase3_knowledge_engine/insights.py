@@ -7,6 +7,9 @@ Level B: compare each record's ``context_signature`` (EA, version, session,
 symbol) with a caller-supplied current context. Match →
 ``is_context_active_now=True``. No match or missing signature → False.
 
+``is_stale`` is a visible signal from ``last_reviewed_at`` vs
+``KNOWLEDGE_STALENESS_DAYS``. It never changes validation state.
+
 Never invents records. Never interprets beyond what is stored. Does not
 mount HTTP, touch Phase 2, or enable ``PHASE3_KNOWLEDGE_ENGINE_ENABLED``.
 
@@ -22,11 +25,11 @@ from __future__ import annotations
 import argparse
 import sys
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from phase3_knowledge_engine.application.services import KnowledgeEngineService
-from phase3_knowledge_engine.config import DEFAULT_KNOWLEDGE_DB_PATH
+from phase3_knowledge_engine.config import DEFAULT_KNOWLEDGE_DB_PATH, KNOWLEDGE_STALENESS_DAYS
 from phase3_knowledge_engine.domain.entities import EAKnowledgeProfile, KnowledgeRecord
 from phase3_knowledge_engine.domain.ports.repository import KnowledgeRepositoryPort
 from phase3_knowledge_engine.domain.validation_states import ValidationState
@@ -62,7 +65,31 @@ class Insight:
     last_reviewed_at: datetime | None
     context_signature: str | None
     is_context_active_now: bool
+    is_stale: bool
     formatted: str
+
+
+def is_knowledge_stale(
+    last_reviewed_at: datetime | None,
+    *,
+    now: datetime | None = None,
+    stale_after_days: int | None = None,
+) -> bool:
+    """True when last review is missing or at/older than the staleness window.
+
+    Does not change validation state. Missing ``last_reviewed_at`` is stale —
+    freshness cannot be claimed without a review timestamp.
+    """
+    days = KNOWLEDGE_STALENESS_DAYS if stale_after_days is None else int(stale_after_days)
+    if last_reviewed_at is None:
+        return True
+    moment = now if now is not None else datetime.now(timezone.utc)
+    reviewed = last_reviewed_at
+    if reviewed.tzinfo is None:
+        reviewed = reviewed.replace(tzinfo=timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment - reviewed >= timedelta(days=days)
 
 
 def format_level_a(record: KnowledgeRecord) -> str:
@@ -172,10 +199,12 @@ def list_insights(
     ea_profile_id: UUID | None = None,
     current_context: CurrentContext | None = None,
     limit: int = 100,
+    now: datetime | None = None,
 ) -> list[Insight]:
     """Level A+B insights from KNOWLEDGE records only.
 
     Empty list when nothing is validated — never synthesises rows.
+    ``is_stale`` is a visible signal only; it never revalidates the record.
     """
     records = repository.list_knowledge_records_by_state(
         ValidationState.KNOWLEDGE,
@@ -200,6 +229,7 @@ def list_insights(
                 last_reviewed_at=record.last_reviewed_at,
                 context_signature=record.context_signature,
                 is_context_active_now=active,
+                is_stale=is_knowledge_stale(record.last_reviewed_at, now=now),
                 formatted=format_level_a(record),
             )
         )
@@ -208,9 +238,11 @@ def list_insights(
 
 def format_insight_line(insight: Insight) -> str:
     flag = "active_now" if insight.is_context_active_now else "not_active_now"
+    stale_flag = "stale" if insight.is_stale else "fresh"
     return (
         f"id={insight.knowledge_record_id}  "
-        f"is_context_active_now={insight.is_context_active_now} ({flag})\n"
+        f"is_context_active_now={insight.is_context_active_now} ({flag})  "
+        f"is_stale={insight.is_stale} ({stale_flag})\n"
         f"  {insight.formatted}"
     )
 

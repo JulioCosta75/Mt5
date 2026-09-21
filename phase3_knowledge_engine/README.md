@@ -111,8 +111,10 @@ python3 -m phase3_knowledge_engine.insights --account london-scalper \
 `--account` is an EA profile UUID or `ea_key`. Level A formats validated
 `KNOWLEDGE` statements (sample size, confidence, last review). Level B sets
 `is_context_active_now` only when the record `context_signature` matches the
-supplied session/symbol. Empty list when nothing is validated. Not mounted on
-Phase 2. Flag untouched.
+supplied session/symbol. `is_stale` is a visible signal when `last_reviewed_at`
+is missing or at/older than `KNOWLEDGE_STALENESS_DAYS` (default 90; env
+`PHASE3_KNOWLEDGE_STALENESS_DAYS`). It never changes validation state. Empty
+list when nothing is validated. Not mounted on Phase 2. Flag untouched.
 
 ## Database
 
@@ -127,6 +129,7 @@ Environment variables (optional):
 | `PHASE3_MIN_OBSERVATIONS_FOR_PATTERN` | `2` | RepeatedPattern threshold |
 | `PHASE3_MIN_EVIDENCE_FOR_KNOWLEDGE` | `10` | Minimum evidence count for Knowledge promotion (Rule 6) |
 | `PHASE3_MIN_SAMPLE_FOR_KNOWLEDGE` | `30` | Minimum sample size for Knowledge promotion (Rule 6) |
+| `PHASE3_KNOWLEDGE_STALENESS_DAYS` | `90` | Days after last review before an insight is flagged stale |
 
 Knowledge promotion thresholds are defined in `config.py` and consumed by
 `domain/rules.py` and `application/services.py`. Adjust via environment

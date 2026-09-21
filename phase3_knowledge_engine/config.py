@@ -32,3 +32,9 @@ MIN_EVIDENCE_FOR_KNOWLEDGE: int = int(
 MIN_SAMPLE_FOR_KNOWLEDGE: int = int(
     os.environ.get("PHASE3_MIN_SAMPLE_FOR_KNOWLEDGE", "30")
 )
+
+# Days since last_reviewed_at after which a KNOWLEDGE insight is flagged stale.
+# Signal only — never auto-revalidates or changes validation state.
+KNOWLEDGE_STALENESS_DAYS: int = int(
+    os.environ.get("PHASE3_KNOWLEDGE_STALENESS_DAYS", "90")
+)

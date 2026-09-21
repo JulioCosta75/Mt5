@@ -9,6 +9,7 @@ import sys
 import pytest
 
 from phase3_knowledge_engine.config import (
+    KNOWLEDGE_STALENESS_DAYS,
     MIN_EVIDENCE_FOR_KNOWLEDGE,
     MIN_SAMPLE_FOR_KNOWLEDGE,
     PHASE3_KNOWLEDGE_ENGINE_ENABLED,
@@ -22,6 +23,7 @@ class TestConfigDefaults:
     def test_knowledge_promotion_defaults(self):
         assert MIN_EVIDENCE_FOR_KNOWLEDGE == 10
         assert MIN_SAMPLE_FOR_KNOWLEDGE == 30
+        assert KNOWLEDGE_STALENESS_DAYS == 90
 
 
 class TestKnowledgeThresholdConfigurability:
@@ -83,6 +85,30 @@ else:
         env = os.environ.copy()
         env["PHASE3_MIN_EVIDENCE_FOR_KNOWLEDGE"] = "5"
         env["PHASE3_MIN_SAMPLE_FOR_KNOWLEDGE"] = "15"
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr or result.stdout
+
+
+class TestStalenessDaysConfigurability:
+    def test_staleness_days_change_via_environment(self):
+        script = """
+from datetime import datetime, timedelta, timezone
+from phase3_knowledge_engine.config import KNOWLEDGE_STALENESS_DAYS
+from phase3_knowledge_engine.insights import is_knowledge_stale
+
+assert KNOWLEDGE_STALENESS_DAYS == 7
+now = datetime(2026, 10, 13, tzinfo=timezone.utc)
+assert is_knowledge_stale(now - timedelta(days=6), now=now) is False
+assert is_knowledge_stale(now - timedelta(days=7), now=now) is True
+"""
+        env = os.environ.copy()
+        env["PHASE3_KNOWLEDGE_STALENESS_DAYS"] = "7"
         result = subprocess.run(
             [sys.executable, "-c", script],
             env=env,
