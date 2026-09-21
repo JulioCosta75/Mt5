@@ -9,6 +9,7 @@ import sys
 import pytest
 
 from phase3_knowledge_engine.config import (
+    EA_CORRELATION_FLAG_THRESHOLD,
     MIN_EVIDENCE_FOR_KNOWLEDGE,
     MIN_SAMPLE_FOR_KNOWLEDGE,
     PHASE3_KNOWLEDGE_ENGINE_ENABLED,
@@ -22,6 +23,7 @@ class TestConfigDefaults:
     def test_knowledge_promotion_defaults(self):
         assert MIN_EVIDENCE_FOR_KNOWLEDGE == 10
         assert MIN_SAMPLE_FOR_KNOWLEDGE == 30
+        assert EA_CORRELATION_FLAG_THRESHOLD == 0.6
 
 
 class TestKnowledgeThresholdConfigurability:
@@ -83,6 +85,25 @@ else:
         env = os.environ.copy()
         env["PHASE3_MIN_EVIDENCE_FOR_KNOWLEDGE"] = "5"
         env["PHASE3_MIN_SAMPLE_FOR_KNOWLEDGE"] = "15"
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr or result.stdout
+
+
+class TestCorrelationThresholdConfigurability:
+    def test_correlation_threshold_changes_via_environment(self):
+        script = """
+from phase3_knowledge_engine.config import EA_CORRELATION_FLAG_THRESHOLD
+
+assert EA_CORRELATION_FLAG_THRESHOLD == 0.4
+"""
+        env = os.environ.copy()
+        env["PHASE3_EA_CORRELATION_FLAG_THRESHOLD"] = "0.4"
         result = subprocess.run(
             [sys.executable, "-c", script],
             env=env,
