@@ -114,6 +114,17 @@ python3 -m phase3_knowledge_engine.insights --account london-scalper \
 supplied session/symbol. Empty list when nothing is validated. Not mounted on
 Phase 2. Flag untouched.
 
+## Gate 5 — graveyard (invalidated conclusions, isolated)
+
+```bash
+python3 -m phase3_knowledge_engine.graveyard --account london-scalper --db ./knowledge.db
+```
+
+`--account` is an EA profile UUID or `ea_key`. Lists
+`INVALIDATED_CONCLUSION` records only (original statement, invalidation time,
+deciding actor, and justification from the existing audit trail). Empty list
+when nothing is invalidated. Not mounted on Phase 2. Flag untouched.
+
 ## Database
 
 Separate SQLite file: `knowledge.db` (never `atlas.db`).
