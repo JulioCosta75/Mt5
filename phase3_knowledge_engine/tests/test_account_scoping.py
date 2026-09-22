@@ -71,27 +71,32 @@ def test_resolve_account_id_from_bridge_payload():
     assert resolve_account_id({"login": ""}) is None
 
 
-def test_list_ea_profile_ids_is_evidence_derived_and_ignores_null():
+def test_list_ea_profile_ids_isolates_each_account_among_many():
     with tempfile.TemporaryDirectory() as tmp:
         repo = _repo(tmp)
-        a = _profile(repo, key="ea-a")
-        b = _profile(repo, key="ea-b")
+        seeds = (
+            ("ea-a", "acc-1"),
+            ("ea-b", "acc-2"),
+            ("ea-c", "acc-3"),
+            ("ea-d", "acc-4"),
+        )
+        by_account: dict[str, EAKnowledgeProfile] = {}
+        for i, (key, account_id) in enumerate(seeds):
+            profile = _profile(repo, key=key)
+            by_account[account_id] = profile
+            repo.save_evidence(_trade(profile, account_id=account_id, ticket=f"T-{i}"))
         orphan = _profile(repo, key="ea-orphan")
-        repo.save_evidence(_trade(a, account_id="acc-a", ticket="A-1"))
-        repo.save_evidence(_trade(b, account_id="acc-b", ticket="B-1"))
         repo.save_evidence(_trade(orphan, account_id=None, ticket="O-1"))
 
-        ids_a = repo.list_ea_profile_ids_with_evidence_for_account("acc-a")
-        ids_b = repo.list_ea_profile_ids_with_evidence_for_account("acc-b")
-        ids_empty = repo.list_ea_profile_ids_with_evidence_for_account("acc-empty")
-        ids_blank = repo.list_ea_profile_ids_with_evidence_for_account("  ")
+        all_ids = {p.id for p in by_account.values()} | {orphan.id}
+        for account_id, profile in by_account.items():
+            found = repo.list_ea_profile_ids_with_evidence_for_account(account_id)
+            assert found == [profile.id], account_id
+            assert (all_ids - {profile.id}).isdisjoint(found)
 
-        assert ids_a == [a.id]
-        assert ids_b == [b.id]
-        assert ids_empty == []
-        assert ids_blank == []
-        assert orphan.id not in ids_a
-        assert orphan.id not in ids_b
+        assert repo.list_ea_profile_ids_with_evidence_for_account("acc-empty") == []
+        assert repo.list_ea_profile_ids_with_evidence_for_account("  ") == []
+        assert repo.list_ea_profile_ids_with_evidence_for_account("ea-a") == []
 
 
 def test_lookup_recognizes_phase2_mt5_login_alias():

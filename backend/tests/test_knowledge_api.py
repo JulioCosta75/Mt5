@@ -277,88 +277,132 @@ def test_flag_on_ea_profiles_fields_and_unknown_account(monkeypatch):
         )
 
 
-def test_two_accounts_do_not_mix_on_ea_profiles_insights_graveyard(monkeypatch):
+def test_each_account_id_is_isolated_regardless_of_how_many_exist(monkeypatch):
+    """Isolation is per account_id. Three-plus accounts is the floor, not a pair."""
+    seeds = (
+        ("london-scalper", "acc-demo-1", "Fact for acc-demo-1"),
+        ("ny-scalper", "acc-live-1", "Fact for acc-live-1"),
+        ("tokyo-grid", "acc-demo-2", "Fact for acc-demo-2"),
+        ("sydney-breakout", "acc-live-2", "Fact for acc-live-2"),
+    )
     with tempfile.TemporaryDirectory() as tmp:
         db = str(Path(tmp) / "knowledge.db")
         repo = KnowledgeRepository(db)
-        london = _profile(repo, key="london-scalper")
-        ny = _profile(repo, key="ny-scalper")
-        repo.save_evidence(_evidence(london, account_id="acc-a", ticket="A-1"))
-        repo.save_evidence(_evidence(ny, account_id="acc-b", ticket="B-1"))
-        repo.save_knowledge_record(
-            _knowledge_record(london, statement="London fact stays on acc-a")
-        )
-        repo.save_knowledge_record(
-            _knowledge_record(ny, statement="NY fact stays on acc-b")
-        )
-        ny_dead = KnowledgeRecord(
+        by_account: dict[str, EAKnowledgeProfile] = {}
+        for i, (ea_key, account_id, statement) in enumerate(seeds):
+            profile = _profile(repo, key=ea_key)
+            by_account[account_id] = profile
+            repo.save_evidence(
+                _evidence(profile, account_id=account_id, ticket=f"T-{i}")
+            )
+            repo.save_knowledge_record(_knowledge_record(profile, statement=statement))
+
+        grave_account = "acc-live-1"
+        grave_profile = by_account[grave_account]
+        dead = KnowledgeRecord(
             id=uuid4(),
-            ea_profile_id=ny.id,
+            ea_profile_id=grave_profile.id,
             validation_state=ValidationState.INVALIDATED_CONCLUSION.value,
-            statement="NY invalidated stays on acc-b",
+            statement="Invalidated only on acc-live-1",
             created_at=datetime(2026, 7, 1, tzinfo=timezone.utc),
             updated_at=datetime(2026, 7, 20, tzinfo=timezone.utc),
         )
-        repo.save_knowledge_record(ny_dead)
+        repo.save_knowledge_record(dead)
         repo.append_audit(
             AuditTrailEntry(
                 id=uuid4(),
-                knowledge_record_id=ny_dead.id,
+                knowledge_record_id=dead.id,
                 from_state=ValidationState.HYPOTHESIS.value,
                 to_state=ValidationState.INVALIDATED_CONCLUSION.value,
                 transitioned_at=datetime(2026, 7, 20, 9, 0, tzinfo=timezone.utc),
                 actor="reviewer@forge",
-                justification="Only on account B.",
+                justification="Scoped to one account_id.",
             )
         )
 
         client = _client(monkeypatch, enabled=True, db_path=db)
-        a_profiles = client.get(
-            "/api/knowledge/v1/ea-profiles", params={"account_id": "acc-a"}
-        ).json()
-        assert [p["ea_key"] for p in a_profiles["profiles"]] == ["london-scalper"]
-        a_text = str(a_profiles)
-        assert "London fact stays on acc-a" in a_text
-        assert "NY fact stays on acc-b" not in a_text
-        assert "NY invalidated" not in a_text
+        all_keys = [ea_key for ea_key, _, _ in seeds]
+        all_facts = [statement for _, _, statement in seeds]
+        all_accounts = [account_id for _, account_id, _ in seeds]
 
-        b_profiles = client.get(
-            "/api/knowledge/v1/ea-profiles", params={"account_id": "acc-b"}
-        ).json()
-        assert [p["ea_key"] for p in b_profiles["profiles"]] == ["ny-scalper"]
-        b_text = str(b_profiles)
-        assert "NY fact stays on acc-b" in b_text
-        assert "London fact stays on acc-a" not in b_text
+        for ea_key, account_id, statement in seeds:
+            others_keys = [k for k in all_keys if k != ea_key]
+            others_facts = [s for s in all_facts if s != statement]
 
-        a_ins = client.get(
-            "/api/knowledge/v1/insights", params={"account_id": "acc-a"}
-        ).json()
-        assert [row["statement"] for row in a_ins["insights"]] == [
-            "London fact stays on acc-a"
-        ]
-        b_ins = client.get(
-            "/api/knowledge/v1/insights", params={"account_id": "acc-b"}
-        ).json()
-        assert [row["statement"] for row in b_ins["insights"]] == [
-            "NY fact stays on acc-b"
-        ]
+            profiles = client.get(
+                "/api/knowledge/v1/ea-profiles", params={"account_id": account_id}
+            )
+            assert profiles.status_code == 200, account_id
+            body = profiles.json()
+            assert [p["ea_key"] for p in body["profiles"]] == [ea_key]
+            blob = str(body)
+            assert statement in blob
+            for other in others_facts + others_keys:
+                assert other not in blob
+            if account_id == grave_account:
+                assert "Invalidated only on acc-live-1" in blob
+            else:
+                assert "Invalidated only on acc-live-1" not in blob
 
-        a_grave = client.get(
-            "/api/knowledge/v1/graveyard", params={"account_id": "acc-a"}
-        ).json()
-        assert a_grave["entries"] == []
-        b_grave = client.get(
-            "/api/knowledge/v1/graveyard", params={"account_id": "acc-b"}
-        ).json()
-        assert [row["statement"] for row in b_grave["entries"]] == [
-            "NY invalidated stays on acc-b"
-        ]
+            insights = client.get(
+                "/api/knowledge/v1/insights", params={"account_id": account_id}
+            )
+            assert insights.status_code == 200, account_id
+            ins = insights.json()
+            assert [row["statement"] for row in ins["insights"]] == [statement]
+            for other in others_facts:
+                assert other not in str(ins)
 
-        zero = client.get(
-            "/api/knowledge/v1/ea-profiles", params={"account_id": "acc-empty"}
-        ).json()
-        assert zero["profiles"] == []
-        assert zero["counts"]["validated"] == 0
+            grave = client.get(
+                "/api/knowledge/v1/graveyard", params={"account_id": account_id}
+            )
+            assert grave.status_code == 200, account_id
+            entries = grave.json()["entries"]
+            if account_id == grave_account:
+                assert [row["statement"] for row in entries] == [
+                    "Invalidated only on acc-live-1"
+                ]
+            else:
+                assert entries == []
+
+        for unused in ("acc-empty", "london-scalper"):
+            empty = client.get(
+                "/api/knowledge/v1/ea-profiles", params={"account_id": unused}
+            )
+            assert empty.status_code == 200
+            payload = empty.json()
+            assert payload["profiles"] == []
+            assert payload["counts"]["validated"] == 0
+            assert payload["ea_key"] is None
+
+
+def test_account_with_zero_evidence_is_empty_not_error_or_corpus(monkeypatch):
+    with tempfile.TemporaryDirectory() as tmp:
+        db = str(Path(tmp) / "knowledge.db")
+        repo = KnowledgeRepository(db)
+        for i, key in enumerate(("ea-one", "ea-two", "ea-three")):
+            profile = _profile(repo, key=key)
+            repo.save_evidence(
+                _evidence(profile, account_id=f"acc-{i + 1}", ticket=f"Z-{i}")
+            )
+            repo.save_knowledge_record(
+                _knowledge_record(profile, statement=f"Corpus fact {key}")
+            )
+        _profile(repo, key="ea-never-ingested")
+
+        client = _client(monkeypatch, enabled=True, db_path=db)
+        for path in (
+            "/api/knowledge/v1/ea-profiles",
+            "/api/knowledge/v1/insights",
+            "/api/knowledge/v1/graveyard",
+        ):
+            r = client.get(path, params={"account_id": "acc-none"})
+            assert r.status_code == 200, path
+            body = r.json()
+            assert body.get("profiles", body.get("insights", body.get("entries"))) == []
+            assert "Corpus fact" not in r.text
+            assert "ea-never-ingested" not in r.text
+            assert "ea-one" not in r.text
 
 
 def test_flag_on_correlation_insufficient_omits_number(monkeypatch):
