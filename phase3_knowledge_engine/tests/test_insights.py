@@ -264,12 +264,7 @@ def test_knowledge_exactly_90_days_is_stale():
         assert rows[0].is_stale is True
 
 
-def test_phase2_server_has_no_phase3_reference():
-    repo_root = Path(__file__).resolve().parents[2]
-    server = repo_root / "backend" / "server.py"
-    text = server.read_text(encoding="utf-8")
-    assert "phase3_knowledge_engine" not in text
-    assert "PHASE3_KNOWLEDGE_ENGINE_ENABLED" not in text
+def test_phase3_flag_remains_off_by_default():
     assert PHASE3_KNOWLEDGE_ENGINE_ENABLED is False
     env = os.environ.get("PHASE3_KNOWLEDGE_ENGINE_ENABLED", "false").lower()
     assert env not in ("1", "true", "yes")

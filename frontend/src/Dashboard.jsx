@@ -10,10 +10,11 @@ import AlertsPanel from "@/components/AlertsPanel";
 import RiskPanel from "@/components/RiskPanel";
 import SupervisionPanel from "@/components/SupervisionPanel";
 import { StrategiesView, RiskView, ReportsView, AuditView } from "@/components/TabViews";
+import RevolutionView from "@/pages/Revolution";
 
 const TABS = ["Overview", "Strategies", "Risk", "Reports", "Audit"];
 
-function Header({ refreshing, onRefresh, sessionId, activeTab, onTabChange, buildInfo }) {
+function Header({ refreshing, onRefresh, sessionId, activeTab, onTabChange, buildInfo, showRevolution }) {
   const versionLabel = buildInfo && buildInfo.version ? `v${buildInfo.version}` : "v…";
   const buildLabel = buildInfo && buildInfo.build && buildInfo.build !== "release"
     ? ` · ${buildInfo.build}` : "";
@@ -59,6 +60,19 @@ function Header({ refreshing, onRefresh, sessionId, activeTab, onTabChange, buil
               {n}
             </button>
           ))}
+          {showRevolution ? (
+            <button
+              type="button"
+              className={`btn nav-revolution ${activeTab === "Revolution" ? "active" : ""}`}
+              data-testid="nav-revolution"
+              aria-current={activeTab === "Revolution" ? "page" : undefined}
+              onClick={() => onTabChange("Revolution")}
+              style={{ border: "none", padding: "4px 10px" }}
+            >
+              <span className="nav-revolution-mark" aria-hidden="true">◆</span>
+              Revolution
+            </button>
+          ) : null}
           <Link to="/about" className="btn" data-testid="nav-about" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>About</Link>
           <Link to="/docs" className="btn" data-testid="nav-docs" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>Docs</Link>
           <Link to="/settings" className="btn" data-testid="nav-settings" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>Settings</Link>
@@ -131,6 +145,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("Overview");
   const [buildInfo, setBuildInfo] = useState(null);
   const [mt5Status, setMt5Status] = useState(null);
+  const [knowledgeEnabled, setKnowledgeEnabled] = useState(false);
   const selectedIdRef = useRef(null);
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
 
@@ -175,6 +190,12 @@ export default function Dashboard() {
       } catch (e) {
         if (!cancelled) setMt5Status(null);
       }
+      try {
+        const k = await api.knowledgeStatus();
+        if (!cancelled) setKnowledgeEnabled(!!(k && k.enabled));
+      } catch (e) {
+        if (!cancelled) setKnowledgeEnabled(false);
+      }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -204,7 +225,7 @@ export default function Dashboard() {
 
   return (
     <div className="App" data-testid="dashboard">
-      <Header refreshing={refreshing} onRefresh={onRefresh} sessionId={sessionId} activeTab={activeTab} onTabChange={setActiveTab} buildInfo={buildInfo} />
+      <Header refreshing={refreshing} onRefresh={onRefresh} sessionId={sessionId} activeTab={activeTab} onTabChange={setActiveTab} buildInfo={buildInfo} showRevolution={knowledgeEnabled} />
       {mt5Status && mt5Status.state !== "connected" && (
         <div
           data-testid="config-mode-banner"
@@ -300,6 +321,13 @@ export default function Dashboard() {
           )}
           {activeTab === "Reports" && <ReportsView />}
           {activeTab === "Audit" && <AuditView alerts={alerts} onAck={onAckAlert} />}
+          {activeTab === "Revolution" && knowledgeEnabled && (
+            <RevolutionView
+              accounts={accounts}
+              selectedId={selectedId}
+              onSelect={(id) => dispatch({ type: "SELECT", id })}
+            />
+          )}
         </main>
       )}
       <footer

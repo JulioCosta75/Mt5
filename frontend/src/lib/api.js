@@ -26,6 +26,15 @@ export const api = {
   supervisionSnapshot: () => client.get("/supervision/snapshot").then(r => r.data),
   atlasReports: (params = {}) => client.get("/atlas/reports", { params }).then(r => r.data),
   postAtlasReport: (payload = {}) => client.post("/atlas/report", payload).then(r => r.data),
+  knowledgeStatus: () => client.get("/knowledge/v1/status").then(r => r.data),
+  knowledgeInsights: (accountId, params = {}) =>
+    client.get("/knowledge/v1/insights", { params: { account_id: accountId, ...params } }).then(r => r.data),
+  knowledgeGraveyard: (accountId) =>
+    client.get("/knowledge/v1/graveyard", { params: { account_id: accountId } }).then(r => r.data),
+  knowledgeCorrelation: (accountId, eaA, eaB) =>
+    client.get("/knowledge/v1/correlation", {
+      params: { account_id: accountId, ea_a: eaA, ea_b: eaB },
+    }).then(r => r.data),
 };
 
 export const fmt = {

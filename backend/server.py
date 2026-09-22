@@ -533,6 +533,12 @@ else:
     logging.getLogger("server").info("MT5 mode disabled — serving MOCK data (set MT5_BRIDGE_URL to switch)")
 
 
+# Gate 5 Stage 2 — read-only Knowledge routes (404 when flag off).
+from knowledge_routes import router as knowledge_router  # noqa: E402
+
+app.include_router(knowledge_router)
+
+
 # ------------------------------------------------------------
 # /api/system/health — used by the health-check page (Windows installer)
 # ------------------------------------------------------------

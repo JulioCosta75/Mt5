@@ -1,13 +1,21 @@
-# Phase 3 API Contract (Proposal — NOT ACTIVE)
-
-> These endpoints are **not mounted** on `backend/server.py`.
-> They document the future HTTP surface for integration after Phase 2 validation.
+# Phase 3 API Contract
 
 Prefix: `/api/knowledge/v1`
 
-Feature gate: `PHASE3_KNOWLEDGE_ENGINE_ENABLED=true`
+Feature gate: `PHASE3_KNOWLEDGE_ENGINE_ENABLED=true` (default **off** → HTTP 404)
 
-## EA Profiles
+## Mounted read-only (Gate 5 Stage 2)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/status` | `{enabled: true}` when flag on; **404** when off |
+| `GET` | `/insights?account_id=` | Level A/B insights + `is_stale` |
+| `GET` | `/graveyard?account_id=` | Invalidated conclusions + audit |
+| `GET` | `/correlation?account_id=&ea_a=&ea_b=` | Negative-day coincidence |
+
+No POST/write routes are mounted.
+
+## EA Profiles (unmounted)
 
 | Method | Path | Description |
 |--------|------|-------------|
