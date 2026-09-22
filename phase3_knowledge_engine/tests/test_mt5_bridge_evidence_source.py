@@ -68,6 +68,7 @@ def test_map_deal_pnl_is_profit_plus_swap_plus_commission():
         assert item.symbol == "XAUUSD"
         assert item.pnl == 12.0
         assert item.account_type == "demo"
+        assert item.account_id is None
         assert item.raw_payload == SAMPLE_DEAL
         assert item.occurred_at.year == 2026
         assert item.occurred_at.month == 8
@@ -79,7 +80,7 @@ def test_fetch_pending_maps_mocked_deals():
         src = Mt5BridgeEvidenceSource(
             repo,
             fetch_deals=lambda: [SAMPLE_DEAL],
-            fetch_account=lambda: {"server": "PepperstoneUK-Demo"},
+            fetch_account=lambda: {"server": "PepperstoneUK-Demo", "login": 5609382},
         )
         items = src.fetch_pending(limit=10)
         assert len(items) == 1
@@ -87,6 +88,7 @@ def test_fetch_pending_maps_mocked_deals():
         assert item.pnl == 12.0
         assert item.external_id == "90001"
         assert item.account_type == "demo"
+        assert item.account_id == "5609382"
         assert item.source_system == "mt5_bridge"
         profile = repo.get_ea_profile(item.ea_profile_id)
         assert profile is not None

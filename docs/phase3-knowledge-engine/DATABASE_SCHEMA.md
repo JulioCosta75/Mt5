@@ -21,6 +21,7 @@ DDL source: `phase3_knowledge_engine/infrastructure/schema.sql`
 ## Key indexes
 
 - `evidence_items(ea_profile_id)`
+- `evidence_items(account_id)` — which MT5 account produced the evidence
 - `evidence_items(source_system, external_id)` — unique when `external_id` set (dedup)
 - `knowledge_records(ea_profile_id, validation_state)`
 - `audit_trail(knowledge_record_id)`

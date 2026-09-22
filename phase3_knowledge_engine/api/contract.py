@@ -52,6 +52,7 @@ class EvidenceDTO(BaseModel):
     drawdown: float | None = None
     ea_version: str | None = None
     account_type: Literal["demo", "live"] | None = None
+    account_id: str | None = None
     context: MarketContextDTO | None = None
 
 

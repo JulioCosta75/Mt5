@@ -48,17 +48,38 @@ def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value is not None else None
 
 
+def _profiles_for_http_account(repo: Any, account_id: str) -> list[Any]:
+    """EA dossiers that have real evidence for this MT5 account_id.
+
+    Does not use ``resolve_account`` (ea_key/UUID). Empty when the account has
+    no evidence rows — including when an ea_key happens to match a profile.
+    """
+    ids = repo.list_ea_profile_ids_with_evidence_for_account(account_id)
+    profiles = []
+    for pid in ids:
+        profile = repo.get_ea_profile(pid)
+        if profile is not None:
+            profiles.append(profile)
+    return profiles
+
+
+def _single_ea_key(profiles: list[Any]) -> str | None:
+    if len(profiles) == 1:
+        return profiles[0].ea_key
+    return None
+
+
 def _load_insights_sync(
     account_id: str,
     session: str | None,
     symbol: str | None,
 ) -> dict[str, Any]:
     from phase3_knowledge_engine.infrastructure.repositories import KnowledgeRepository
-    from phase3_knowledge_engine.insights import CurrentContext, list_insights, resolve_account
+    from phase3_knowledge_engine.insights import CurrentContext, list_insights
 
     repo = KnowledgeRepository(_db_path())
-    profile = resolve_account(repo, account_id)
-    if profile is None:
+    profiles = _profiles_for_http_account(repo, account_id)
+    if not profiles:
         return {
             "account_id": account_id,
             "ea_key": None,
@@ -68,32 +89,33 @@ def _load_insights_sync(
     current = None
     if session or symbol:
         current = CurrentContext(session=session, symbol=symbol)
-    rows = list_insights(
-        repository=repo,
-        ea_profile_id=profile.id,
-        current_context=current,
-    )
     payload = []
     active = 0
-    for row in rows:
-        if row.is_context_active_now:
-            active += 1
-        payload.append(
-            {
-                "knowledge_record_id": str(row.knowledge_record_id),
-                "statement": row.statement,
-                "sample_size": row.sample_size,
-                "confidence_score": row.confidence_score,
-                "last_reviewed_at": _iso(row.last_reviewed_at),
-                "context_signature": row.context_signature,
-                "is_context_active_now": row.is_context_active_now,
-                "is_stale": row.is_stale,
-                "formatted": row.formatted,
-            }
+    for profile in profiles:
+        rows = list_insights(
+            repository=repo,
+            ea_profile_id=profile.id,
+            current_context=current,
         )
+        for row in rows:
+            if row.is_context_active_now:
+                active += 1
+            payload.append(
+                {
+                    "knowledge_record_id": str(row.knowledge_record_id),
+                    "statement": row.statement,
+                    "sample_size": row.sample_size,
+                    "confidence_score": row.confidence_score,
+                    "last_reviewed_at": _iso(row.last_reviewed_at),
+                    "context_signature": row.context_signature,
+                    "is_context_active_now": row.is_context_active_now,
+                    "is_stale": row.is_stale,
+                    "formatted": row.formatted,
+                }
+            )
     return {
         "account_id": account_id,
-        "ea_key": profile.ea_key,
+        "ea_key": _single_ea_key(profiles),
         "insights": payload,
         "counts": {"validated": len(payload), "active_now": active},
     }
@@ -102,32 +124,33 @@ def _load_insights_sync(
 def _load_graveyard_sync(account_id: str) -> dict[str, Any]:
     from phase3_knowledge_engine.graveyard import list_graveyard
     from phase3_knowledge_engine.infrastructure.repositories import KnowledgeRepository
-    from phase3_knowledge_engine.insights import resolve_account
 
     repo = KnowledgeRepository(_db_path())
-    profile = resolve_account(repo, account_id)
-    if profile is None:
+    profiles = _profiles_for_http_account(repo, account_id)
+    if not profiles:
         return {
             "account_id": account_id,
             "ea_key": None,
             "entries": [],
             "count": 0,
         }
-    rows = list_graveyard(repository=repo, ea_profile_id=profile.id)
-    payload = [
-        {
-            "knowledge_record_id": str(row.knowledge_record_id),
-            "statement": row.statement,
-            "invalidated_at": _iso(row.invalidated_at),
-            "decided_by": row.decided_by,
-            "justification": row.justification,
-            "formatted": row.formatted,
-        }
-        for row in rows
-    ]
+    payload = []
+    for profile in profiles:
+        rows = list_graveyard(repository=repo, ea_profile_id=profile.id)
+        payload.extend(
+            {
+                "knowledge_record_id": str(row.knowledge_record_id),
+                "statement": row.statement,
+                "invalidated_at": _iso(row.invalidated_at),
+                "decided_by": row.decided_by,
+                "justification": row.justification,
+                "formatted": row.formatted,
+            }
+            for row in rows
+        )
     return {
         "account_id": account_id,
-        "ea_key": profile.ea_key,
+        "ea_key": _single_ea_key(profiles),
         "entries": payload,
         "count": len(payload),
     }
@@ -195,22 +218,19 @@ def _serialize_record(record: Any, grave_by_id: dict[str, Any]) -> dict[str, Any
 
 
 def _load_ea_profiles_sync(account_id: str) -> dict[str, Any]:
-    """Return EA dossiers when ``account_id`` resolves; otherwise an empty list.
+    """Return EA dossiers that have evidence for ``account_id``.
 
-    Phase 3 has no MT5 login on profiles. A resolved account is the admission
-    ticket to this knowledge.db, so every stored EA profile is returned — that
-    is what lets the Revolution screen group multiple dossiers. Unknown
-    account → profiles:[]. Records are included so the pipeline can highlight
-    current validation states without a write path.
+    Scoping is derived from ``evidence_items.account_id`` only. Unknown or
+    no-evidence account → profiles:[]. Records are included so the pipeline
+    can highlight current validation states without a write path.
     """
     from phase3_knowledge_engine.domain.validation_states import ValidationState
     from phase3_knowledge_engine.graveyard import list_graveyard
     from phase3_knowledge_engine.infrastructure.repositories import KnowledgeRepository
-    from phase3_knowledge_engine.insights import resolve_account
 
     repo = KnowledgeRepository(_db_path())
-    matched = resolve_account(repo, account_id)
-    if matched is None:
+    profiles_for_account = _profiles_for_http_account(repo, account_id)
+    if not profiles_for_account:
         return {
             "account_id": account_id,
             "ea_key": None,
@@ -218,18 +238,18 @@ def _load_ea_profiles_sync(account_id: str) -> dict[str, Any]:
             "counts": _empty_counts(),
         }
 
-    graves = list_graveyard(repository=repo, ea_profile_id=None)
-    grave_by_id = {str(entry.knowledge_record_id): entry for entry in graves}
-
-    records_by_ea: dict[str, list[Any]] = {}
-    for state in ValidationState:
-        for record in repo.list_knowledge_records_by_state(state, limit=1000):
-            records_by_ea.setdefault(str(record.ea_profile_id), []).append(record)
-
     counts = _empty_counts()
     profiles = []
-    for profile in repo.list_ea_profiles():
-        rows = records_by_ea.get(str(profile.id), [])
+    for profile in profiles_for_account:
+        graves = list_graveyard(repository=repo, ea_profile_id=profile.id)
+        grave_by_id = {str(entry.knowledge_record_id): entry for entry in graves}
+        rows: list[Any] = []
+        for state in ValidationState:
+            rows.extend(
+                repo.list_knowledge_records_by_state(
+                    state, ea_profile_id=profile.id, limit=1000
+                )
+            )
         serialized = [_serialize_record(row, grave_by_id) for row in rows]
         for row in serialized:
             state = row["validation_state"]
@@ -259,7 +279,7 @@ def _load_ea_profiles_sync(account_id: str) -> dict[str, Any]:
         )
     return {
         "account_id": account_id,
-        "ea_key": matched.ea_key,
+        "ea_key": _single_ea_key(profiles_for_account),
         "profiles": profiles,
         "counts": counts,
     }

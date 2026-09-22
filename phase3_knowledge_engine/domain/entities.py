@@ -49,6 +49,7 @@ class EvidenceItem:
     exit_reason: str | None = None
     ea_version: str | None = None
     account_type: AccountType | None = None
+    account_id: str | None = None  # specific MT5 account; None when source omitted it
     test_type: TestType | None = None
     raw_payload: dict[str, Any] = field(default_factory=dict)
     context: MarketContext | None = None

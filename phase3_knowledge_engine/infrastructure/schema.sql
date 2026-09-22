@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS schema_meta (
     value TEXT NOT NULL
 );
 
-INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '3');
+INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '4');
 
 CREATE TABLE IF NOT EXISTS ea_profiles (
     id                  TEXT PRIMARY KEY,
@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS evidence_items (
     exit_reason         TEXT,
     ea_version          TEXT,
     account_type        TEXT,
+    account_id          TEXT,
     test_type           TEXT,
     raw_payload_json    TEXT NOT NULL DEFAULT '{}',
     context_id          TEXT REFERENCES market_contexts(id),
@@ -73,6 +74,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_evidence_source_external
 
 CREATE INDEX IF NOT EXISTS idx_evidence_ea ON evidence_items(ea_profile_id);
 CREATE INDEX IF NOT EXISTS idx_evidence_occurred ON evidence_items(occurred_at);
+CREATE INDEX IF NOT EXISTS idx_evidence_account ON evidence_items(account_id);
 
 CREATE TABLE IF NOT EXISTS knowledge_records (
     id                              TEXT PRIMARY KEY,

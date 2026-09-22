@@ -76,6 +76,26 @@ def resolve_account_type(account: dict[str, Any] | None) -> AccountType:
     return "live"
 
 
+def resolve_account_id(account: dict[str, Any] | None) -> str | None:
+    """Capture the real account identifier from a bridge /account payload.
+
+    Never invented: uses ``account_id`` or ``id`` if the source sent a non-empty
+    value, otherwise ``login``. Missing all of those → None.
+    """
+    if not account:
+        return None
+    for key in ("account_id", "id"):
+        value = account.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        if isinstance(value, int):
+            return str(value)
+    login = account.get("login")
+    if login is None or login == "":
+        return None
+    return str(login)
+
+
 def deal_net_pnl(deal: dict[str, Any]) -> float:
     """Net real result: profit + swap + commission."""
     profit = float(deal.get("profit") or 0.0)
@@ -141,11 +161,13 @@ def map_deal_to_evidence(
     ea_profile_id: UUID,
     account_type: AccountType,
     ingestion_batch_id: str | None = None,
+    account_id: str | None = None,
 ) -> EvidenceItem:
     """Map one bridge deal dict to EvidenceItem (pnl = profit+swap+commission)."""
     ticket = deal.get("ticket")
     if ticket is None:
         raise ValueError("deal missing ticket")
+    captured = (account_id or "").strip() or None
     return EvidenceItem(
         id=uuid4(),
         ea_profile_id=ea_profile_id,
@@ -154,6 +176,7 @@ def map_deal_to_evidence(
         symbol=str(deal.get("symbol") or ""),
         pnl=deal_net_pnl(deal),
         account_type=account_type,
+        account_id=captured,
         test_type="forward",
         raw_payload=dict(deal),
         source_system=SOURCE_SYSTEM,
@@ -187,6 +210,8 @@ class Mt5BridgeEvidenceSource:
         self._fetch_account = fetch_account
         self._ingestion_batch_id = ingestion_batch_id
         self._resolved_account_type: AccountType | None = account_type
+        self._account_payload: dict[str, Any] | None = None
+        self._account_loaded = False
 
     @property
     def source_system(self) -> str:
@@ -212,11 +237,20 @@ class Mt5BridgeEvidenceSource:
             logger.warning("Bridge /account unavailable; defaulting account_type: %s", e)
             return {}
 
+    def _account_dict(self) -> dict[str, Any]:
+        if not self._account_loaded:
+            self._account_payload = self._load_account()
+            self._account_loaded = True
+        return self._account_payload or {}
+
     def _account_type(self) -> AccountType:
         if self._resolved_account_type is not None:
             return self._resolved_account_type
-        self._resolved_account_type = resolve_account_type(self._load_account())
+        self._resolved_account_type = resolve_account_type(self._account_dict())
         return self._resolved_account_type
+
+    def _account_id(self) -> str | None:
+        return resolve_account_id(self._account_dict())
 
     def fetch_pending(
         self,
@@ -226,7 +260,14 @@ class Mt5BridgeEvidenceSource:
     ) -> list[EvidenceItem]:
         """Return bridge deals not yet stored (by ticket / external_id)."""
         limit = max(1, int(limit))
-        account_type = self._account_type()
+        payload = self._account_dict()
+        account_type = (
+            self._account_type_override
+            if self._account_type_override is not None
+            else resolve_account_type(payload)
+        )
+        self._resolved_account_type = account_type
+        account_id = resolve_account_id(payload)
         out: list[EvidenceItem] = []
         for deal in self._load_deals():
             if len(out) >= limit:
@@ -250,6 +291,7 @@ class Mt5BridgeEvidenceSource:
                     deal,
                     ea_profile_id=profile.id,
                     account_type=account_type,
+                    account_id=account_id,
                     ingestion_batch_id=self._ingestion_batch_id,
                 )
             )

@@ -58,6 +58,7 @@ python3 -m pytest phase3_knowledge_engine/tests/ -q
 ```bash
 # From bridge JSON/CSV export
 python3 -m phase3_knowledge_engine.ingest --file deals.json --db ./knowledge.db
+python3 -m phase3_knowledge_engine.ingest --file deals.json --account-type demo --account-id MT5-5609382 --db ./knowledge.db
 
 # Live bridge (read-only GET /deals — reuses backend/mt5_client.BridgeClient)
 python3 -m phase3_knowledge_engine.ingest \
@@ -147,8 +148,10 @@ Read-only mounts on `backend/server.py` under `/api/knowledge/v1`
 (insights, graveyard, correlation, status, ea-profiles). **404 on every route**
 unless `PHASE3_KNOWLEDGE_ENGINE_ENABLED=true`. The dashboard "Revolution" tab
 is shown only when `GET /status` returns `{enabled: true}`. The Revolution
-screen groups Memory by EA dossier (pipeline + nested graveyard). No writes.
-No Level C.
+screen groups Memory by EA dossier (pipeline + nested graveyard). `insights`,
+`graveyard`, and `ea-profiles` are scoped to EA profiles that have evidence
+rows for the requested `account_id` (never the whole `knowledge.db`).
+No writes. No Level C.
 
 ## Database
 

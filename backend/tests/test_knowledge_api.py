@@ -13,6 +13,7 @@ from phase3_knowledge_engine.application.services import KnowledgeEngineService
 from phase3_knowledge_engine.domain.entities import (
     AuditTrailEntry,
     EAKnowledgeProfile,
+    EvidenceItem,
     KnowledgeRecord,
 )
 from phase3_knowledge_engine.domain.validation_states import ValidationState
@@ -71,6 +72,28 @@ def _profile(repo: KnowledgeRepository, *, key: str) -> EAKnowledgeProfile:
             market_conditions={},
             status="active",
         )
+    )
+
+
+def _evidence(
+    profile: EAKnowledgeProfile,
+    *,
+    account_id: str | None,
+    ticket: str,
+) -> EvidenceItem:
+    return EvidenceItem(
+        id=uuid4(),
+        ea_profile_id=profile.id,
+        evidence_type="trade",
+        occurred_at=datetime(2026, 7, 10, tzinfo=timezone.utc),
+        symbol="XAUUSD",
+        session="London",
+        pnl=-1.5,
+        account_type="demo",
+        account_id=account_id,
+        test_type="forward",
+        source_system="mt5_bridge",
+        external_id=ticket,
     )
 
 
@@ -145,6 +168,8 @@ def test_flag_on_insights_and_graveyard_scoped_to_account(monkeypatch):
         repo = KnowledgeRepository(db)
         london = _profile(repo, key="london-scalper")
         ny = _profile(repo, key="ny-scalper")
+        repo.save_evidence(_evidence(london, account_id="acc-london", ticket="L-1"))
+        repo.save_evidence(_evidence(ny, account_id="acc-ny", ticket="N-1"))
         repo.save_knowledge_record(
             _knowledge_record(london, statement="Spread filter reduces London open losses")
         )
@@ -175,7 +200,7 @@ def test_flag_on_insights_and_graveyard_scoped_to_account(monkeypatch):
         client = _client(monkeypatch, enabled=True, db_path=db)
         r = client.get(
             "/api/knowledge/v1/insights",
-            params={"account_id": "london-scalper", "session": "London", "symbol": "XAUUSD"},
+            params={"account_id": "acc-london", "session": "London", "symbol": "XAUUSD"},
         )
         assert r.status_code == 200
         body = r.json()
@@ -186,13 +211,19 @@ def test_flag_on_insights_and_graveyard_scoped_to_account(monkeypatch):
         assert body["insights"][0]["is_context_active_now"] is True
         assert "Should not leak" not in r.text
 
-        g = client.get("/api/knowledge/v1/graveyard", params={"account_id": "london-scalper"})
+        g = client.get("/api/knowledge/v1/graveyard", params={"account_id": "acc-london"})
         assert g.status_code == 200
         entries = g.json()["entries"]
         assert len(entries) == 1
         assert entries[0]["statement"] == "London open always profitable"
         assert entries[0]["justification"] == "Contradictory evidence on NY session."
         assert entries[0]["decided_by"] == "reviewer@forge"
+
+        by_ea_key = client.get(
+            "/api/knowledge/v1/insights", params={"account_id": "london-scalper"}
+        )
+        assert by_ea_key.status_code == 200
+        assert by_ea_key.json()["insights"] == []
 
 
 def test_flag_on_ea_profiles_fields_and_unknown_account(monkeypatch):
@@ -201,6 +232,7 @@ def test_flag_on_ea_profiles_fields_and_unknown_account(monkeypatch):
         repo = KnowledgeRepository(db)
         london = _profile(repo, key="london-scalper")
         _profile(repo, key="ny-scalper")
+        repo.save_evidence(_evidence(london, account_id="acc-london", ticket="L-1"))
         repo.save_knowledge_record(
             _knowledge_record(london, statement="Spread filter reduces London open losses")
         )
@@ -212,14 +244,20 @@ def test_flag_on_ea_profiles_fields_and_unknown_account(monkeypatch):
         assert unknown.status_code == 200
         assert unknown.json()["profiles"] == []
 
-        r = client.get(
+        no_evidence = client.get(
             "/api/knowledge/v1/ea-profiles", params={"account_id": "london-scalper"}
+        )
+        assert no_evidence.status_code == 200
+        assert no_evidence.json()["profiles"] == []
+
+        r = client.get(
+            "/api/knowledge/v1/ea-profiles", params={"account_id": "acc-london"}
         )
         assert r.status_code == 200
         body = r.json()
         assert body["ea_key"] == "london-scalper"
         keys = {row["ea_key"]: row for row in body["profiles"]}
-        assert set(keys) == {"london-scalper", "ny-scalper"}
+        assert set(keys) == {"london-scalper"}
         row = keys["london-scalper"]
         assert row["name"] == "london-scalper"
         assert row["version"] == "1.0.0"
@@ -237,6 +275,90 @@ def test_flag_on_ea_profiles_fields_and_unknown_account(monkeypatch):
             rec["validation_state"] == ValidationState.KNOWLEDGE.value
             for rec in row["records"]
         )
+
+
+def test_two_accounts_do_not_mix_on_ea_profiles_insights_graveyard(monkeypatch):
+    with tempfile.TemporaryDirectory() as tmp:
+        db = str(Path(tmp) / "knowledge.db")
+        repo = KnowledgeRepository(db)
+        london = _profile(repo, key="london-scalper")
+        ny = _profile(repo, key="ny-scalper")
+        repo.save_evidence(_evidence(london, account_id="acc-a", ticket="A-1"))
+        repo.save_evidence(_evidence(ny, account_id="acc-b", ticket="B-1"))
+        repo.save_knowledge_record(
+            _knowledge_record(london, statement="London fact stays on acc-a")
+        )
+        repo.save_knowledge_record(
+            _knowledge_record(ny, statement="NY fact stays on acc-b")
+        )
+        ny_dead = KnowledgeRecord(
+            id=uuid4(),
+            ea_profile_id=ny.id,
+            validation_state=ValidationState.INVALIDATED_CONCLUSION.value,
+            statement="NY invalidated stays on acc-b",
+            created_at=datetime(2026, 7, 1, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 7, 20, tzinfo=timezone.utc),
+        )
+        repo.save_knowledge_record(ny_dead)
+        repo.append_audit(
+            AuditTrailEntry(
+                id=uuid4(),
+                knowledge_record_id=ny_dead.id,
+                from_state=ValidationState.HYPOTHESIS.value,
+                to_state=ValidationState.INVALIDATED_CONCLUSION.value,
+                transitioned_at=datetime(2026, 7, 20, 9, 0, tzinfo=timezone.utc),
+                actor="reviewer@forge",
+                justification="Only on account B.",
+            )
+        )
+
+        client = _client(monkeypatch, enabled=True, db_path=db)
+        a_profiles = client.get(
+            "/api/knowledge/v1/ea-profiles", params={"account_id": "acc-a"}
+        ).json()
+        assert [p["ea_key"] for p in a_profiles["profiles"]] == ["london-scalper"]
+        a_text = str(a_profiles)
+        assert "London fact stays on acc-a" in a_text
+        assert "NY fact stays on acc-b" not in a_text
+        assert "NY invalidated" not in a_text
+
+        b_profiles = client.get(
+            "/api/knowledge/v1/ea-profiles", params={"account_id": "acc-b"}
+        ).json()
+        assert [p["ea_key"] for p in b_profiles["profiles"]] == ["ny-scalper"]
+        b_text = str(b_profiles)
+        assert "NY fact stays on acc-b" in b_text
+        assert "London fact stays on acc-a" not in b_text
+
+        a_ins = client.get(
+            "/api/knowledge/v1/insights", params={"account_id": "acc-a"}
+        ).json()
+        assert [row["statement"] for row in a_ins["insights"]] == [
+            "London fact stays on acc-a"
+        ]
+        b_ins = client.get(
+            "/api/knowledge/v1/insights", params={"account_id": "acc-b"}
+        ).json()
+        assert [row["statement"] for row in b_ins["insights"]] == [
+            "NY fact stays on acc-b"
+        ]
+
+        a_grave = client.get(
+            "/api/knowledge/v1/graveyard", params={"account_id": "acc-a"}
+        ).json()
+        assert a_grave["entries"] == []
+        b_grave = client.get(
+            "/api/knowledge/v1/graveyard", params={"account_id": "acc-b"}
+        ).json()
+        assert [row["statement"] for row in b_grave["entries"]] == [
+            "NY invalidated stays on acc-b"
+        ]
+
+        zero = client.get(
+            "/api/knowledge/v1/ea-profiles", params={"account_id": "acc-empty"}
+        ).json()
+        assert zero["profiles"] == []
+        assert zero["counts"]["validated"] == 0
 
 
 def test_flag_on_correlation_insufficient_omits_number(monkeypatch):

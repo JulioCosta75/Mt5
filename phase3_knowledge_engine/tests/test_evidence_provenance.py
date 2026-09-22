@@ -64,6 +64,7 @@ def test_provenance_roundtrip_persistence():
         assert loaded.source_system == "mt5_bridge"
         assert loaded.external_id == "ticket-12345"
         assert loaded.ingestion_batch_id == "batch-2026-07-14"
+        assert loaded.account_id is None
 
 
 def test_schema_version_is_at_least_two():

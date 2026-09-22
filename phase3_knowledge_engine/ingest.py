@@ -128,6 +128,7 @@ def run_file_ingest(
     db_path: str,
     limit: int,
     account_type: str | None,
+    account_id: str | None = None,
 ) -> dict:
     repo = KnowledgeRepository(db_path)
     batch_id = f"file-{uuid4().hex[:12]}"
@@ -136,6 +137,7 @@ def run_file_ingest(
         acct = account_type
     else:
         acct = resolve_account_type({})
+    captured = (account_id or "").strip() or None
     items = []
     for deal in deals:
         magic_raw = deal.get("magic")
@@ -149,6 +151,7 @@ def run_file_ingest(
                 deal,
                 ea_profile_id=profile.id,
                 account_type=acct,  # type: ignore[arg-type]
+                account_id=captured,
                 ingestion_batch_id=batch_id,
             )
         )
@@ -209,6 +212,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override account_type for --file ingestion",
     )
+    p.add_argument(
+        "--account-id",
+        default=None,
+        help="MT5 account identifier stored on each evidence row (omitted → None)",
+    )
     return p
 
 
@@ -221,6 +229,7 @@ def main(argv: list[str] | None = None) -> int:
             db_path=args.db,
             limit=args.limit,
             account_type=args.account_type,
+            account_id=args.account_id,
         )
     else:
         import os

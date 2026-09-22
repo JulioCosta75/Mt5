@@ -34,6 +34,24 @@ def _uuid() -> UUID:
     return uuid4()
 
 
+def _account_id_lookup_values(account_id: str) -> list[str]:
+    """Exact account_id plus the Phase 2 ``MT5-{login}`` alias of a numeric login."""
+    raw = (account_id or "").strip()
+    if not raw:
+        return []
+    values = [raw]
+    upper = raw.upper()
+    if upper.startswith("MT5-") and raw[4:].isdigit():
+        values.append(raw[4:])
+    elif raw.isdigit():
+        values.append(f"MT5-{raw}")
+    seen: list[str] = []
+    for value in values:
+        if value not in seen:
+            seen.append(value)
+    return seen
+
+
 class KnowledgeRepository:
     """SQLite repository — isolated from atlas.db."""
 
@@ -120,6 +138,25 @@ class KnowledgeRepository:
                 )
                 cx.execute(
                     "UPDATE schema_meta SET value = '3' WHERE key = 'schema_version'"
+                )
+            version = 3
+        if version < 4:
+            with self._connection() as cx:
+                columns = {
+                    r[1] for r in cx.execute("PRAGMA table_info(evidence_items)").fetchall()
+                }
+                if "account_id" not in columns:
+                    cx.execute(
+                        "ALTER TABLE evidence_items ADD COLUMN account_id TEXT"
+                    )
+                cx.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_evidence_account
+                    ON evidence_items(account_id)
+                    """
+                )
+                cx.execute(
+                    "UPDATE schema_meta SET value = '4' WHERE key = 'schema_version'"
                 )
 
     # ---- EA profiles ---------------------------------------------------------
@@ -240,17 +277,18 @@ class KnowledgeRepository:
                     INSERT INTO evidence_items (
                         id, ea_profile_id, evidence_type, occurred_at, symbol,
                         session, market_regime, volatility, spread, pnl, drawdown,
-                        entry_reason, exit_reason, ea_version, account_type, test_type,
-                        raw_payload_json, context_id, source_system, external_id,
+                        entry_reason, exit_reason, ea_version, account_type, account_id,
+                        test_type, raw_payload_json, context_id, source_system, external_id,
                         ingestion_batch_id, created_at
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         str(item.id), str(item.ea_profile_id), item.evidence_type,
                         _iso(item.occurred_at), item.symbol, item.session,
                         item.market_regime, item.volatility, item.spread,
                         item.pnl, item.drawdown, item.entry_reason, item.exit_reason,
-                        item.ea_version, item.account_type, item.test_type,
+                        item.ea_version, item.account_type, item.account_id,
+                        item.test_type,
                         json.dumps(item.raw_payload), context_id, item.source_system,
                         item.external_id, item.ingestion_batch_id, _iso(_utcnow()),
                     ),
@@ -295,6 +333,7 @@ class KnowledgeRepository:
         return self._row_to_evidence(row)
 
     def _row_to_evidence(self, row: sqlite3.Row) -> EvidenceItem:
+        keys = row.keys()
         return EvidenceItem(
             id=UUID(row["id"]),
             ea_profile_id=UUID(row["ea_profile_id"]),
@@ -311,6 +350,7 @@ class KnowledgeRepository:
             exit_reason=row["exit_reason"],
             ea_version=row["ea_version"],
             account_type=row["account_type"],
+            account_id=row["account_id"] if "account_id" in keys else None,
             test_type=row["test_type"],
             raw_payload=json.loads(row["raw_payload_json"]),
             source_system=row["source_system"],
@@ -365,6 +405,29 @@ class KnowledgeRepository:
         with self._connection() as cx:
             rows = cx.execute(sql, params).fetchall()
         return [self._row_to_evidence(r) for r in rows]
+
+    def list_ea_profile_ids_with_evidence_for_account(
+        self, account_id: str
+    ) -> list[UUID]:
+        """EA dossiers that have at least one evidence row for this account.
+
+        Derived only from ``evidence_items.account_id`` (never a manual map).
+        Rows with NULL/blank account_id are ignored. Empty input → [].
+        Also recognizes the Phase 2 ``MT5-{login}`` form of a numeric login.
+        """
+        candidates = _account_id_lookup_values(account_id)
+        if not candidates:
+            return []
+        placeholders = ",".join("?" * len(candidates))
+        sql = f"""
+            SELECT DISTINCT ea_profile_id
+              FROM evidence_items
+             WHERE account_id IN ({placeholders})
+             ORDER BY ea_profile_id ASC
+        """
+        with self._connection() as cx:
+            rows = cx.execute(sql, candidates).fetchall()
+        return [UUID(r["ea_profile_id"]) for r in rows]
 
     # ---- Knowledge records ---------------------------------------------------
     def save_knowledge_record(

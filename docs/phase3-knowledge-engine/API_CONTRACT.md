@@ -9,12 +9,14 @@ Feature gate: `PHASE3_KNOWLEDGE_ENGINE_ENABLED=true` (default **off** → HTTP 4
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/status` | `{enabled: true}` when flag on; **404** when off |
-| `GET` | `/insights?account_id=` | Level A/B insights + `is_stale` |
-| `GET` | `/graveyard?account_id=` | Invalidated conclusions + audit |
-| `GET` | `/correlation?account_id=&ea_a=&ea_b=` | Negative-day coincidence |
-| `GET` | `/ea-profiles?account_id=` | EA dossiers + records (empty list when account unknown) |
+| `GET` | `/insights?account_id=` | Level A/B insights for EAs with evidence on that account |
+| `GET` | `/graveyard?account_id=` | Invalidated conclusions for those EAs |
+| `GET` | `/correlation?account_id=&ea_a=&ea_b=` | Negative-day coincidence (explicit EA keys) |
+| `GET` | `/ea-profiles?account_id=` | EA dossiers with evidence on that account (empty if none) |
 
 No POST/write routes are mounted.
+
+`account_id` on `insights` / `graveyard` / `ea-profiles` is the MT5 account stored on `evidence_items.account_id`. Only EA profiles with real evidence for that account are returned. Empty list when none. `correlation` still takes two explicit EA keys.
 
 ## EA Profiles (unmounted writes / by-id)
 
