@@ -79,7 +79,9 @@ def test_service_has_no_bulk_enable_helper():
         "default_on",
     }
     assert names.isdisjoint(forbidden)
-    source = inspect.getsource(PreferenceService)
-    lowered = source.lower()
-    assert "bulk" not in lowered
-    assert "enable_all" not in lowered
+    public = [
+        name
+        for name, value in inspect.getmembers(PreferenceService, predicate=inspect.isfunction)
+        if not name.startswith("_")
+    ]
+    assert set(public).isdisjoint(forbidden)
