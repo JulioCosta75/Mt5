@@ -141,12 +141,14 @@ then intersection/union. At or above `EA_CORRELATION_FLAG_THRESHOLD` (default
 (observed fact only). Missing history → `dados insuficientes`; coincidence is
 omitted, never invented as 0%. Not mounted on Phase 2. Flag untouched.
 
-## Gate 5 Stage 2 — Atlas Revolution (flag-gated HTTP + tab)
+## Gate 5 Stage 2b — Atlas Revolution (flag-gated HTTP + EA dossiers)
 
 Read-only mounts on `backend/server.py` under `/api/knowledge/v1`
-(insights, graveyard, correlation, status). **404 on every route** unless
-`PHASE3_KNOWLEDGE_ENGINE_ENABLED=true`. The dashboard "Revolution" tab is
-shown only when `GET /status` returns `{enabled: true}`. No writes. No Level C.
+(insights, graveyard, correlation, status, ea-profiles). **404 on every route**
+unless `PHASE3_KNOWLEDGE_ENGINE_ENABLED=true`. The dashboard "Revolution" tab
+is shown only when `GET /status` returns `{enabled: true}`. The Revolution
+screen groups Memory by EA dossier (pipeline + nested graveyard). No writes.
+No Level C.
 
 ## Database
 

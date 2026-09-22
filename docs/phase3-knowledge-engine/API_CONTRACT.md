@@ -4,7 +4,7 @@ Prefix: `/api/knowledge/v1`
 
 Feature gate: `PHASE3_KNOWLEDGE_ENGINE_ENABLED=true` (default **off** → HTTP 404)
 
-## Mounted read-only (Gate 5 Stage 2)
+## Mounted read-only (Gate 5 Stage 2b)
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -12,14 +12,14 @@ Feature gate: `PHASE3_KNOWLEDGE_ENGINE_ENABLED=true` (default **off** → HTTP 4
 | `GET` | `/insights?account_id=` | Level A/B insights + `is_stale` |
 | `GET` | `/graveyard?account_id=` | Invalidated conclusions + audit |
 | `GET` | `/correlation?account_id=&ea_a=&ea_b=` | Negative-day coincidence |
+| `GET` | `/ea-profiles?account_id=` | EA dossiers + records (empty list when account unknown) |
 
 No POST/write routes are mounted.
 
-## EA Profiles (unmounted)
+## EA Profiles (unmounted writes / by-id)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/ea-profiles` | List all EA dossiers |
 | `GET` | `/ea-profiles/{id}` | Get dossier by ID |
 | `POST` | `/ea-profiles` | Register or update dossier |
 

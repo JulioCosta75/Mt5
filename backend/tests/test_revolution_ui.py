@@ -1,4 +1,4 @@
-"""Frontend Gate 5 Stage 2 — Revolution tab gating and read-only markup."""
+"""Frontend Gate 5 Stage 2b — Revolution tab gating and read-only markup."""
 
 from __future__ import annotations
 
@@ -29,3 +29,9 @@ def test_revolution_page_has_no_action_buttons_or_suggestions():
     assert "dados insuficientes" in page
     assert "revolution-strike" in page
     assert "revolution-stale" in page
+    assert "Memory — what survived validation" in page
+    assert 'data-testid="revolution-dossier"' in page
+    assert "Raw" in page and "Pattern" in page and "Hypothesis" in page
+    assert "knowledgeEaProfiles" in page
+    assert "api.knowledgeInsights" not in page
+    assert "@router.post" not in page

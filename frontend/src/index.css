@@ -342,7 +342,7 @@ input:focus, select:focus { border-color: var(--bd-focus); }
 .revolution-page {
     background: linear-gradient(180deg, #120818 0%, #0A0A0A 48%);
     border: 1px solid rgba(168, 85, 247, 0.28);
-    padding: 18px 20px 28px;
+    padding: 16px 18px 24px;
     min-height: 60vh;
     color: #EDE9FE;
 }
@@ -355,26 +355,37 @@ input:focus, select:focus { border-color: var(--bd-focus); }
     font-weight: 600;
 }
 .revolution-strip {
+    margin-bottom: 16px;
+}
+.revolution-memory-title {
+    margin: 0 0 10px;
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: #E9D5FF;
+}
+.revolution-metrics {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-    margin-bottom: 18px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
 }
 .revolution-metric {
     border: 1px solid rgba(168, 85, 247, 0.28);
     background: rgba(88, 28, 135, 0.18);
-    padding: 14px 16px;
+    padding: 10px 12px;
 }
 .revolution-metric-value {
     display: block;
-    font-size: 28px;
+    font-size: 22px;
     font-weight: 600;
     color: #F5F3FF;
+    line-height: 1.1;
 }
 .revolution-metric-label {
     display: block;
-    margin-top: 4px;
-    font-size: 11px;
+    margin-top: 3px;
+    font-size: 10px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: #A78BFA;
@@ -387,6 +398,235 @@ input:focus, select:focus { border-color: var(--bd-focus); }
     color: #C4B5FD;
     margin-bottom: 8px;
 }
+.revolution-dossier {
+    border: 1px solid rgba(168, 85, 247, 0.28);
+    background: rgba(16, 8, 24, 0.92);
+    padding: 12px 14px 14px;
+    margin-bottom: 12px;
+}
+.revolution-dossier-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px 16px;
+}
+.revolution-dossier-title h2 {
+    margin: 0;
+    font-size: 15px;
+    letter-spacing: 0.04em;
+    text-transform: none;
+    color: #F5F3FF;
+}
+.revolution-meta {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    color: #A78BFA;
+}
+.revolution-dossier-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+.revolution-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border: 1px solid rgba(168, 85, 247, 0.35);
+    color: #E9D5FF;
+    line-height: 1.4;
+}
+.revolution-badge-version {
+    border-color: rgba(196, 181, 253, 0.45);
+    color: #DDD6FE;
+}
+.revolution-badge-status {
+    font-weight: 600;
+}
+.revolution-status-active { border-color: rgba(52, 211, 153, 0.5); color: #6EE7B7; }
+.revolution-status-testing { border-color: rgba(96, 165, 250, 0.5); color: #93C5FD; }
+.revolution-status-restricted { border-color: rgba(251, 191, 36, 0.5); color: #FCD34D; }
+.revolution-status-stopped,
+.revolution-status-quarantine { border-color: rgba(248, 113, 113, 0.5); color: #FCA5A5; }
+.revolution-badge-scope {
+    color: #C4B5FD;
+}
+.revolution-purpose {
+    margin: 8px 0 10px;
+    font-size: 13px;
+    color: #DDD6FE;
+    line-height: 1.4;
+}
+.revolution-pipeline {
+    display: flex;
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 8px 6px;
+    gap: 0;
+    border: 1px solid rgba(168, 85, 247, 0.18);
+    background: rgba(10, 6, 16, 0.7);
+    overflow-x: auto;
+}
+.revolution-pipeline-step {
+    flex: 1 1 0;
+    min-width: 72px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    position: relative;
+    opacity: 0.38;
+}
+.revolution-pipeline-step + .revolution-pipeline-step::before {
+    content: "";
+    position: absolute;
+    left: -50%;
+    top: 6px;
+    width: 100%;
+    height: 1px;
+    background: rgba(168, 85, 247, 0.22);
+    z-index: 0;
+}
+.revolution-pipeline-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #71717A;
+    border: 1px solid #A1A1AA;
+    z-index: 1;
+}
+.revolution-pipeline-label {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #A1A1AA;
+}
+.revolution-pipeline-step.is-occupied {
+    opacity: 0.85;
+}
+.revolution-pipeline-step.is-current {
+    opacity: 1;
+}
+.revolution-pipeline-step.is-current .revolution-pipeline-dot {
+    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.22);
+}
+.revolution-pipeline-step.is-current .revolution-pipeline-label {
+    font-weight: 600;
+    color: #E9D5FF;
+}
+.revolution-pipeline-step.is-current[data-state="raw_observation"] .revolution-pipeline-dot,
+.revolution-pipeline-step.is-current[data-state="repeated_pattern"] .revolution-pipeline-dot {
+    background: #A1A1AA;
+    border-color: #D4D4D8;
+}
+.revolution-pipeline-step.is-current[data-state="hypothesis"] .revolution-pipeline-dot {
+    background: #2563EB;
+    border-color: #93C5FD;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.28);
+}
+.revolution-pipeline-step.is-current[data-state="hypothesis"] .revolution-pipeline-label { color: #BFDBFE; }
+.revolution-pipeline-step.is-current[data-state="evidence_under_review"] .revolution-pipeline-dot {
+    background: #D97706;
+    border-color: #FBBF24;
+    box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.28);
+}
+.revolution-pipeline-step.is-current[data-state="evidence_under_review"] .revolution-pipeline-label { color: #FDE68A; }
+.revolution-pipeline-step.is-current[data-state="knowledge"] .revolution-pipeline-dot,
+.revolution-pipeline-step.is-current[data-state="fully_validated_conclusion"] .revolution-pipeline-dot,
+.revolution-pipeline-step.is-current[data-state="provisionally_validated_conclusion"] .revolution-pipeline-dot {
+    background: #EAB308;
+    border-color: #FACC15;
+    box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.28);
+}
+.revolution-pipeline-step.is-current[data-state="knowledge"] .revolution-pipeline-label,
+.revolution-pipeline-step.is-current[data-state="fully_validated_conclusion"] .revolution-pipeline-label,
+.revolution-pipeline-step.is-current[data-state="provisionally_validated_conclusion"] .revolution-pipeline-label {
+    color: #FDE68A;
+}
+.revolution-pipeline-step.is-candidate .revolution-pipeline-dot {
+    background: #A855F7;
+    border-color: #C084FC;
+    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.25);
+}
+.revolution-pipeline-step[data-state="hypothesis"].is-occupied .revolution-pipeline-dot {
+    background: #3B82F6;
+    border-color: #60A5FA;
+}
+.revolution-pipeline-step[data-state="evidence_under_review"].is-occupied .revolution-pipeline-dot {
+    background: #F59E0B;
+    border-color: #FBBF24;
+}
+.revolution-pipeline-step[data-state="provisionally_validated_conclusion"].is-occupied .revolution-pipeline-dot,
+.revolution-pipeline-step[data-state="fully_validated_conclusion"].is-occupied .revolution-pipeline-dot,
+.revolution-pipeline-step[data-state="knowledge"].is-occupied .revolution-pipeline-dot {
+    background: #CA8A04;
+    border-color: #EAB308;
+}
+.revolution-dossier-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 16px;
+}
+.revolution-dossier-col h3,
+.revolution-dossier-graveyard h3 {
+    margin: 0 0 6px;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #C4B5FD;
+    font-weight: 600;
+}
+.revolution-fact-row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px;
+    align-items: start;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(168, 85, 247, 0.12);
+    font-size: 13px;
+    line-height: 1.4;
+}
+.revolution-fact-row p { margin: 0; }
+.revolution-state {
+    display: inline-block;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    font-weight: 600;
+    white-space: nowrap;
+    margin-top: 2px;
+}
+.revolution-state-neutral {
+    color: #D4D4D8;
+    border: 1px solid #71717A;
+    background: rgba(113, 113, 122, 0.18);
+}
+.revolution-state-blue {
+    color: #BFDBFE;
+    border: 1px solid #3B82F6;
+    background: rgba(37, 99, 235, 0.2);
+}
+.revolution-state-amber {
+    color: #FDE68A;
+    border: 1px solid #F59E0B;
+    background: rgba(245, 158, 11, 0.16);
+}
+.revolution-state-gold {
+    color: #FEF3C7;
+    border: 1px solid #EAB308;
+    background: rgba(234, 179, 8, 0.16);
+}
+.revolution-state-muted {
+    color: #A1A1AA;
+    border: 1px solid #52525B;
+    background: rgba(63, 63, 70, 0.3);
+}
 .revolution-card {
     border: 1px solid rgba(168, 85, 247, 0.22);
     background: rgba(20, 10, 31, 0.85);
@@ -398,6 +638,7 @@ input:focus, select:focus { border-color: var(--bd-focus); }
 .revolution-card p { margin: 0 0 8px; }
 .revolution-stale {
     display: inline-block;
+    margin-top: 4px;
     font-size: 10px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -410,6 +651,11 @@ input:focus, select:focus { border-color: var(--bd-focus); }
     font-size: 13px;
     font-style: italic;
 }
+.revolution-dossier-graveyard {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(168, 85, 247, 0.16);
+}
 .revolution-grave {
     opacity: 0.72;
 }
@@ -420,6 +666,7 @@ input:focus, select:focus { border-color: var(--bd-focus); }
 .revolution-reason {
     font-size: 12px;
     color: #A78BFA;
+    margin-top: 2px;
 }
 .revolution-pair {
     display: flex;
@@ -435,4 +682,18 @@ input:focus, select:focus { border-color: var(--bd-focus); }
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: #C4B5FD;
+}
+@media (max-width: 800px) {
+    .revolution-metrics,
+    .revolution-dossier-body {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+@media (max-width: 520px) {
+    .revolution-metrics {
+        grid-template-columns: 1fr 1fr;
+    }
+    .revolution-dossier-body {
+        grid-template-columns: 1fr;
+    }
 }

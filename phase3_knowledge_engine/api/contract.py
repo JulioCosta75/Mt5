@@ -1,8 +1,8 @@
 """API contract models for the Phase 3 HTTP surface.
 
-Gate 5 Stage 2 mounts four read-only GETs on backend/server.py under
-``/api/knowledge/v1`` (insights, graveyard, correlation, status). They
-return 404 unless ``PHASE3_KNOWLEDGE_ENGINE_ENABLED`` is true.
+Gate 5 Stage 2b mounts five read-only GETs on backend/server.py under
+``/api/knowledge/v1`` (insights, graveyard, correlation, status, ea-profiles).
+They return 404 unless ``PHASE3_KNOWLEDGE_ENGINE_ENABLED`` is true.
 
 POST / write routes below remain unmounted.
 """
@@ -87,7 +87,6 @@ class AuditTrailDTO(BaseModel):
 
 
 # Future write / query routes (still unmounted):
-# GET    /api/knowledge/v1/ea-profiles
 # GET    /api/knowledge/v1/ea-profiles/{id}
 # POST   /api/knowledge/v1/ea-profiles
 # POST   /api/knowledge/v1/observations
@@ -101,6 +100,7 @@ class AuditTrailDTO(BaseModel):
 # GET    /api/knowledge/v1/insights?account_id=...
 # GET    /api/knowledge/v1/graveyard?account_id=...
 # GET    /api/knowledge/v1/correlation?account_id=...&ea_a=...&ea_b=...
+# GET    /api/knowledge/v1/ea-profiles?account_id=...
 
 API_PREFIX = "/api/knowledge/v1"
 FEATURE_FLAG_ENV = "PHASE3_KNOWLEDGE_ENGINE_ENABLED"

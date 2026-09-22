@@ -1,4 +1,4 @@
-"""Gate 5 Stage 2 — flag-gated /api/knowledge/v1 read-only mounts."""
+"""Gate 5 Stage 2b — flag-gated /api/knowledge/v1 read-only mounts."""
 
 from __future__ import annotations
 
@@ -34,6 +34,7 @@ ROUTES = (
     "/api/knowledge/v1/insights?account_id=london-scalper",
     "/api/knowledge/v1/graveyard?account_id=london-scalper",
     "/api/knowledge/v1/correlation?account_id=demo-1&ea_a=london-scalper&ea_b=ny-scalper",
+    "/api/knowledge/v1/ea-profiles?account_id=london-scalper",
 )
 
 
@@ -94,7 +95,7 @@ def _knowledge_record(profile: EAKnowledgeProfile, *, statement: str) -> Knowled
     )
 
 
-def test_flag_off_returns_404_on_all_four_routes(monkeypatch):
+def test_flag_off_returns_404_on_all_mounted_routes(monkeypatch):
     client = _client(monkeypatch, enabled=False)
     for path in ROUTES:
         r = client.get(path)
@@ -124,6 +125,18 @@ def test_flag_on_status_and_empty_account(monkeypatch):
         assert grave.status_code == 200
         assert grave.json()["entries"] == []
         assert grave.json()["count"] == 0
+
+        profiles = client.get("/api/knowledge/v1/ea-profiles", params={"account_id": "unknown-ea"})
+        assert profiles.status_code == 200
+        body = profiles.json()
+        assert body["profiles"] == []
+        assert body["ea_key"] is None
+        assert body["counts"] == {
+            "under_review": 0,
+            "candidates": 0,
+            "validated": 0,
+            "graveyard": 0,
+        }
 
 
 def test_flag_on_insights_and_graveyard_scoped_to_account(monkeypatch):
@@ -180,6 +193,50 @@ def test_flag_on_insights_and_graveyard_scoped_to_account(monkeypatch):
         assert entries[0]["statement"] == "London open always profitable"
         assert entries[0]["justification"] == "Contradictory evidence on NY session."
         assert entries[0]["decided_by"] == "reviewer@forge"
+
+
+def test_flag_on_ea_profiles_fields_and_unknown_account(monkeypatch):
+    with tempfile.TemporaryDirectory() as tmp:
+        db = str(Path(tmp) / "knowledge.db")
+        repo = KnowledgeRepository(db)
+        london = _profile(repo, key="london-scalper")
+        _profile(repo, key="ny-scalper")
+        repo.save_knowledge_record(
+            _knowledge_record(london, statement="Spread filter reduces London open losses")
+        )
+
+        client = _client(monkeypatch, enabled=True, db_path=db)
+        unknown = client.get(
+            "/api/knowledge/v1/ea-profiles", params={"account_id": "unknown-ea"}
+        )
+        assert unknown.status_code == 200
+        assert unknown.json()["profiles"] == []
+
+        r = client.get(
+            "/api/knowledge/v1/ea-profiles", params={"account_id": "london-scalper"}
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["ea_key"] == "london-scalper"
+        keys = {row["ea_key"]: row for row in body["profiles"]}
+        assert set(keys) == {"london-scalper", "ny-scalper"}
+        row = keys["london-scalper"]
+        assert row["name"] == "london-scalper"
+        assert row["version"] == "1.0.0"
+        assert row["purpose"] == "test"
+        assert row["entry_rules"] == "n/a"
+        assert row["exit_rules"] == "n/a"
+        assert row["risk_rules"] == {}
+        assert row["permitted_symbols"] == ["XAUUSD"]
+        assert row["permitted_sessions"] == ["London"]
+        assert row["status"] == "active"
+        assert body["counts"]["validated"] == 1
+        statements = [rec["statement"] for rec in row["records"]]
+        assert "Spread filter reduces London open losses" in statements
+        assert all(
+            rec["validation_state"] == ValidationState.KNOWLEDGE.value
+            for rec in row["records"]
+        )
 
 
 def test_flag_on_correlation_insufficient_omits_number(monkeypatch):

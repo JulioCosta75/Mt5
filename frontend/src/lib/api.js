@@ -35,6 +35,8 @@ export const api = {
     client.get("/knowledge/v1/correlation", {
       params: { account_id: accountId, ea_a: eaA, ea_b: eaB },
     }).then(r => r.data),
+  knowledgeEaProfiles: (accountId) =>
+    client.get("/knowledge/v1/ea-profiles", { params: { account_id: accountId } }).then(r => r.data),
 };
 
 export const fmt = {
