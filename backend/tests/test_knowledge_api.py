@@ -323,7 +323,6 @@ def test_each_account_id_is_isolated_regardless_of_how_many_exist(monkeypatch):
         client = _client(monkeypatch, enabled=True, db_path=db)
         all_keys = [ea_key for ea_key, _, _ in seeds]
         all_facts = [statement for _, _, statement in seeds]
-        all_accounts = [account_id for _, account_id, _ in seeds]
 
         for ea_key, account_id, statement in seeds:
             others_keys = [k for k in all_keys if k != ea_key]
