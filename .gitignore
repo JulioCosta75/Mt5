@@ -65,6 +65,7 @@ chainlit.md
 agenthub/agents/youtube/db
 knowledge.db
 notifications.db
+ai_usage.db
 
 # Archive files and large assets
 **/*.zip

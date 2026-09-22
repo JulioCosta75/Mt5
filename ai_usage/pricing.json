@@ -1,0 +1,10 @@
+{
+  "haiku": {
+    "input_usd_per_million": 1.0,
+    "output_usd_per_million": 5.0
+  },
+  "sonnet": {
+    "input_usd_per_million": 2.0,
+    "output_usd_per_million": 10.0
+  }
+}
