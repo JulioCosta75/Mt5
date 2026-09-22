@@ -1,0 +1,56 @@
+{
+  "metatrader5": {
+    "id": "metatrader5",
+    "title": "Como funciona o MetaTrader 5",
+    "definition": "O MetaTrader 5 (MT5) é o programa que o corretor disponibiliza para veres preços, enviares ordens e consultares o histórico da conta. Não decide por ti: mostra o mercado e executa o que tu, ou um Expert Advisor, pedirem. O gráfico, a janela de Negociação e o Histórico são vistas diferentes da mesma conta.",
+    "example": "Abres o MT5, escolhes o gráfico EURUSD, clicas Comprar 0,10 lotes e o programa envia essa ordem ao corretor. O resultado — posição aberta, rejeitada ou já fechada — aparece no separador Negociação, não no gráfico em si."
+  },
+  "candles": {
+    "id": "candles",
+    "title": "Velas (candles) e como são formadas",
+    "definition": "Uma vela resume o preço num intervalo de tempo (por exemplo 1 hora ou 1 dia). Tem quatro valores: abertura (primeiro preço do intervalo), máximo, mínimo e fecho (último preço). O corpo liga abertura e fecho; os pavios (sombras) mostram até onde o preço chegou acima e abaixo desse corpo.",
+    "example": "Numa vela de 1 hora, o EURUSD abre a 1,1000, sobe até 1,1020, desce até 1,0980 e fecha a 1,1010. O corpo vai de 1,1000 a 1,1010; o pavio de cima chega a 1,1020 e o de baixo a 1,0980."
+  },
+  "spread": {
+    "id": "spread",
+    "title": "Spread, pip, lote, margem e alavancagem",
+    "definition": "Spread é a diferença entre o preço a que podes comprar e o preço a que podes vender, cobrada pelo corretor no momento da ordem. Pip é o passo pequeno em que o preço costuma ser medido (em pares como EURUSD, 0,0001). Lote é o tamanho da posição: 1,00 lote padrão em câmbio equivale normalmente a 100 000 unidades da moeda base. Margem é o valor que o corretor reserva na conta para manter a posição aberta. Alavancagem é o rácio que permite controlar um volume maior do que o dinheiro reservado em margem — amplifica ganhos e perdas.",
+    "example": "Com alavancagem 1:100, abrir 0,10 lotes de EURUSD (cerca de 10 000 euros nocionais) pode reservar cerca de 100 euros de margem. Se o spread for 1 pip, compras a 1,10010 quando a venda está a 1,10000: esse 1 pip é o custo imediato de entrar, independentemente de o preço depois subir ou descer."
+  },
+  "orders": {
+    "id": "orders",
+    "title": "Ordens, posições, stop-loss e take-profit",
+    "definition": "Uma ordem é o pedido para abrir ou fechar um negócio a mercado ou a um preço definido. Uma posição é o negócio que ficou de facto aberto. Stop-loss é o preço em que aceitas sair com uma perda limitada. Take-profit é o preço em que queres sair com lucro. Enquanto a ordem não for preenchida, ainda não há posição.",
+    "example": "Envias uma ordem de compra de 0,10 lotes em ouro a mercado. Fica uma posição comprada. Colocas stop-loss 20 dólares abaixo do preço de entrada e take-profit 40 dólares acima. Se o preço cair até ao stop, a posição fecha sozinha; se subir até ao take-profit, também fecha sozinha."
+  },
+  "market_sessions": {
+    "id": "market_sessions",
+    "title": "Volatilidade, liquidez e sessões de mercado",
+    "definition": "Volatilidade é a amplitude com que o preço se mexe num período. Liquidez é a facilidade de entrar e sair sem deslocar muito o preço. As sessões de Tóquio, Londres e Nova Iorque marcam as horas em que mais transações acontecem; quando se sobrepõem, costuma haver mais liquidez e velas maiores.",
+    "example": "Por volta das 08:00 em Lisboa, Londres abre ainda em cima da sessão asiática. O EURUSD, que podia estar calmo de madrugada, passa a ter velas mais altas porque há mais participantes a negociar ao mesmo tempo."
+  },
+  "trends": {
+    "id": "trends",
+    "title": "Tendências e alterações de regime",
+    "definition": "Tendência é a direção persistente do preço — subida, descida ou intervalo lateral — durante um período. Uma alteração de regime é quando essa dinâmica muda: um mercado que subia de forma relativamente estável passa a oscilar ou a cair. O facto de uma tendência ter durado não garante que continue.",
+    "example": "Um EA que ganhava enquanto o ouro subiu durante várias semanas pode começar a perder quando o ouro entra num intervalo lateral. O mercado mudou de regime; as mesmas regras já não encontram o mesmo contexto."
+  },
+  "drawdown": {
+    "id": "drawdown",
+    "title": "Drawdown e gestão de risco",
+    "definition": "Drawdown é a descida do saldo (ou do equity) desde um máximo anterior até ao ponto mais baixo seguinte, antes de recuperar. Gestão de risco é o conjunto de limites — tamanho da posição, stops, exposição máxima — para que uma sequência de perdas não esvazie a conta. Drawdown mede o que já aconteceu; os limites tentam impedir que o próximo buraco seja irreparável.",
+    "example": "A conta sobe de 10 000 euros para 12 000 euros e depois desce para 10 800 euros. O drawdown desde o máximo é 1 200 euros (10%). Se o teu limite for 15% de drawdown, ainda há folga; se cada perda isolada for 5% da conta, três perdas seguidas já consomem essa folga."
+  },
+  "expert_advisors": {
+    "id": "expert_advisors",
+    "title": "Funcionamento dos EAs",
+    "definition": "Um Expert Advisor (EA) é um programa que corre dentro do MetaTrader 5, lê o gráfico e as contas, aplica regras e pode enviar ordens automaticamente. Só faz o que o código e as definições permitirem; não interpreta o mercado para além dessas regras. Precisa do terminal ligado, ou de um VPS com o MT5 a correr, para continuar a agir.",
+    "example": "Um EA de cruzamento de médias está ligado ao EURUSD no gráfico de 15 minutos, com lote 0,10 e stop de 50 pontos. Quando a média rápida cruza a lenta, envia a ordem. Se desligares o MT5 sem um VPS, o EA deixa de abrir posições novas até o terminal voltar a estar ligado."
+  },
+  "backtest_demo_live": {
+    "id": "backtest_demo_live",
+    "title": "Diferenças entre backtest, conta demo e conta real",
+    "definition": "Backtest reproduz regras sobre histórico de preços: é uma simulação do passado, não uma previsão do futuro. Conta demo usa cotações de mercado mas dinheiro fictício — não há risco real nem as mesmas emoções, e a execução pode ser mais favorável do que no real. Conta real usa dinheiro verdadeiro: spread, derrapagem, comissões e o teu próprio comportamento passam a contar. Um resultado bom num não prova o outro.",
+    "example": "Um EA mostra 40% de lucro no backtest de dois anos e também ganha na demo durante um mês. Na conta real o mesmo EA pode render menos porque o spread é maior na abertura de Londres e duas ordens escorregam 2 pips — custos que um backtest otimista não mostrou."
+  }
+}
