@@ -8,7 +8,8 @@
 >
 > Feature flag: `ATLAS_NOTIFICATIONS_ENABLED=false` (default)
 >
-> No channels, no delivery, no HTTP in this stage.
+> No Phase 2 wiring. Stage 1 has no delivery. Stage 2a Telegram lives in
+> `notifications/telegram/` and is tested with `FakeTelegramClient` only.
 
 ## Purpose
 
@@ -28,6 +29,7 @@ notifications/
 ├── application/services.py   # create/update/delete + audit
 ├── infrastructure/           # SQLite notifications.db
 ├── preferences.py            # CLI
+├── telegram/                 # Stage 2a isolated adapter (polling, FakeTelegramClient)
 └── tests/
 ```
 
@@ -44,5 +46,5 @@ python -m notifications.preferences create --user alice --account MT5-1111 \\
 ## Tests
 
 ```bash
-python3 -m pytest notifications/tests/ -q
+python3 -m pytest notifications/tests notifications/telegram/tests -q
 ```
