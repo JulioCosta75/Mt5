@@ -1,13 +1,22 @@
 """FastAPI server exposing MT5 data over HTTP/JSON.
 
-Runs on a Windows host with the MT5 terminal installed and a logged-in account.
+Runs on a Windows host with the MT5 terminal installed; logs in via .env credentials.
 Protected by a static bearer token (BRIDGE_TOKEN env var). Designed to be
 consumed by the Linux backend at /app/backend.
 """
 from __future__ import annotations
 
 import logging
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+# Embeddable Python (python311._pth) isolates sys.path and does not add the
+# script directory. NSSM launches `python bridge_server.py` from AppDirectory,
+# but imports still fail without this — keep the bridge folder on path first.
+_BRIDGE_DIR = str(Path(__file__).resolve().parent)
+if _BRIDGE_DIR not in sys.path:
+    sys.path.insert(0, _BRIDGE_DIR)
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 

@@ -1,22 +1,31 @@
 import React from "react";
 import { fmt, pnlClass } from "@/lib/api";
+import { formatSimulatedStatus, SAMPLE_DATA_LABEL } from "@/lib/sampleMode";
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, isSample }) {
   const cls = status === "LIVE" ? "live" : status === "PAUSED" ? "paused" : "error";
   const dot = status === "LIVE" ? "" : status === "PAUSED" ? "warn" : "neg";
+  const label = isSample ? formatSimulatedStatus(status) : status;
   return (
-    <span className={`badge ${cls}`}>
+    <span className={`badge ${cls}`} data-testid="account-status-badge">
       <span className={`pulse-dot ${dot}`} />
-      {status}
+      {label}
     </span>
   );
 }
 
-export default function AccountsTable({ accounts, selectedId, onSelect }) {
+export default function AccountsTable({ accounts, selectedId, onSelect, isSample = false }) {
   return (
     <div className="panel" data-testid="accounts-panel">
       <div className="panel-header">
-        <span className="panel-title">MT5 Accounts · {accounts.length}</span>
+        <span className="panel-title">
+          MT5 Accounts · {accounts.length}
+          {isSample ? (
+            <span className="kbd" style={{ marginLeft: 8 }} data-testid="accounts-sample-label">
+              {SAMPLE_DATA_LABEL}
+            </span>
+          ) : null}
+        </span>
         <span className="kbd">ENTER to select</span>
       </div>
       <div className="scroll-area" style={{ maxHeight: 320, overflow: "auto" }}>
@@ -50,7 +59,7 @@ export default function AccountsTable({ accounts, selectedId, onSelect }) {
                     borderLeft: active ? "2px solid var(--text-primary)" : "2px solid transparent",
                   }}
                 >
-                  <td><StatusBadge status={acc.status} /></td>
+                  <td><StatusBadge status={acc.status} isSample={isSample} /></td>
                   <td className="mono" style={{ color: "var(--text-primary)" }}>{acc.login}</td>
                   <td style={{ color: "var(--text-secondary)" }}>{acc.broker}</td>
                   <td style={{ color: "var(--text-secondary)" }}>{acc.strategy}</td>

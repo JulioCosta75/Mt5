@@ -75,29 +75,126 @@ class MT5Service:
             self._last_error = f"MetaTrader5 library unavailable: {_MT5_IMPORT_ERROR}"
             raise MT5Error(-1, self._last_error)
         with _lock:
-            kwargs = {}
+            # Prefer path + timeout only so an already-matching saved session
+            # can be reused without a second login round-trip. On a virgin
+            # profile (or IPC timeout), fall back to initialize() with
+            # credentials — verified cold-start path on terminal build 6090+.
+            # Keep the path-only timeout moderate so a clean profile fails
+            # over to the credential path without a multi-minute hang.
+            kwargs: dict[str, Any] = {"timeout": 45_000}
             if self.terminal_path:
                 kwargs["path"] = self.terminal_path
             ok = mt5.initialize(**kwargs)
             if not ok:
-                err = mt5.last_error()
-                self._last_error = f"initialize failed: {err}"
-                raise MT5Error(err[0] if isinstance(err, tuple) else -1, str(err))
-            ok = mt5.login(self.login, password=self.password, server=self.server)
+                first_err = mt5.last_error()
+                logger.warning(
+                    "initialize(path) failed (%s); retrying with login credentials",
+                    first_err,
+                )
+                try:
+                    mt5.shutdown()
+                except Exception:  # noqa: BLE001
+                    pass
+                cred_kwargs = dict(kwargs)
+                cred_kwargs.update(
+                    login=int(self.login),
+                    password=self.password,
+                    server=self.server,
+                    timeout=120_000,
+                )
+                ok = mt5.initialize(**cred_kwargs)
+                if not ok:
+                    err = mt5.last_error()
+                    code = err[0] if isinstance(err, tuple) else -1
+                    if code == -10005:
+                        self._last_error = (
+                            "initialize failed: IPC timeout (-10005). "
+                            "Close MetaTrader 5 completely, then restart the bridge "
+                            "so it can launch the terminal. Attaching to an "
+                            "already-running terminal is unreliable on some installs."
+                        )
+                    else:
+                        self._last_error = f"initialize failed: {err}"
+                    raise MT5Error(code, self._last_error)
+                self._initialized = True
+                self._last_error = None
+                logger.info(
+                    "MT5 connected via initialize(login): login=%s server=%s",
+                    self.login,
+                    self.server,
+                )
+                self._warn_if_algo_trading_disabled()
+                return
+
+            # Prefer an already-matching terminal session; otherwise login().
+            acc = mt5.account_info()
+            if acc is not None and int(acc.login) == int(self.login):
+                self._initialized = True
+                self._last_error = None
+                logger.info(
+                    "MT5 connected via terminal session: login=%s server=%s",
+                    acc.login,
+                    getattr(acc, "server", self.server),
+                )
+                self._warn_if_algo_trading_disabled()
+                return
+
+            if acc is not None:
+                logger.warning(
+                    "Terminal session login=%s differs from configured login=%s; "
+                    "attempting mt5.login()",
+                    acc.login,
+                    self.login,
+                )
+
+            ok = mt5.login(
+                self.login, password=self.password, server=self.server
+            )
             if not ok:
                 err = mt5.last_error()
+                code = err[0] if isinstance(err, tuple) else -1
                 mt5.shutdown()
-                self._last_error = f"login failed: {err}"
-                raise MT5Error(err[0] if isinstance(err, tuple) else -1, str(err))
+                if code == -10005:
+                    self._last_error = (
+                        "login failed: IPC timeout (-10005). "
+                        "Close MetaTrader 5 completely, then restart the bridge "
+                        "so it can launch and log in cold. On older terminal "
+                        "builds, ensure a matching saved session or upgrade MT5 "
+                        f"(configured MT5_LOGIN={self.login})."
+                    )
+                else:
+                    self._last_error = f"login failed: {err}"
+                raise MT5Error(code, self._last_error)
             self._initialized = True
             self._last_error = None
             logger.info("MT5 connected: login=%s server=%s", self.login, self.server)
+            self._warn_if_algo_trading_disabled()
 
     def shutdown(self):
         with _lock:
             if self._initialized:
                 mt5.shutdown()
                 self._initialized = False
+
+    def _warn_if_algo_trading_disabled(self) -> None:
+        """Log a clear user-facing warning when Algo Trading is off."""
+        term = mt5.terminal_info()
+        if term is not None and not bool(term.trade_allowed):
+            logger.warning(
+                "MT5 connected but algorithmic trading is DISABLED "
+                "(trade_allowed=False). Enable: Tools → Options → Expert "
+                "Advisors → \"Allow algorithmic trading\", then restart the "
+                "bridge if health still reports trade_allowed=false."
+            )
+
+    @staticmethod
+    def _algo_trading_message() -> str:
+        return (
+            "Connected, but algorithmic trading is disabled in MetaTrader 5. "
+            "Enable Tools → Options → Expert Advisors → "
+            "\"Allow algorithmic trading\" so Atlas can supervise live trading "
+            "state correctly."
+        )
 
     # ---- queries ----
     def health(self) -> dict:
@@ -134,15 +231,23 @@ class MT5Service:
         with _lock:
             term = mt5.terminal_info()
             acc = mt5.account_info() if self._initialized else None
+        connected = bool(self._initialized and term and term.connected)
+        trade_allowed = bool(term and term.trade_allowed)
+        message = None
+        if connected and not trade_allowed:
+            message = self._algo_trading_message()
+        elif not connected and self._last_error:
+            message = self._last_error
         return {
-            "status": "ok" if self._initialized and term and term.connected else "degraded",
+            "status": "ok" if connected else "degraded",
             "configured": True,
             "terminal_connected": bool(term and term.connected),
             "account_logged_in": bool(acc),
-            "trade_allowed": bool(term and term.trade_allowed),
+            "trade_allowed": trade_allowed,
             "login": self.login,
             "server": self.server,
             "last_error": self._last_error,
+            "message": message,
             "server_time": datetime.now(timezone.utc).isoformat(),
         }
 

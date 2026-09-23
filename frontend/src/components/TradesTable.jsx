@@ -14,7 +14,7 @@ function SortHeader({ sortKey, sortDir, onSort, k, num, children }) {
   );
 }
 
-export default function TradesTable({ trades, accountId }) {
+export default function TradesTable({ trades, accountId, isSample = false }) {
   const [symbolFilter, setSymbolFilter] = useState("");
   const [sideFilter, setSideFilter] = useState("");
   const [sortKey, setSortKey] = useState("close_time");
@@ -49,7 +49,10 @@ export default function TradesTable({ trades, accountId }) {
   return (
     <div className="panel" data-testid="trades-panel">
       <div className="panel-header" style={{ flexWrap: "wrap", gap: 12 }}>
-        <span className="panel-title">Trade History · {accountId}</span>
+        <span className="panel-title">
+          Trade History · {accountId}
+          {isSample ? <span className="kbd" style={{ marginLeft: 8 }} data-testid="trades-sample-label">SAMPLE DATA</span> : null}
+        </span>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <select
             value={symbolFilter}

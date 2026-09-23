@@ -26,11 +26,14 @@ function CustomTooltip({ active, payload, label, format }) {
   );
 }
 
-export function EquityChart({ data }) {
+export function EquityChart({ data, isSample = false }) {
   return (
     <div className="panel" data-testid="equity-panel" style={{ height: 320, display: "flex", flexDirection: "column" }}>
       <div className="panel-header">
-        <span className="panel-title">Equity Curve · 90D</span>
+        <span className="panel-title">
+          Equity Curve · 90D
+          {isSample ? <span className="kbd" style={{ marginLeft: 8 }} data-testid="equity-sample-label">SAMPLE DATA</span> : null}
+        </span>
         <span className="kbd">{data?.length ?? 0} pts</span>
       </div>
       <div style={{ flex: 1, padding: "8px 4px 4px 0" }}>
@@ -74,11 +77,14 @@ export function EquityChart({ data }) {
   );
 }
 
-export function DrawdownChart({ data, maxDD, currentDD }) {
+export function DrawdownChart({ data, maxDD, currentDD, isSample = false }) {
   return (
     <div className="panel" data-testid="drawdown-panel" style={{ height: 320, display: "flex", flexDirection: "column" }}>
       <div className="panel-header">
-        <span className="panel-title">Drawdown · 90D</span>
+        <span className="panel-title">
+          Drawdown · 90D
+          {isSample ? <span className="kbd" style={{ marginLeft: 8 }} data-testid="drawdown-sample-label">SAMPLE DATA</span> : null}
+        </span>
         <span style={{ display: "flex", gap: 12, fontSize: 10 }}>
           <span style={{ color: "var(--text-tertiary)" }}>MAX</span>
           <span className="mono cell-neg" data-testid="dd-max">{fmt.pct(maxDD)}</span>

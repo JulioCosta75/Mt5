@@ -90,6 +90,27 @@ class ConfigError(ValueError):
     pass
 
 
+def assert_can_add_account(already_configured: int | None = None) -> None:
+    """Block adding another simultaneous MT5 account on the Free license.
+
+    The dashboard primary slot (create or replace via ``save_config``) is
+    always the first account and is allowed on Free. This helper is the
+    gate for a *second* simultaneous account.
+    """
+    from license import enforce_account_limit
+
+    if already_configured is None:
+        already_configured = 1 if load().get("configured") else 0
+    enforce_account_limit(already_configured + 1)
+
+
+def licensed_bridge_urls(urls: list) -> list:
+    """Return the prefix of bridge URLs allowed by the current license."""
+    from license import apply_account_cap
+
+    return apply_account_cap(list(urls))
+
+
 def validate(payload: dict) -> None:
     login = str(payload.get("login", "")).strip()
     if not login.isdigit():
@@ -109,6 +130,10 @@ def validate(payload: dict) -> None:
 
 def save_config(payload: dict) -> dict:
     """Validate + persist. Keeps existing password if payload omits it.
+
+    This is the single dashboard account slot: creating it or replacing
+    it counts as 1 account and is allowed on the Free license. Adding a
+    second simultaneous account must go through ``assert_can_add_account``.
 
     Returns the (unmasked) stored config dict.
     """
@@ -198,6 +223,8 @@ def _write_backend_env(mt5_bridge_url: str, token: str) -> None:
         f"MT5_BRIDGE_TOKEN={token}",
         "ATLAS_STORE=sqlite",
         f"ATLAS_SQLITE_PATH={data_dir / 'atlas.db'}",
+        "ATLAS_AUTO_SNAPSHOT_INTERVAL_SEC=1800",
+        "ATLAS_REPORT_RETENTION_DAYS=90",
         "SERVE_FRONTEND=true",
         f"FRONTEND_BUILD={frontend_build}",
         "CORS_ORIGINS=*",
@@ -206,7 +233,7 @@ def _write_backend_env(mt5_bridge_url: str, token: str) -> None:
 
 
 def _restart_services() -> None:
-    """Fire-and-forget restart of the Atlas services (Windows only).
+    """Fire-and-forget restart of Atlas via the tray launcher (Windows only).
 
     Runs a detached helper so this backend process can finish responding to the
     HTTP request before it is itself restarted.

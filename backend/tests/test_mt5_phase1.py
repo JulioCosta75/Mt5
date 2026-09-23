@@ -130,9 +130,10 @@ class TestAdapter:
         assert acc["open_positions"] == 4
         assert acc["status"] == "LIVE"
         assert acc["source"] == "mt5"
-        # kill_switch propagation
+        # Observation-only: kill_switch must not force PAUSED (UI control removed).
         acc2 = account_from_bridge(bridge, 0, {}, kill_switch=True)
-        assert acc2["status"] == "PAUSED"
+        assert acc2["kill_switch"] is True
+        assert acc2["status"] == "LIVE"
         # disconnected
         bridge2 = {**bridge, "connected": False}
         acc3 = account_from_bridge(bridge2, 0, {}, kill_switch=False)

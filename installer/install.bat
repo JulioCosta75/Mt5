@@ -1,35 +1,30 @@
 @echo off
 REM ============================================================
-REM  Atlas - one-click installer (fresh git clone friendly)
+REM  Atlas - one-click installer (fresh git clone / dev layout)
 REM  ----------------------------------------------------------
 REM  1. Installs Python dependencies
-REM  2. Registers AtlasBridge + AtlasBackend Windows services
-REM  3. Starts them and opens the dashboard
-REM
-REM  Right-click this file  ->  "Run as administrator".
+REM  2. Configures MT5 (optional prompts)
+REM  3. Starts the tray launcher (no Windows services / no admin)
 REM ============================================================
 setlocal
 cd /d "%~dp0"
 title Atlas Installer
 
-net session >nul 2>nul
+echo ============================================================
+echo   Atlas installation (tray app — no Administrator needed)
+echo ============================================================
+echo.
+
+call "scripts\_detect_env.bat"
 if errorlevel 1 (
-    echo [ERROR] Administrator rights are required.
-    echo         Right-click install.bat and choose "Run as administrator".
-    echo.
+    echo [FAILED] Environment detection failed.
     pause
     exit /b 1
 )
 
-echo ============================================================
-echo   Atlas installation
-echo ============================================================
-echo.
-
-call "scripts\install_services.bat"
+call "scripts\install_deps.bat"
 if errorlevel 1 (
-    echo.
-    echo [FAILED] Installation did not complete. See the messages above.
+    echo [FAILED] Dependency install failed.
     pause
     exit /b 1
 )
@@ -38,9 +33,6 @@ echo.
 echo ============================================================
 echo   Connect your MetaTrader 5 account
 echo ============================================================
-echo   Atlas needs your MT5 login details so the bridge can
-echo   connect to your account. They are stored locally only.
-echo.
 call "scripts\configure_mt5.bat"
 if errorlevel 1 (
     echo.
@@ -53,21 +45,17 @@ if errorlevel 1 (
 
 echo.
 echo ============================================================
-echo   Starting Atlas
+echo   Starting Atlas ^(tray launcher^)
 echo ============================================================
-call "scripts\start_atlas.bat"
+call "scripts\start_atlas_app.bat"
 
 echo.
 echo ============================================================
 echo   Installation complete.
-echo   Dashboard : http://localhost:8001/
-echo   Health    : http://localhost:8001/healthcheck
+echo   Dashboard : http://127.0.0.1:8001/
+echo   Health    : http://127.0.0.1:8001/healthcheck
+echo   Tip       : look for the Atlas icon in the system tray.
 echo ============================================================
-echo.
-echo   Need to change your MT5 account later? Use the dashboard
-echo   Settings page, or re-run:
-echo       scripts\configure_mt5.bat
-echo   then:  scripts\stop_atlas.bat  ^&^&  scripts\start_atlas.bat
 echo.
 pause
 endlocal

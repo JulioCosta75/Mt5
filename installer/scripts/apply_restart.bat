@@ -1,29 +1,19 @@
 @echo off
 REM ============================================================
-REM  apply_restart.bat  --  restart Atlas services so freshly
-REM  saved MT5 credentials (written by the dashboard) take effect.
-REM  Launched detached by the backend; safe to restart the backend
-REM  itself because this runs in its own process.
+REM  apply_restart.bat — restart Atlas via the tray launcher
+REM  (no NSSM / Windows services). Detached by the backend after
+REM  Settings "Save & Connect" writes new .env credentials.
 REM ============================================================
-setlocal
+setlocal EnableExtensions
 
-REM Give the backend a moment to finish sending its HTTP response.
+REM Let the HTTP response finish before we recycle the backend process.
 timeout /t 2 >nul
 
-call "%~dp0_detect_env.bat" >nul 2>nul
-if not defined NSSM (
-    for %%I in ("%~dp0..\nssm.exe") do set "NSSM=%%~fI"
-)
+call "%~dp0stop_atlas.bat" >nul 2>nul
+timeout /t 2 >nul
 
-if defined NSSM (
-    "%NSSM%" restart AtlasBridge  >nul 2>nul
-    "%NSSM%" restart AtlasBackend >nul 2>nul
-) else (
-    net stop  AtlasBridge  >nul 2>nul
-    net stop  AtlasBackend >nul 2>nul
-    net start AtlasBridge  >nul 2>nul
-    net start AtlasBackend >nul 2>nul
-)
+REM Relaunch tray app (pythonw preferred) without waiting.
+call "%~dp0start_atlas_app.bat"
 
 endlocal
 exit /b 0

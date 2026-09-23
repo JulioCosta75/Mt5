@@ -30,6 +30,13 @@ CREATE TABLE IF NOT EXISTS mt5_overrides (
     risk_limits TEXT NOT NULL,
     daily_pnl_anchor TEXT
 );
+CREATE TABLE IF NOT EXISTS mt5_ea_labels (
+    login INTEGER NOT NULL,
+    magic INTEGER NOT NULL,
+    label TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (login, magic)
+);
 """
 
 _DEFAULT_LIMITS = {
@@ -171,3 +178,31 @@ class MT5CacheSQLite:
 
     async def maybe_set_daily_anchor(self, login: int, balance: float) -> float:
         return await asyncio.to_thread(self._maybe_set_daily_anchor, login, balance)
+
+    def _get_ea_labels(self, login: int) -> dict[int, str]:
+        with self._cx() as cx:
+            rows = cx.execute(
+                "SELECT magic, label FROM mt5_ea_labels WHERE login=?", (login,)
+            ).fetchall()
+        return {int(r["magic"]): str(r["label"]) for r in rows}
+
+    def _set_ea_label(self, login: int, magic: int, label: str | None) -> dict[int, str]:
+        with self._cx() as cx:
+            if label is None or not str(label).strip():
+                cx.execute(
+                    "DELETE FROM mt5_ea_labels WHERE login=? AND magic=?",
+                    (login, int(magic)),
+                )
+            else:
+                cx.execute(
+                    "INSERT INTO mt5_ea_labels (login, magic, label, updated_at) VALUES (?,?,?,?) "
+                    "ON CONFLICT(login, magic) DO UPDATE SET label=excluded.label, updated_at=excluded.updated_at",
+                    (login, int(magic), str(label).strip(), self._now_iso()),
+                )
+        return self._get_ea_labels(login)
+
+    async def get_ea_labels(self, login: int) -> dict[int, str]:
+        return await asyncio.to_thread(self._get_ea_labels, login)
+
+    async def set_ea_label(self, login: int, magic: int, label: str | None) -> dict[int, str]:
+        return await asyncio.to_thread(self._set_ea_label, login, magic, label)

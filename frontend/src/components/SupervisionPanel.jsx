@@ -40,7 +40,7 @@ function Stat({ label, value, cls }) {
   );
 }
 
-export default function SupervisionPanel({ serverTime }) {
+export default function SupervisionPanel({ serverTime, onAfterGenerate }) {
   const [snapshot, setSnapshot] = useState(null);
   const [reports, setReports] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -80,6 +80,11 @@ export default function SupervisionPanel({ serverTime }) {
       await api.postAtlasReport({ source: "dashboard" });
       await loadReports();
       await loadSnapshot();
+      // Same pattern as ReportsView — refresh Alerts panel + KPI active_alerts
+      // without requiring a manual REFRESH FEED.
+      if (typeof onAfterGenerate === "function") {
+        await onAfterGenerate();
+      }
     } finally {
       setBusy(false);
     }
