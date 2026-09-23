@@ -124,10 +124,9 @@ Filename: "{app}\scripts\install_deps.bat";  StatusMsg: "Installing Python depen
 Filename: "{app}\python\python.exe"; Parameters: """{app}\scripts\configure_atlas.py"" --answers ""{tmp}\atlas_mt5_answers.json"" --non-interactive --backend-dir ""{app}\backend"" --bridge-dir ""{app}\bridge"" --data-dir ""{app}\data"""; WorkingDir: "{app}"; StatusMsg: "Saving MetaTrader 5 configuration..."; Flags: runhidden
 
 ; 3) Start Atlas as a normal tray application (no Windows services).
+;     The launcher opens the dashboard once when healthy — do not also
+;     run open_dashboard.bat here (that produced a second browser tab).
 Filename: "{app}\scripts\start_atlas_app.bat"; StatusMsg: "Starting Atlas..."; Flags: nowait
-
-; 4) Optional: open the dashboard URL (launcher also opens once when healthy).
-Filename: "{app}\scripts\open_dashboard.bat"; StatusMsg: "Opening dashboard..."; Tasks: openbrowser; Flags: nowait skipifsilent
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\data"
