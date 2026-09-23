@@ -55,7 +55,7 @@ class FakeLLMClient:
 
 _MODEL_IDS = {
     "haiku": "claude-haiku-4-5",
-    "sonnet": "claude-sonnet-4-5",
+    "sonnet": "claude-sonnet-5",
 }
 
 
