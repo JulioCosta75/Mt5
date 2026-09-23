@@ -19,7 +19,6 @@ FORBIDDEN_MODULES = (
     "mt5_adapter",
     "MetaTrader5",
     "openai",
-    "anthropic",
 )
 
 
@@ -58,6 +57,28 @@ def test_education_has_zero_imports_from_backend_phase3_or_notifications():
         for name in _imported_names(path):
             if _is_forbidden(name):
                 offenders.append(f"{path.relative_to(REPO_ROOT)} imports {name}")
+    assert offenders == []
+
+
+def _top_level_imported_names(path: Path) -> set[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    names: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                names.add(alias.name)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            names.add(node.module)
+    return names
+
+
+def test_anthropic_sdk_is_never_imported_at_module_top_level():
+    """Stage 2 may lazy-import anthropic inside a method, never at import time."""
+    offenders: list[str] = []
+    for path in _iter_production_py():
+        for name in _top_level_imported_names(path):
+            if name == "anthropic" or name.startswith("anthropic."):
+                offenders.append(f"{path.relative_to(REPO_ROOT)} top-level imports {name}")
     assert offenders == []
 
 

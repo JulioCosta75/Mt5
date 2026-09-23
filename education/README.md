@@ -51,5 +51,17 @@ python -m education.glossary --list
 ## Tests
 
 ```bash
-python3 -m pytest education/tests/ -q
+python3 -m pytest education/tests/ education/ai/tests/ -q
+```
+
+## Stage 2 (budget-guarded LLM adapter)
+
+`education/ai/` can call an LLM behind `ai_usage` quotas. Automated tests
+use `FakeLLMClient` (no key, no network). The real client lazy-imports
+`anthropic` inside `generate` and reads `ANTHROPIC_API_KEY` from the
+environment only.
+
+```bash
+python -m education.ai.ask --concept spread --question "O que é o spread?" \\
+    --user alice --tier free
 ```
