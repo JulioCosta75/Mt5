@@ -4,6 +4,7 @@ import { api, fmt } from "@/lib/api";
 import { srAtlasRound } from "@/assets/branding";
 import { isSamplePresentation } from "@/lib/sampleMode";
 import KpiTicker from "@/components/KpiTicker";
+import OverviewHero from "@/components/OverviewHero";
 import AccountsTable from "@/components/AccountsTable";
 import { EquityChart, DrawdownChart } from "@/components/Charts";
 import TradesTable from "@/components/TradesTable";
@@ -253,13 +254,10 @@ export default function Dashboard() {
       {isSample && (
         <div
           data-testid="config-mode-banner"
-          style={{
-            display: "flex", alignItems: "flex-start", gap: 12, padding: "10px 20px",
-            background: "#2A1E05", borderBottom: "1px solid #7A5A12", color: "#FCD34D", fontSize: 13,
-          }}
+          className="config-mode-banner"
         >
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#F59E0B", display: "inline-block", marginTop: 5, flexShrink: 0 }} />
-          <span style={{ lineHeight: 1.45 }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--sig-warn)", display: "inline-block", flexShrink: 0 }} />
+          <span>
             <b>Configuration Mode — Simulated Sample Data</b>
             {" "}Atlas is not connected to MetaTrader 5.
             All trading accounts, trades, alerts, charts, risk values, and strategy activity shown here are simulated sample data — not verified live activity.
@@ -268,13 +266,20 @@ export default function Dashboard() {
             to="/settings"
             data-testid="config-mode-cta"
             className="btn"
-            style={{ marginLeft: "auto", textDecoration: "none", padding: "4px 12px", flexShrink: 0 }}
+            style={{ marginLeft: "auto", textDecoration: "none", padding: "3px 10px", flexShrink: 0 }}
           >
             Open Settings →
           </Link>
         </div>
       )}
-      <KpiTicker kpis={kpis} />
+      {activeTab === "Overview" ? (
+        <>
+          <OverviewHero kpis={kpis} mt5Status={mt5Status} isSample={isSample} />
+          <KpiTicker kpis={kpis} className="ticker-row-compact" />
+        </>
+      ) : (
+        <KpiTicker kpis={kpis} />
+      )}
 
       {loading ? (
         <div style={{ padding: 60, textAlign: "center", color: "var(--text-tertiary)", fontSize: 12 }}>
@@ -282,15 +287,11 @@ export default function Dashboard() {
         </div>
       ) : activeTab === "Overview" ? (
         <main
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr) 360px",
-            gap: 14,
-            padding: 14,
-          }}
+          className="overview-layout"
+          data-testid="overview-layout"
         >
           {/* LEFT COLUMN */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
             <AccountsTable accounts={accounts} selectedId={selectedId} onSelect={(id) => dispatch({ type: "SELECT", id })} isSample={isSample} />
             {selectedAccount && (
               <>
@@ -299,8 +300,9 @@ export default function Dashboard() {
                   account={selectedAccount}
                   onUpdate={() => { loadGlobals(); loadAccountDetail(selectedId); }}
                   isSample={isSample}
+                  showHeroBars
                 />
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
                   <EquityChart data={equity} isSample={isSample} />
                   <DrawdownChart
                     data={drawdown.series}
@@ -315,7 +317,7 @@ export default function Dashboard() {
           </div>
 
           {/* RIGHT COLUMN */}
-          <aside style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+          <aside style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
             <SupervisionPanel
               serverTime={kpis?.server_time}
               onAfterGenerate={loadGlobals}
@@ -326,7 +328,7 @@ export default function Dashboard() {
                 <span className="panel-title">System</span>
                 <span className="pulse-dot" />
               </div>
-              <div style={{ padding: 14, fontSize: 11, color: "var(--text-secondary)" }}>
+              <div style={{ padding: 22, fontSize: 13, color: "var(--text-secondary)" }}>
                 {isSample ? (
                   <>
                     <Row label="API Latency" value={<span className="cell-warn" data-testid="system-api-latency">SAMPLE · —</span>} />
