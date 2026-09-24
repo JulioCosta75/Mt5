@@ -5,20 +5,12 @@ import { barPct, resolveHeroLayout } from "./riskMetrics";
 const panelSrc = fs.readFileSync(path.join(__dirname, "RiskPanel.jsx"), "utf8");
 const viewsSrc = fs.readFileSync(path.join(__dirname, "TabViews.jsx"), "utf8");
 
-function extractFunction(src, name) {
-  const start = src.indexOf(`function ${name}`);
+function sliceBetween(src, startMarker, endMarker) {
+  const start = src.indexOf(startMarker);
+  const end = src.indexOf(endMarker, start + 1);
   expect(start).toBeGreaterThan(-1);
-  let i = src.indexOf("{", start);
-  let depth = 0;
-  const from = start;
-  for (; i < src.length; i += 1) {
-    if (src[i] === "{") depth += 1;
-    else if (src[i] === "}") {
-      depth -= 1;
-      if (depth === 0) return src.slice(from, i + 1);
-    }
-  }
-  throw new Error(`unclosed function ${name}`);
+  expect(end).toBeGreaterThan(start);
+  return src.slice(start, end);
 }
 
 describe("barPct is display-only and never invents a limit", () => {
@@ -60,7 +52,7 @@ describe("Risk tab full hero is the original 8 cells, bars only where a limit ex
   });
 
   test("FullHeroMetrics keeps equity testid and does not bar daily P&L against % loss", () => {
-    const full = extractFunction(panelSrc, "FullHeroMetrics");
+    const full = sliceBetween(panelSrc, "function FullHeroMetrics", "function ClassicStatGrid");
     expect(full).toMatch(/label="Equity"/);
     expect(full).toMatch(/testId="account-equity-value"/);
     expect(full).toMatch(/label="Balance"/);
@@ -83,7 +75,7 @@ describe("Risk tab full hero is the original 8 cells, bars only where a limit ex
   });
 
   test("Overview compact strip still has the Stage 2 three metrics with bars", () => {
-    const overview = extractFunction(panelSrc, "OverviewHeroMetrics");
+    const overview = sliceBetween(panelSrc, "function OverviewHeroMetrics", "function FullHeroMetrics");
     expect(overview).toMatch(/label="Drawdown"/);
     expect(overview).toMatch(/label="Margin level"/);
     expect(overview).toMatch(/label="Open positions"/);
