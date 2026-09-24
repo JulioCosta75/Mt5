@@ -14,10 +14,25 @@
     --text-primary: #F4F4F5;
     --text-secondary: #A1A1AA;
     --text-tertiary: #71717A;
+    /* Signal colors — operational status only. Values must stay distinct from brand gold. */
     --sig-pos: #22C55E;
     --sig-neg: #EF4444;
     --sig-warn: #F59E0B;
     --sig-info: #3B82F6;
+    --sig-pos-soft: rgba(34, 197, 94, 0.10);
+    --sig-neg-soft: rgba(239, 68, 68, 0.10);
+    --sig-warn-soft: rgba(245, 158, 11, 0.10);
+    --sig-info-soft: rgba(59, 130, 246, 0.10);
+    /* Forge Factory Lab brand gold — decorative identity, never a warning/error/success stand-in. */
+    --brand-gold: #C9A962;
+    --brand-gold-bright: #E4D09A;
+    --brand-gold-muted: #8C7344;
+    --brand-gold-dim: #5C4B28;
+    --brand-gold-soft: rgba(201, 169, 98, 0.12);
+    --brand-gold-border: rgba(201, 169, 98, 0.38);
+    /* Metallic surface extras for later stages (Overview re-skin). Unused by panels in Stage 1. */
+    --metal-sheen: #1C1D21;
+    --metal-edge: #3A3B40;
 }
 
 * {
@@ -58,12 +73,29 @@ body {
     background: rgba(255,255,255,0.01);
 }
 
-.panel-title {
-    font-size: 10.5px;
-    letter-spacing: 0.14em;
+.panel-title,
+.section-heading {
+    font-size: 11px;
+    letter-spacing: 0.2em;
     text-transform: uppercase;
-    color: var(--text-secondary);
+    color: var(--brand-gold);
     font-weight: 600;
+}
+
+@media (max-width: 1024px) {
+    .panel-title,
+    .section-heading {
+        font-size: 10.5px;
+        letter-spacing: 0.16em;
+    }
+}
+
+@media (max-width: 768px) {
+    .panel-title,
+    .section-heading {
+        font-size: 10px;
+        letter-spacing: 0.12em;
+    }
 }
 
 .cell-pos { color: var(--sig-pos); }
@@ -71,18 +103,18 @@ body {
 .cell-warn { color: var(--sig-warn); }
 .cell-info { color: var(--sig-info); }
 
-.bg-pos-soft { background: rgba(34,197,94,0.10); }
-.bg-neg-soft { background: rgba(239,68,68,0.10); }
-.bg-warn-soft { background: rgba(245,158,11,0.10); }
-.bg-info-soft { background: rgba(59,130,246,0.10); }
+.bg-pos-soft { background: var(--sig-pos-soft); }
+.bg-neg-soft { background: var(--sig-neg-soft); }
+.bg-warn-soft { background: var(--sig-warn-soft); }
+.bg-info-soft { background: var(--sig-info-soft); }
 
 .divide-bd > * + * { border-top: 1px solid var(--bd-default); }
 
 /* Scrollbars */
 .scroll-area::-webkit-scrollbar { width: 8px; height: 8px; }
 .scroll-area::-webkit-scrollbar-track { background: transparent; }
-.scroll-area::-webkit-scrollbar-thumb { background: #27272A; border-radius: 0; }
-.scroll-area::-webkit-scrollbar-thumb:hover { background: #3F3F46; }
+.scroll-area::-webkit-scrollbar-thumb { background: var(--bd-default); border-radius: 0; }
+.scroll-area::-webkit-scrollbar-thumb:hover { background: var(--bd-focus); }
 
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 8px 10px; text-align: left; font-size: 12px; }
@@ -172,6 +204,13 @@ button { font-family: inherit; }
 .btn.success { color: var(--sig-pos); border-color: rgba(34,197,94,0.4); }
 .btn.success:hover { background: rgba(34,197,94,0.08); }
 .btn.active { background: rgba(244,244,245,0.08); border-color: var(--bd-focus); }
+.btn.active:not(.nav-revolution) {
+    background: transparent;
+    border-color: transparent;
+    border-bottom: 2px solid var(--brand-gold);
+    border-radius: 0;
+    color: var(--brand-gold);
+}
 
 .badge {
     display: inline-flex; align-items: center; gap: 5px;
@@ -205,7 +244,235 @@ input[type="number"], input[type="text"], select {
 }
 input:focus, select:focus { border-color: var(--bd-focus); }
 
-::selection { background: rgba(244,244,245,0.18); }
+::selection { background: var(--brand-gold-soft); color: var(--text-primary); }
+
+/* ============================================================
+   Atlas 2 Stage 2 — Overview layout only
+   ============================================================ */
+.config-mode-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 20px;
+    background: var(--brand-gold-soft);
+    border-bottom: 1px solid var(--brand-gold-border);
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.4;
+}
+.config-mode-banner b { color: var(--text-primary); font-weight: 600; }
+
+.hero-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    padding: 18px 20px 0;
+}
+.hero-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--bd-default);
+    border-top: 2px solid var(--brand-gold-border);
+    padding: 22px;
+    min-width: 0;
+}
+.hero-card-icon {
+    color: var(--brand-gold);
+    margin-bottom: 10px;
+}
+.hero-card-label {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--brand-gold);
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+.hero-card-value {
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+}
+.hero-card-detail {
+    margin: 10px 0 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.45;
+    min-height: 2.6em;
+}
+.hero-bar-track {
+    height: 3px;
+    background: var(--bd-subtle);
+    overflow: hidden;
+}
+.hero-bar-fill {
+    height: 100%;
+    background: var(--brand-gold);
+}
+
+.ticker-row-compact {
+    height: 32px;
+    gap: 24px;
+    margin-top: 8px;
+    border-top: 1px solid var(--bd-subtle);
+}
+
+.overview-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+    gap: 18px;
+    padding: 18px 20px 24px;
+}
+.overview-layout .panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--bd-default);
+}
+.overview-layout .panel-header {
+    padding: 14px 22px;
+}
+.overview-layout th,
+.overview-layout td {
+    font-size: 13px;
+    padding: 10px 12px;
+}
+.overview-layout th {
+    font-size: 11px;
+}
+.overview-layout .alert-row {
+    padding: 14px 18px;
+    gap: 12px;
+}
+.overview-layout [data-testid="supervision-generate-report"] {
+    color: var(--bg-base);
+    background: var(--brand-gold);
+    border-color: var(--brand-gold);
+    font-weight: 600;
+}
+.overview-layout [data-testid="supervision-generate-report"]:hover {
+    background: var(--brand-gold-bright);
+    border-color: var(--brand-gold-bright);
+    color: var(--bg-base);
+}
+
+.risk-hero {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    padding: 22px;
+    border-bottom: 1px solid var(--bd-default);
+}
+.risk-metric-label {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--brand-gold);
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+.risk-metric-value {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin-bottom: 12px;
+}
+.risk-metric-limit {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+}
+
+.risk-hero-full {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 18px;
+    padding: 22px;
+}
+
+.risk-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+.risk-layout .panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--bd-default);
+}
+.risk-layout .panel-header {
+    padding: 14px 22px;
+}
+.risk-layout th,
+.risk-layout td {
+    font-size: 13px;
+    padding: 10px 12px;
+}
+.risk-layout th {
+    font-size: 11px;
+}
+.risk-layout [data-testid="risk-save-button"] {
+    color: var(--bg-base);
+    background: var(--brand-gold);
+    border-color: var(--brand-gold);
+    font-weight: 600;
+}
+.risk-layout [data-testid="risk-save-button"]:hover {
+    background: var(--brand-gold-bright);
+    border-color: var(--brand-gold-bright);
+    color: var(--bg-base);
+}
+
+.risk-limits-card {
+    padding: 22px;
+}
+.risk-limits-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+.risk-limits-label {
+    display: block;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+@media (max-width: 1024px) {
+    .hero-strip,
+    .risk-hero,
+    .risk-hero-full {
+        grid-template-columns: 1fr 1fr;
+    }
+    .overview-layout {
+        grid-template-columns: 1fr;
+    }
+    .risk-limits-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+    .hero-card-value,
+    .risk-metric-value { font-size: 26px; }
+}
+@media (max-width: 768px) {
+    .hero-strip,
+    .risk-hero,
+    .risk-hero-full {
+        grid-template-columns: 1fr;
+        padding-left: 14px;
+        padding-right: 14px;
+        gap: 14px;
+    }
+    .overview-layout { padding: 14px; gap: 14px; }
+    .hero-card { padding: 20px; }
+    .hero-card-value,
+    .risk-metric-value { font-size: 28px; }
+    .risk-limits-grid {
+        grid-template-columns: 1fr;
+    }
+    .risk-limits-card {
+        padding: 14px;
+    }
+    .risk-layout {
+        gap: 14px;
+    }
+}
 
 /* ============================================================
    Branding — Welcome / Loading boot splash
@@ -215,7 +482,7 @@ input:focus, select:focus { border-color: var(--bd-focus); }
     inset: 0;
     z-index: 10000;
     background:
-        radial-gradient(1200px 600px at 50% -10%, rgba(34,197,94,0.06), transparent 60%),
+        radial-gradient(1200px 600px at 50% -10%, var(--brand-gold-soft), transparent 60%),
         var(--bg-base);
     display: flex;
     flex-direction: column;
@@ -248,11 +515,11 @@ input:focus, select:focus { border-color: var(--bd-focus); }
 }
 .brand-boot-bar-fill {
     height: 100%;
-    background: linear-gradient(90deg, #16A34A, #22C55E);
+    background: linear-gradient(90deg, var(--brand-gold-muted), var(--brand-gold));
     transition: width 120ms linear;
 }
 .brand-boot-status {
-    font-size: 10px; letter-spacing: 0.18em; color: var(--text-tertiary);
+    font-size: 10px; letter-spacing: 0.18em; color: var(--brand-gold-muted);
     text-transform: uppercase;
 }
 .brand-boot-footer {
@@ -276,7 +543,8 @@ input:focus, select:focus { border-color: var(--bd-focus); }
 .page-shell-nav { display: flex; gap: 4px; }
 .page-shell-badge {
     margin-left: auto; display: flex; align-items: center; gap: 8px;
-    font-size: 9.5px; letter-spacing: 0.16em; color: var(--text-tertiary);
+    font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--brand-gold-muted);
 }
 .page-shell-main {
     max-width: 940px; margin: 0 auto; padding: 32px 20px 64px;

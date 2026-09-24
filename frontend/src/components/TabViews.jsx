@@ -280,13 +280,19 @@ export function StrategiesView({ accounts, isSample = false }) {
 /* ------------------------------------------------------------------ */
 export function RiskView({ accounts, selectedId, onSelect, selectedAccount, onUpdate, isSample = false }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+    <div className="risk-layout" data-testid="risk-layout">
       <AccountsTable accounts={accounts} selectedId={selectedId} onSelect={onSelect} isSample={isSample} />
       {selectedAccount ? (
-        <RiskPanel key={selectedAccount.id} account={selectedAccount} onUpdate={onUpdate} isSample={isSample} />
+        <RiskPanel
+          key={selectedAccount.id}
+          account={selectedAccount}
+          onUpdate={onUpdate}
+          isSample={isSample}
+          heroLayout="full"
+        />
       ) : (
         <div className="panel" data-testid="risk-empty">
-          <div style={{ padding: 24, textAlign: "center", color: "var(--text-tertiary)", fontSize: 12 }}>
+          <div style={{ padding: 22, textAlign: "center", color: "var(--text-tertiary)", fontSize: 13 }}>
             Select an account to manage its risk limits.
           </div>
         </div>

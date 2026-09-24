@@ -1,17 +1,17 @@
 import React from "react";
 import { fmt } from "@/lib/api";
 
-export default function KpiTicker({ kpis }) {
+export default function KpiTicker({ kpis, className = "" }) {
   if (!kpis) {
     return (
-      <div className="ticker-row" data-testid="kpi-ticker-loading">
+      <div className={`ticker-row ${className}`.trim()} data-testid="kpi-ticker-loading">
         <span className="ticker-item"><span className="label">Loading market state…</span></span>
       </div>
     );
   }
   const pnlClass = kpis.daily_pnl > 0 ? "cell-pos" : kpis.daily_pnl < 0 ? "cell-neg" : "";
   return (
-    <div className="ticker-row" data-testid="kpi-ticker">
+    <div className={`ticker-row ${className}`.trim()} data-testid="kpi-ticker">
       <span className="ticker-item" data-testid="kpi-total-equity">
         <span className="label">Total Equity</span>
         <span className="val">{fmt.money(kpis.total_equity)}</span>

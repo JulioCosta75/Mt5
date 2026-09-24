@@ -1,5 +1,8 @@
 import React, { useState } from "react";
 import { api, fmt, pnlClass } from "@/lib/api";
+import { barPct, resolveHeroLayout } from "./riskMetrics";
+
+export { barPct, resolveHeroLayout };
 
 function Stat({ label, value, mono = true, cls = "" }) {
   return (
@@ -14,9 +17,132 @@ function Stat({ label, value, mono = true, cls = "" }) {
   );
 }
 
-export default function RiskPanel({ account, onUpdate, isSample = false }) {
+function RiskMetric({ label, value, valueClass, fill, limitLabel, testId, showBar = false }) {
+  return (
+    <div data-testid={testId}>
+      <div className="risk-metric-label">{label}</div>
+      <div className={`risk-metric-value mono ${valueClass || ""}`}>{value}</div>
+      {showBar ? (
+        <>
+          <div className="hero-bar-track" aria-hidden="true">
+            <div className="hero-bar-fill" style={{ width: `${fill}%` }} />
+          </div>
+          {limitLabel ? <div className="risk-metric-limit">{limitLabel}</div> : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function OverviewHeroMetrics({ account, limits }) {
+  return (
+    <div className="risk-hero" data-testid="risk-hero">
+      <RiskMetric
+        label="Drawdown"
+        value={fmt.pct(account.current_drawdown)}
+        valueClass="cell-neg"
+        showBar
+        fill={barPct(account.current_drawdown, limits.max_daily_loss_pct)}
+        limitLabel={`limit ${limits.max_daily_loss_pct}%`}
+      />
+      <RiskMetric
+        label="Margin level"
+        value={`${fmt.num(account.margin_level, 1)}%`}
+        valueClass={account.margin_level < 200 ? "cell-warn" : ""}
+        showBar
+        fill={barPct(account.margin_level, 200)}
+        limitLabel="warn below 200%"
+      />
+      <RiskMetric
+        label="Open positions"
+        value={String(account.open_positions)}
+        showBar
+        fill={barPct(account.open_positions, limits.max_open_positions)}
+        limitLabel={`limit ${limits.max_open_positions}`}
+      />
+    </div>
+  );
+}
+
+function FullHeroMetrics({ account, limits }) {
+  return (
+    <div className="risk-hero risk-hero-full" data-testid="risk-hero-full">
+      <RiskMetric
+        label="Equity"
+        value={fmt.money(account.equity)}
+        testId="account-equity-value"
+      />
+      <RiskMetric
+        label="Balance"
+        value={fmt.money(account.balance)}
+      />
+      <RiskMetric
+        label="Margin used"
+        value={fmt.money(account.margin_used)}
+      />
+      <RiskMetric
+        label="Margin level"
+        value={`${fmt.num(account.margin_level, 1)}%`}
+        valueClass={account.margin_level < 200 ? "cell-warn" : ""}
+        showBar
+        fill={barPct(account.margin_level, 200)}
+        limitLabel="warn below 200%"
+      />
+      <RiskMetric
+        label="Daily P&L"
+        value={fmt.money(account.daily_pnl)}
+        valueClass={pnlClass(account.daily_pnl)}
+      />
+      <RiskMetric
+        label="Current DD"
+        value={fmt.pct(account.current_drawdown)}
+        valueClass="cell-neg"
+        showBar
+        fill={barPct(account.current_drawdown, limits.max_daily_loss_pct)}
+        limitLabel={`limit ${limits.max_daily_loss_pct}%`}
+      />
+      <RiskMetric
+        label="Max DD"
+        value={fmt.pct(account.max_drawdown)}
+        valueClass="cell-neg"
+      />
+      <RiskMetric
+        label="Leverage"
+        value={`1:${account.leverage}`}
+      />
+    </div>
+  );
+}
+
+function ClassicStatGrid({ account }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", borderBottom: "1px solid var(--bd-default)" }}>
+      <Stat label="Equity" value={fmt.money(account.equity)} />
+      <Stat label="Balance" value={fmt.money(account.balance)} />
+      <Stat label="Margin Used" value={fmt.money(account.margin_used)} />
+      <Stat
+        label="Margin Lvl"
+        value={`${fmt.num(account.margin_level, 1)}%`}
+        cls={account.margin_level < 200 ? "cell-warn" : ""}
+      />
+      <Stat label="Daily P&L" value={fmt.money(account.daily_pnl)} cls={pnlClass(account.daily_pnl)} />
+      <Stat label="Cur DD" value={fmt.pct(account.current_drawdown)} cls="cell-neg" />
+      <Stat label="Max DD" value={fmt.pct(account.max_drawdown)} cls="cell-neg" />
+      <Stat label="Leverage" value={`1:${account.leverage}`} />
+    </div>
+  );
+}
+
+export default function RiskPanel({
+  account,
+  onUpdate,
+  isSample = false,
+  showHeroBars = false,
+  heroLayout = null,
+}) {
   const [limits, setLimits] = useState(account.risk_limits);
   const [saving, setSaving] = useState(false);
+  const layout = resolveHeroLayout(heroLayout, showHeroBars);
 
   const saveLimits = async () => {
     setSaving(true);
@@ -38,26 +164,19 @@ export default function RiskPanel({ account, onUpdate, isSample = false }) {
           {isSample ? <span className="kbd" style={{ marginLeft: 8 }} data-testid="risk-sample-label">SAMPLE DATA</span> : null}
         </span>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", borderBottom: "1px solid var(--bd-default)" }}>
-        <Stat label="Equity" value={fmt.money(account.equity)} data-testid="account-equity-value" />
-        <Stat label="Balance" value={fmt.money(account.balance)} />
-        <Stat label="Margin Used" value={fmt.money(account.margin_used)} />
-        <Stat
-          label="Margin Lvl"
-          value={`${fmt.num(account.margin_level, 1)}%`}
-          cls={account.margin_level < 200 ? "cell-warn" : ""}
-        />
-        <Stat label="Daily P&L" value={fmt.money(account.daily_pnl)} cls={pnlClass(account.daily_pnl)} />
-        <Stat label="Cur DD" value={fmt.pct(account.current_drawdown)} cls="cell-neg" />
-        <Stat label="Max DD" value={fmt.pct(account.max_drawdown)} cls="cell-neg" />
-        <Stat label="Leverage" value={`1:${account.leverage}`} />
-      </div>
-      <div style={{ padding: 14 }}>
-        <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>
+      {layout === "full" ? (
+        <FullHeroMetrics account={account} limits={limits} />
+      ) : layout === "overview" ? (
+        <OverviewHeroMetrics account={account} limits={limits} />
+      ) : (
+        <ClassicStatGrid account={account} />
+      )}
+      <div className={layout === "full" ? "risk-limits-card" : undefined} style={layout === "full" ? undefined : { padding: layout === "overview" ? 22 : 14 }}>
+        <div className={layout === "full" ? "section-heading" : undefined} style={layout === "full" ? { marginBottom: 16 } : { fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>
           Risk Limits
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-          <label style={{ fontSize: 11, color: "var(--text-secondary)" }}>
+        <div className={layout === "full" ? "risk-limits-grid" : undefined} style={layout === "full" ? undefined : { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+          <label className={layout === "full" ? "risk-limits-label" : undefined} style={layout === "full" ? undefined : { fontSize: 11, color: "var(--text-secondary)" }}>
             Max Daily Loss (%)
             <input
               type="number"
@@ -68,7 +187,7 @@ export default function RiskPanel({ account, onUpdate, isSample = false }) {
               style={{ marginTop: 4 }}
             />
           </label>
-          <label style={{ fontSize: 11, color: "var(--text-secondary)" }}>
+          <label className={layout === "full" ? "risk-limits-label" : undefined} style={layout === "full" ? undefined : { fontSize: 11, color: "var(--text-secondary)" }}>
             Max Position Size (lots)
             <input
               type="number"
@@ -79,7 +198,7 @@ export default function RiskPanel({ account, onUpdate, isSample = false }) {
               style={{ marginTop: 4 }}
             />
           </label>
-          <label style={{ fontSize: 11, color: "var(--text-secondary)" }}>
+          <label className={layout === "full" ? "risk-limits-label" : undefined} style={layout === "full" ? undefined : { fontSize: 11, color: "var(--text-secondary)" }}>
             Max Open Positions
             <input
               type="number"
@@ -91,7 +210,7 @@ export default function RiskPanel({ account, onUpdate, isSample = false }) {
             />
           </label>
         </div>
-        <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
+        <div style={{ marginTop: layout === "full" ? 18 : 12, display: "flex", justifyContent: "flex-end" }}>
           <button
             className="btn"
             onClick={saveLimits}
