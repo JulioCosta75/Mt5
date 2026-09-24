@@ -14,10 +14,25 @@
     --text-primary: #F4F4F5;
     --text-secondary: #A1A1AA;
     --text-tertiary: #71717A;
+    /* Signal colors — operational status only. Values must stay distinct from brand gold. */
     --sig-pos: #22C55E;
     --sig-neg: #EF4444;
     --sig-warn: #F59E0B;
     --sig-info: #3B82F6;
+    --sig-pos-soft: rgba(34, 197, 94, 0.10);
+    --sig-neg-soft: rgba(239, 68, 68, 0.10);
+    --sig-warn-soft: rgba(245, 158, 11, 0.10);
+    --sig-info-soft: rgba(59, 130, 246, 0.10);
+    /* Forge Factory Lab brand gold — decorative identity, never a warning/error/success stand-in. */
+    --brand-gold: #C9A962;
+    --brand-gold-bright: #E4D09A;
+    --brand-gold-muted: #8C7344;
+    --brand-gold-dim: #5C4B28;
+    --brand-gold-soft: rgba(201, 169, 98, 0.12);
+    --brand-gold-border: rgba(201, 169, 98, 0.38);
+    /* Metallic surface extras for later stages (Overview re-skin). Unused by panels in Stage 1. */
+    --metal-sheen: #1C1D21;
+    --metal-edge: #3A3B40;
 }
 
 * {
@@ -58,12 +73,29 @@ body {
     background: rgba(255,255,255,0.01);
 }
 
-.panel-title {
-    font-size: 10.5px;
-    letter-spacing: 0.14em;
+.panel-title,
+.section-heading {
+    font-size: 11px;
+    letter-spacing: 0.2em;
     text-transform: uppercase;
-    color: var(--text-secondary);
+    color: var(--brand-gold);
     font-weight: 600;
+}
+
+@media (max-width: 1024px) {
+    .panel-title,
+    .section-heading {
+        font-size: 10.5px;
+        letter-spacing: 0.16em;
+    }
+}
+
+@media (max-width: 768px) {
+    .panel-title,
+    .section-heading {
+        font-size: 10px;
+        letter-spacing: 0.12em;
+    }
 }
 
 .cell-pos { color: var(--sig-pos); }
@@ -71,18 +103,18 @@ body {
 .cell-warn { color: var(--sig-warn); }
 .cell-info { color: var(--sig-info); }
 
-.bg-pos-soft { background: rgba(34,197,94,0.10); }
-.bg-neg-soft { background: rgba(239,68,68,0.10); }
-.bg-warn-soft { background: rgba(245,158,11,0.10); }
-.bg-info-soft { background: rgba(59,130,246,0.10); }
+.bg-pos-soft { background: var(--sig-pos-soft); }
+.bg-neg-soft { background: var(--sig-neg-soft); }
+.bg-warn-soft { background: var(--sig-warn-soft); }
+.bg-info-soft { background: var(--sig-info-soft); }
 
 .divide-bd > * + * { border-top: 1px solid var(--bd-default); }
 
 /* Scrollbars */
 .scroll-area::-webkit-scrollbar { width: 8px; height: 8px; }
 .scroll-area::-webkit-scrollbar-track { background: transparent; }
-.scroll-area::-webkit-scrollbar-thumb { background: #27272A; border-radius: 0; }
-.scroll-area::-webkit-scrollbar-thumb:hover { background: #3F3F46; }
+.scroll-area::-webkit-scrollbar-thumb { background: var(--bd-default); border-radius: 0; }
+.scroll-area::-webkit-scrollbar-thumb:hover { background: var(--bd-focus); }
 
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 8px 10px; text-align: left; font-size: 12px; }
@@ -205,7 +237,7 @@ input[type="number"], input[type="text"], select {
 }
 input:focus, select:focus { border-color: var(--bd-focus); }
 
-::selection { background: rgba(244,244,245,0.18); }
+::selection { background: var(--brand-gold-soft); color: var(--text-primary); }
 
 /* ============================================================
    Branding — Welcome / Loading boot splash
@@ -215,7 +247,7 @@ input:focus, select:focus { border-color: var(--bd-focus); }
     inset: 0;
     z-index: 10000;
     background:
-        radial-gradient(1200px 600px at 50% -10%, rgba(34,197,94,0.06), transparent 60%),
+        radial-gradient(1200px 600px at 50% -10%, var(--brand-gold-soft), transparent 60%),
         var(--bg-base);
     display: flex;
     flex-direction: column;
@@ -248,11 +280,11 @@ input:focus, select:focus { border-color: var(--bd-focus); }
 }
 .brand-boot-bar-fill {
     height: 100%;
-    background: linear-gradient(90deg, #16A34A, #22C55E);
+    background: linear-gradient(90deg, var(--brand-gold-muted), var(--brand-gold));
     transition: width 120ms linear;
 }
 .brand-boot-status {
-    font-size: 10px; letter-spacing: 0.18em; color: var(--text-tertiary);
+    font-size: 10px; letter-spacing: 0.18em; color: var(--brand-gold-muted);
     text-transform: uppercase;
 }
 .brand-boot-footer {
@@ -276,7 +308,8 @@ input:focus, select:focus { border-color: var(--bd-focus); }
 .page-shell-nav { display: flex; gap: 4px; }
 .page-shell-badge {
     margin-left: auto; display: flex; align-items: center; gap: 8px;
-    font-size: 9.5px; letter-spacing: 0.16em; color: var(--text-tertiary);
+    font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--brand-gold-muted);
 }
 .page-shell-main {
     max-width: 940px; margin: 0 auto; padding: 32px 20px 64px;
