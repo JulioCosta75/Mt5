@@ -383,20 +383,77 @@ input:focus, select:focus { border-color: var(--bd-focus); }
     color: var(--text-tertiary);
 }
 
+.risk-hero-full {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 18px;
+    padding: 22px;
+}
+
+.risk-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+.risk-layout .panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--bd-default);
+}
+.risk-layout .panel-header {
+    padding: 14px 22px;
+}
+.risk-layout th,
+.risk-layout td {
+    font-size: 13px;
+    padding: 10px 12px;
+}
+.risk-layout th {
+    font-size: 11px;
+}
+.risk-layout [data-testid="risk-save-button"] {
+    color: var(--bg-base);
+    background: var(--brand-gold);
+    border-color: var(--brand-gold);
+    font-weight: 600;
+}
+.risk-layout [data-testid="risk-save-button"]:hover {
+    background: var(--brand-gold-bright);
+    border-color: var(--brand-gold-bright);
+    color: var(--bg-base);
+}
+
+.risk-limits-card {
+    padding: 22px;
+}
+.risk-limits-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+.risk-limits-label {
+    display: block;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
 @media (max-width: 1024px) {
     .hero-strip,
-    .risk-hero {
+    .risk-hero,
+    .risk-hero-full {
         grid-template-columns: 1fr 1fr;
     }
     .overview-layout {
         grid-template-columns: 1fr;
+    }
+    .risk-limits-grid {
+        grid-template-columns: 1fr 1fr;
     }
     .hero-card-value,
     .risk-metric-value { font-size: 26px; }
 }
 @media (max-width: 768px) {
     .hero-strip,
-    .risk-hero {
+    .risk-hero,
+    .risk-hero-full {
         grid-template-columns: 1fr;
         padding-left: 14px;
         padding-right: 14px;
@@ -406,6 +463,15 @@ input:focus, select:focus { border-color: var(--bd-focus); }
     .hero-card { padding: 20px; }
     .hero-card-value,
     .risk-metric-value { font-size: 28px; }
+    .risk-limits-grid {
+        grid-template-columns: 1fr;
+    }
+    .risk-limits-card {
+        padding: 14px;
+    }
+    .risk-layout {
+        gap: 14px;
+    }
 }
 
 /* ============================================================

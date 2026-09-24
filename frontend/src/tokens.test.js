@@ -57,3 +57,19 @@ describe("Atlas 2 Stage 2 Overview chrome", () => {
     expect(css).toMatch(/\.overview-layout \{/);
   });
 });
+
+describe("Atlas 2 Stage 3 Risk tab chrome", () => {
+  test("full hero and limits form reuse established type scale and 768 breakpoint", () => {
+    expect(css).toMatch(/\.risk-hero-full \{/);
+    expect(css).toMatch(/\.risk-layout \{/);
+    expect(css).toMatch(/\.risk-limits-card \{/);
+    expect(css).toMatch(/\.risk-limits-grid \{/);
+    expect(css).toMatch(/\.risk-hero,\s*\n\s*\.risk-hero-full \{[^}]*grid-template-columns:\s*1fr;/);
+    expect(css).toMatch(/\.risk-limits-grid \{\s*\n\s*grid-template-columns:\s*1fr;/);
+  });
+
+  test("Risk save button uses brand gold, not a signal color", () => {
+    expect(css).toMatch(/\.risk-layout \[data-testid="risk-save-button"\] \{[^}]*background:\s*var\(--brand-gold\)/s);
+    expect(css).not.toMatch(/\.risk-layout \[data-testid="risk-save-button"\] \{[^}]*--sig-/s);
+  });
+});
