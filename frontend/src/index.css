@@ -355,6 +355,26 @@ input:focus, select:focus { border-color: var(--bd-focus); }
     color: var(--bg-base);
 }
 
+/* Stage 4 — Overview AccountsTable / TradesTable only.
+   Do not copy these selectors onto .risk-layout. */
+.overview-layout [data-testid="accounts-table"] th,
+.overview-layout [data-testid="trades-panel"] th {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    font-weight: 600;
+    color: var(--brand-gold);
+    padding: 12px 14px;
+}
+.overview-layout [data-testid="accounts-table"] td,
+.overview-layout [data-testid="trades-panel"] td {
+    font-size: 13px;
+    padding: 12px 14px;
+}
+.overview-layout [data-testid="accounts-table"] tbody tr[style*="--text-primary"] {
+    background: var(--brand-gold-soft) !important;
+    border-left-color: var(--brand-gold) !important;
+}
+
 .risk-hero {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -460,6 +480,12 @@ input:focus, select:focus { border-color: var(--bd-focus); }
         gap: 14px;
     }
     .overview-layout { padding: 14px; gap: 14px; }
+    .overview-layout [data-testid="accounts-table"] th,
+    .overview-layout [data-testid="accounts-table"] td,
+    .overview-layout [data-testid="trades-panel"] th,
+    .overview-layout [data-testid="trades-panel"] td {
+        padding: 10px 12px;
+    }
     .hero-card { padding: 20px; }
     .hero-card-value,
     .risk-metric-value { font-size: 28px; }

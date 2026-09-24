@@ -73,3 +73,28 @@ describe("Atlas 2 Stage 3 Risk tab chrome", () => {
     expect(css).not.toMatch(/\.risk-layout \[data-testid="risk-save-button"\] \{[^}]*--sig-/s);
   });
 });
+
+describe("Atlas 2 Stage 4 Overview tables", () => {
+  test("table chrome is scoped to overview-layout, not risk-layout", () => {
+    expect(css).toMatch(/\.overview-layout \[data-testid="accounts-table"\] th/);
+    expect(css).toMatch(/\.overview-layout \[data-testid="trades-panel"\] th/);
+    expect(css).not.toMatch(/\.risk-layout \[data-testid="accounts-table"\]/);
+    expect(css).not.toMatch(/\.risk-layout \[data-testid="trades-panel"\]/);
+  });
+
+  test("Risk layout table type bump is unchanged from Stage 3", () => {
+    expect(css).toMatch(/\.risk-layout th,\s*\n\.risk-layout td \{\s*\n\s*font-size: 13px;\s*\n\s*padding: 10px 12px;/);
+  });
+
+  test("Overview selected account row uses brand gold, not a signal token", () => {
+    const selected = css.match(/\.overview-layout \[data-testid="accounts-table"\] tbody tr\[style\*=["']--text-primary["']\] \{[^}]+\}/);
+    expect(selected).toBeTruthy();
+    expect(selected[0]).toMatch(/var\(--brand-gold-soft\)/);
+    expect(selected[0]).toMatch(/border-left-color:\s*var\(--brand-gold\)/);
+    expect(selected[0]).not.toMatch(/--sig-/);
+  });
+
+  test("narrow breakpoint tightens Overview table padding only", () => {
+    expect(css).toMatch(/@media \(max-width: 768px\)[\s\S]*\.overview-layout \[data-testid="accounts-table"\] td[\s\S]*padding:\s*10px 12px;/);
+  });
+});
