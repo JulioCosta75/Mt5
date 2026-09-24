@@ -35,7 +35,7 @@ function Stat({ label, value, cls }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 2, padding: "6px 8px", background: "var(--bg-base)", border: "1px solid var(--bd-subtle)", borderRadius: 3 }}>
       <span style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</span>
-      <span className={`mono ${cls || ""}`} style={{ fontSize: 14, fontWeight: 500 }}>{value}</span>
+      <span className={`mono ${cls || ""}`} style={{ fontSize: 18, fontWeight: 600 }}>{value}</span>
     </div>
   );
 }
@@ -114,7 +114,7 @@ export default function SupervisionPanel({ serverTime, onAfterGenerate }) {
         </span>
       </div>
 
-      <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ padding: 22, display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ fontSize: 11, color: "var(--text-secondary)" }} data-testid="supervision-message">
           {error ? error : (snapshot?.message || "Loading supervision snapshot…")}
         </div>

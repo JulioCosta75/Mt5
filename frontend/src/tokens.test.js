@@ -48,3 +48,12 @@ describe("Atlas 2 Stage 1 color tokens", () => {
     expect(css).toMatch(/border-bottom: 2px solid #A855F7;/);
   });
 });
+
+describe("Atlas 2 Stage 2 Overview chrome", () => {
+  test("featured hero cards use brand gold accent, not signal warn", () => {
+    expect(css).toMatch(/\.hero-card \{/);
+    expect(css).toMatch(/border-top: 2px solid var\(--brand-gold-border\)/);
+    expect(css).toMatch(/\.hero-bar-fill \{[^}]*background: var\(--brand-gold\)/s);
+    expect(css).toMatch(/\.overview-layout \{/);
+  });
+});

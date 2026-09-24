@@ -14,7 +14,27 @@ function Stat({ label, value, mono = true, cls = "" }) {
   );
 }
 
-export default function RiskPanel({ account, onUpdate, isSample = false }) {
+function barPct(current, limit) {
+  const c = Number(current);
+  const l = Number(limit);
+  if (!Number.isFinite(c) || !Number.isFinite(l) || l <= 0) return 0;
+  return Math.min(100, Math.max(0, (c / l) * 100));
+}
+
+function RiskMetric({ label, value, valueClass, fill, limitLabel }) {
+  return (
+    <div>
+      <div className="risk-metric-label">{label}</div>
+      <div className={`risk-metric-value mono ${valueClass || ""}`}>{value}</div>
+      <div className="hero-bar-track" aria-hidden="true">
+        <div className="hero-bar-fill" style={{ width: `${fill}%` }} />
+      </div>
+      <div className="risk-metric-limit">{limitLabel}</div>
+    </div>
+  );
+}
+
+export default function RiskPanel({ account, onUpdate, isSample = false, showHeroBars = false }) {
   const [limits, setLimits] = useState(account.risk_limits);
   const [saving, setSaving] = useState(false);
 
@@ -38,6 +58,30 @@ export default function RiskPanel({ account, onUpdate, isSample = false }) {
           {isSample ? <span className="kbd" style={{ marginLeft: 8 }} data-testid="risk-sample-label">SAMPLE DATA</span> : null}
         </span>
       </div>
+      {showHeroBars ? (
+        <div className="risk-hero" data-testid="risk-hero">
+          <RiskMetric
+            label="Drawdown"
+            value={fmt.pct(account.current_drawdown)}
+            valueClass="cell-neg"
+            fill={barPct(account.current_drawdown, limits.max_daily_loss_pct)}
+            limitLabel={`limit ${limits.max_daily_loss_pct}%`}
+          />
+          <RiskMetric
+            label="Margin level"
+            value={`${fmt.num(account.margin_level, 1)}%`}
+            valueClass={account.margin_level < 200 ? "cell-warn" : ""}
+            fill={barPct(account.margin_level, 200)}
+            limitLabel="warn below 200%"
+          />
+          <RiskMetric
+            label="Open positions"
+            value={String(account.open_positions)}
+            fill={barPct(account.open_positions, limits.max_open_positions)}
+            limitLabel={`limit ${limits.max_open_positions}`}
+          />
+        </div>
+      ) : (
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", borderBottom: "1px solid var(--bd-default)" }}>
         <Stat label="Equity" value={fmt.money(account.equity)} data-testid="account-equity-value" />
         <Stat label="Balance" value={fmt.money(account.balance)} />
@@ -52,7 +96,8 @@ export default function RiskPanel({ account, onUpdate, isSample = false }) {
         <Stat label="Max DD" value={fmt.pct(account.max_drawdown)} cls="cell-neg" />
         <Stat label="Leverage" value={`1:${account.leverage}`} />
       </div>
-      <div style={{ padding: 14 }}>
+      )}
+      <div style={{ padding: showHeroBars ? 22 : 14 }}>
         <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>
           Risk Limits
         </div>

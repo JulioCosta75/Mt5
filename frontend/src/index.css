@@ -204,6 +204,13 @@ button { font-family: inherit; }
 .btn.success { color: var(--sig-pos); border-color: rgba(34,197,94,0.4); }
 .btn.success:hover { background: rgba(34,197,94,0.08); }
 .btn.active { background: rgba(244,244,245,0.08); border-color: var(--bd-focus); }
+.btn.active:not(.nav-revolution) {
+    background: transparent;
+    border-color: transparent;
+    border-bottom: 2px solid var(--brand-gold);
+    border-radius: 0;
+    color: var(--brand-gold);
+}
 
 .badge {
     display: inline-flex; align-items: center; gap: 5px;
@@ -238,6 +245,168 @@ input[type="number"], input[type="text"], select {
 input:focus, select:focus { border-color: var(--bd-focus); }
 
 ::selection { background: var(--brand-gold-soft); color: var(--text-primary); }
+
+/* ============================================================
+   Atlas 2 Stage 2 — Overview layout only
+   ============================================================ */
+.config-mode-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 20px;
+    background: var(--brand-gold-soft);
+    border-bottom: 1px solid var(--brand-gold-border);
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.4;
+}
+.config-mode-banner b { color: var(--text-primary); font-weight: 600; }
+
+.hero-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    padding: 18px 20px 0;
+}
+.hero-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--bd-default);
+    border-top: 2px solid var(--brand-gold-border);
+    padding: 22px;
+    min-width: 0;
+}
+.hero-card-icon {
+    color: var(--brand-gold);
+    margin-bottom: 10px;
+}
+.hero-card-label {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--brand-gold);
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+.hero-card-value {
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+}
+.hero-card-detail {
+    margin: 10px 0 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.45;
+    min-height: 2.6em;
+}
+.hero-bar-track {
+    height: 3px;
+    background: var(--bd-subtle);
+    overflow: hidden;
+}
+.hero-bar-fill {
+    height: 100%;
+    background: var(--brand-gold);
+}
+
+.ticker-row-compact {
+    height: 32px;
+    gap: 24px;
+    margin-top: 8px;
+    border-top: 1px solid var(--bd-subtle);
+}
+
+.overview-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+    gap: 18px;
+    padding: 18px 20px 24px;
+}
+.overview-layout .panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--bd-default);
+}
+.overview-layout .panel-header {
+    padding: 14px 22px;
+}
+.overview-layout th,
+.overview-layout td {
+    font-size: 13px;
+    padding: 10px 12px;
+}
+.overview-layout th {
+    font-size: 11px;
+}
+.overview-layout .alert-row {
+    padding: 14px 18px;
+    gap: 12px;
+}
+.overview-layout [data-testid="supervision-generate-report"] {
+    color: var(--bg-base);
+    background: var(--brand-gold);
+    border-color: var(--brand-gold);
+    font-weight: 600;
+}
+.overview-layout [data-testid="supervision-generate-report"]:hover {
+    background: var(--brand-gold-bright);
+    border-color: var(--brand-gold-bright);
+    color: var(--bg-base);
+}
+
+.risk-hero {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    padding: 22px;
+    border-bottom: 1px solid var(--bd-default);
+}
+.risk-metric-label {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--brand-gold);
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+.risk-metric-value {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin-bottom: 12px;
+}
+.risk-metric-limit {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+}
+
+@media (max-width: 1024px) {
+    .hero-strip,
+    .risk-hero {
+        grid-template-columns: 1fr 1fr;
+    }
+    .overview-layout {
+        grid-template-columns: 1fr;
+    }
+    .hero-card-value,
+    .risk-metric-value { font-size: 26px; }
+}
+@media (max-width: 768px) {
+    .hero-strip,
+    .risk-hero {
+        grid-template-columns: 1fr;
+        padding-left: 14px;
+        padding-right: 14px;
+        gap: 14px;
+    }
+    .overview-layout { padding: 14px; gap: 14px; }
+    .hero-card { padding: 20px; }
+    .hero-card-value,
+    .risk-metric-value { font-size: 28px; }
+}
 
 /* ============================================================
    Branding — Welcome / Loading boot splash
