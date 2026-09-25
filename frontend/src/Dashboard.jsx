@@ -304,7 +304,7 @@ export default function Dashboard() {
                   isSample={isSample}
                   showHeroBars
                 />
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+                <div className="overview-charts" data-testid="overview-charts">
                   <EquityChart data={equity} isSample={isSample} />
                   <DrawdownChart
                     data={drawdown.series}

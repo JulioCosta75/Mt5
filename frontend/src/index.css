@@ -388,9 +388,19 @@ input:focus, select:focus { border-color: var(--bd-focus); }
 .overview-layout .panel {
     background: var(--bg-panel);
     border: 1px solid var(--bd-default);
+    border-top: 2px solid var(--brand-gold-border);
 }
 .overview-layout .panel-header {
     padding: 14px 22px;
+}
+.overview-layout [data-testid="accounts-panel"] .scroll-area {
+    max-height: 220px !important;
+}
+.overview-charts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    min-width: 0;
 }
 .overview-layout th,
 .overview-layout td {
@@ -521,6 +531,7 @@ input:focus, select:focus { border-color: var(--bd-focus); }
         gap: 14px;
     }
     .overview-layout { padding: 14px; gap: 14px; }
+    .overview-charts { grid-template-columns: 1fr; }
     .hero-card { padding: 20px; }
     .hero-card-value,
     .risk-metric-value { font-size: 28px; }
