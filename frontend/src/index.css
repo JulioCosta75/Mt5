@@ -395,7 +395,41 @@ input:focus, select:focus { border-color: var(--bd-focus); }
 }
 .overview-layout [data-testid="accounts-panel"] .scroll-area {
     max-height: 220px !important;
+    overflow: auto;
 }
+.overview-layout [data-testid="accounts-table"],
+.overview-layout [data-testid="trades-panel"] table {
+    min-width: 960px;
+}
+.overview-layout [data-testid="accounts-table"] th,
+.overview-layout [data-testid="trades-panel"] th {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    font-weight: 600;
+    color: var(--brand-gold);
+    padding: 12px 14px;
+}
+.overview-layout [data-testid="accounts-table"] td,
+.overview-layout [data-testid="trades-panel"] td {
+    font-size: 13px;
+    padding: 12px 14px;
+}
+.overview-layout [data-testid="accounts-table"] th:first-child,
+.overview-layout [data-testid="accounts-table"] td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--bg-panel);
+}
+.overview-layout [data-testid="accounts-table"] tbody tr.is-selected {
+    background: color-mix(in srgb, var(--brand-gold) 16%, var(--bg-panel)) !important;
+    box-shadow: inset 3px 0 0 var(--brand-gold);
+    border-left-color: var(--brand-gold) !important;
+}
+.overview-layout [data-testid="accounts-table"] tbody tr.is-selected td:first-child {
+    background: color-mix(in srgb, var(--brand-gold) 16%, var(--bg-panel));
+}
+
 .overview-charts {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -532,6 +566,12 @@ input:focus, select:focus { border-color: var(--bd-focus); }
     }
     .overview-layout { padding: 14px; gap: 14px; }
     .overview-charts { grid-template-columns: 1fr; }
+    .overview-layout [data-testid="accounts-table"] th,
+    .overview-layout [data-testid="accounts-table"] td,
+    .overview-layout [data-testid="trades-panel"] th,
+    .overview-layout [data-testid="trades-panel"] td {
+        padding: 10px 12px;
+    }
     .hero-card { padding: 20px; }
     .hero-card-value,
     .risk-metric-value { font-size: 28px; }

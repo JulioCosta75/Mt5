@@ -52,6 +52,7 @@ export default function AccountsTable({ accounts, selectedId, onSelect, isSample
                 <tr
                   key={acc.id}
                   data-testid={`account-row-${acc.id}`}
+                  className={active ? "is-selected" : undefined}
                   onClick={() => onSelect(acc.id)}
                   style={{
                     cursor: "pointer",
