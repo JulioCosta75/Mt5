@@ -26,15 +26,10 @@ function Header({ refreshing, onRefresh, sessionId, activeTab, onTabChange, buil
   return (
     <header
       data-testid="app-header"
-      style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "10px 20px",
-        background: "var(--bg-base)",
-        borderBottom: "1px solid var(--bd-default)",
-      }}
+      className="app-header"
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div className="app-header-left">
+        <div className="app-header-brand">
           <img
             src={srAtlasRound}
             alt="Sr. Atlas"
@@ -48,7 +43,7 @@ function Header({ refreshing, onRefresh, sessionId, activeTab, onTabChange, buil
           </span>
           <span className="kbd" style={{ marginLeft: 4 }}>MT5</span>
         </div>
-        <nav style={{ display: "flex", gap: 4, marginLeft: 16 }}>
+        <nav className="app-nav" data-testid="app-nav">
           {TABS.map((n) => (
             <button
               key={n}
@@ -75,12 +70,19 @@ function Header({ refreshing, onRefresh, sessionId, activeTab, onTabChange, buil
               Revolution
             </button>
           ) : null}
-          <Link to="/about" className="btn" data-testid="nav-about" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>About</Link>
-          <Link to="/docs" className="btn" data-testid="nav-docs" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>Docs</Link>
-          <Link to="/settings" className="btn" data-testid="nav-settings" style={{ border: "none", padding: "4px 10px", textDecoration: "none" }}>Settings</Link>
+          <details className="app-nav-more" data-testid="nav-more">
+            <summary className="btn" data-testid="nav-more-toggle" style={{ border: "none", padding: "4px 10px" }}>
+              More
+            </summary>
+            <div className="app-nav-more-panel">
+              <Link to="/about" className="btn" data-testid="nav-about">About</Link>
+              <Link to="/docs" className="btn" data-testid="nav-docs">Docs</Link>
+              <Link to="/settings" className="btn" data-testid="nav-settings">Settings</Link>
+            </div>
+          </details>
         </nav>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div className="app-header-right">
         <button
           className="btn success"
           onClick={onRefresh}

@@ -246,6 +246,67 @@ input:focus, select:focus { border-color: var(--bd-focus); }
 
 ::selection { background: var(--brand-gold-soft); color: var(--text-primary); }
 
+.app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: var(--bg-base);
+    border-bottom: 1px solid var(--bd-default);
+    gap: 12px;
+}
+.app-header-left,
+.app-header-brand,
+.app-header-right,
+.app-nav {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+.app-header-left { gap: 14px; flex: 1; }
+.app-header-brand { gap: 10px; }
+.app-header-right { gap: 10px; flex-shrink: 0; }
+.app-nav {
+    gap: 4px;
+    margin-left: 16px;
+    flex-wrap: wrap;
+}
+.app-nav-more { position: relative; }
+.app-nav-more > summary {
+    list-style: none;
+    cursor: pointer;
+}
+.app-nav-more > summary::-webkit-details-marker { display: none; }
+.app-nav-more-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 40;
+    min-width: 168px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px;
+    background: var(--bg-panel);
+    border: 1px solid var(--bd-default);
+    border-top: 2px solid var(--brand-gold-border);
+}
+.app-nav-more-panel .btn {
+    justify-content: flex-start;
+    text-decoration: none;
+    width: 100%;
+    border: none;
+    padding: 6px 10px;
+}
+
+@media (max-width: 768px) {
+    .app-header {
+        padding: 8px 14px;
+        flex-wrap: wrap;
+    }
+    .app-nav { margin-left: 0; }
+}
+
 /* ============================================================
    Atlas 2 Stage 2 — Overview layout only
    ============================================================ */
