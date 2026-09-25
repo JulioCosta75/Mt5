@@ -3,10 +3,10 @@ import PageShell from "@/pages/PageShell";
 import { api } from "@/lib/api";
 
 const LICENSE_STATUS_META = {
-  free: { label: "Free", color: "#A1A1AA", desc: "1 MT5 account included." },
-  pro_active: { label: "Pro active", color: "#22C55E", desc: "Unlimited MT5 accounts." },
-  pro_expired: { label: "Pro expired", color: "#F59E0B", desc: "Back to the free version (1 MT5 account)." },
-  checking: { label: "Checking", color: "#60A5FA", desc: "Checking license status…" },
+  free: { label: "Free", color: "var(--text-secondary)", desc: "1 MT5 account included." },
+  pro_active: { label: "Pro active", color: "var(--sig-pos)", desc: "Unlimited MT5 accounts." },
+  pro_expired: { label: "Pro expired", color: "var(--sig-warn)", desc: "Back to the free version (1 MT5 account)." },
+  checking: { label: "Checking", color: "var(--sig-info)", desc: "Checking license status…" },
 };
 
 /**
@@ -135,10 +135,10 @@ export default function Settings() {
 
   const state = status?.state || "unconfigured";
   const stateMeta = {
-    connected: { label: "Connected", color: "#22C55E", desc: "Atlas is connected to your MetaTrader 5 account." },
-    pending_restart: { label: "Applying / Pending restart", color: "#F59E0B", desc: "Settings saved. Atlas is restarting to connect to MetaTrader 5." },
-    unconfigured: { label: "Configuration Mode", color: "#F59E0B", desc: "No MetaTrader 5 account connected yet. Enter your credentials below." },
-  }[state] || { label: state, color: "#A1A1AA", desc: "" };
+    connected: { label: "Connected", color: "var(--sig-pos)", desc: "Atlas is connected to your MetaTrader 5 account." },
+    pending_restart: { label: "Applying / Pending restart", color: "var(--sig-warn)", desc: "Settings saved. Atlas is restarting to connect to MetaTrader 5." },
+    unconfigured: { label: "Configuration Mode", color: "var(--sig-warn)", desc: "No MetaTrader 5 account connected yet. Enter your credentials below." },
+  }[state] || { label: state, color: "var(--text-secondary)", desc: "" };
 
   const licenseStatus = license?.status || "free";
   const licenseMeta = LICENSE_STATUS_META[licenseStatus] || LICENSE_STATUS_META.free;
@@ -147,17 +147,19 @@ export default function Settings() {
   );
 
   const inputStyle = {
-    width: "100%", padding: "9px 11px", background: "#121212", color: "#F4F4F5",
-    border: "1px solid #27272A", borderRadius: 8, fontSize: 13, outline: "none",
+    width: "100%", padding: "9px 11px", background: "var(--bg-panel)", color: "var(--text-primary)",
+    border: "1px solid var(--bd-default)", borderRadius: 8, fontSize: 13, outline: "none",
   };
-  const labelStyle = { display: "block", fontSize: 12, color: "#A1A1AA", marginBottom: 6, marginTop: 14 };
-  const panelStyle = { padding: 18, marginBottom: 16, border: "1px solid #27272A", borderRadius: 12, background: "#0F0F0F" };
+  const labelStyle = { display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 6, marginTop: 14 };
+  const panelStyle = { padding: 18, marginBottom: 16, border: "1px solid var(--bd-default)", borderRadius: 12, background: "var(--bg-panel)" };
+  const okBanner = { background: "var(--sig-pos-soft)", color: "var(--sig-pos)", border: "1px solid var(--sig-pos)" };
+  const errBanner = { background: "var(--sig-neg-soft)", color: "var(--sig-neg)", border: "1px solid var(--sig-neg)" };
 
   return (
     <PageShell active="settings" testId="settings-page">
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: "4px 0 2px" }}>MT5 Connection</h1>
-        <p style={{ color: "#A1A1AA", fontSize: 13, marginBottom: 18 }}>
+        <p style={{ color: "var(--text-secondary)", fontSize: 13, marginBottom: 18 }}>
           Connect Atlas to your MetaTrader 5 account. You can change these details
           anytime — no reinstall required.
         </p>
@@ -166,16 +168,16 @@ export default function Settings() {
         <div
           className="panel"
           data-testid="connection-status"
-          style={{ padding: 16, marginBottom: 16, border: "1px solid #27272A", borderRadius: 12, background: "#0F0F0F" }}
+          style={{ padding: 16, marginBottom: 16, border: "1px solid var(--bd-default)", borderRadius: 12, background: "var(--bg-panel)" }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ width: 10, height: 10, borderRadius: "50%", background: stateMeta.color, display: "inline-block" }} />
             <span data-testid="connection-state" style={{ fontWeight: 600 }}>{stateMeta.label}</span>
             <span className="kbd" style={{ marginLeft: "auto" }}>mode: {status?.mode || "—"}</span>
           </div>
-          <p style={{ color: "#A1A1AA", fontSize: 12.5, margin: "10px 0 0" }}>{stateMeta.desc}</p>
+          <p style={{ color: "var(--text-secondary)", fontSize: 12.5, margin: "10px 0 0" }}>{stateMeta.desc}</p>
           {status?.platform === "preview" && (
-            <p style={{ color: "#71717A", fontSize: 11.5, margin: "8px 0 0" }}>
+            <p style={{ color: "var(--text-tertiary)", fontSize: 11.5, margin: "8px 0 0" }}>
               Note: this is the cloud preview (no local MT5). On the installed Windows app,
               saving connects to MT5 automatically.
             </p>
@@ -187,9 +189,7 @@ export default function Settings() {
             data-testid="settings-banner"
             style={{
               padding: "10px 14px", borderRadius: 8, marginBottom: 16, fontSize: 13,
-              background: banner.type === "error" ? "#3F1D1D" : "#14321F",
-              color: banner.type === "error" ? "#FCA5A5" : "#86EFAC",
-              border: `1px solid ${banner.type === "error" ? "#7F1D1D" : "#166534"}`,
+              ...(banner.type === "error" ? errBanner : okBanner),
             }}
           >
             {banner.text}
@@ -197,11 +197,11 @@ export default function Settings() {
         )}
 
         {/* Form */}
-        <form onSubmit={onSave} className="panel" data-testid="mt5-form" style={{ padding: 18, border: "1px solid #27272A", borderRadius: 12 }}>
+        <form onSubmit={onSave} className="panel" data-testid="mt5-form" style={{ padding: 18, border: "1px solid var(--bd-default)", borderRadius: 12 }}>
           <label style={labelStyle}>MT5 Login (account number)</label>
           <input data-testid="mt5-login" style={inputStyle} value={form.login} onChange={setField("login")} placeholder="e.g. 51234567" inputMode="numeric" />
 
-          <label style={labelStyle}>MT5 Password {passwordSet && <span style={{ color: "#22C55E" }}>· saved (leave blank to keep)</span>}</label>
+          <label style={labelStyle}>MT5 Password {passwordSet && <span style={{ color: "var(--sig-pos)" }}>· saved (leave blank to keep)</span>}</label>
           <input data-testid="mt5-password" style={inputStyle} type="password" value={form.password} onChange={setField("password")} placeholder={passwordSet ? "••••••••" : "account password"} />
 
           <label style={labelStyle}>Server / Broker</label>
@@ -228,8 +228,8 @@ export default function Settings() {
             data-testid="license-limit-notice"
             style={{
               marginTop: 16, padding: "12px 14px", borderRadius: 8, fontSize: 13,
-              background: "#1A1A12", color: "#E4E4C8",
-              border: "1px solid #3F3F22",
+              background: "var(--brand-gold-soft)", color: "var(--text-primary)",
+              border: "1px solid var(--brand-gold-border)",
             }}
           >
             The free version includes 1 MT5 account, and this installation is already using it.
@@ -245,7 +245,7 @@ export default function Settings() {
           style={{ ...panelStyle, marginTop: 24 }}
         >
           <h2 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 6px" }}>License</h2>
-          <p style={{ color: "#A1A1AA", fontSize: 13, margin: "0 0 14px" }}>
+          <p style={{ color: "var(--text-secondary)", fontSize: 13, margin: "0 0 14px" }}>
             Atlas is free for one MetaTrader 5 account. A Pro license unlocks unlimited accounts.
           </p>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
@@ -255,7 +255,7 @@ export default function Settings() {
               <span className="kbd" data-testid="license-key-present" style={{ marginLeft: "auto" }}>key saved</span>
             )}
           </div>
-          <p data-testid="license-status-desc" style={{ color: "#A1A1AA", fontSize: 12.5, margin: "0 0 12px" }}>
+          <p data-testid="license-status-desc" style={{ color: "var(--text-secondary)", fontSize: 12.5, margin: "0 0 12px" }}>
             {license?.message || licenseMeta.desc}
           </p>
 
@@ -263,10 +263,8 @@ export default function Settings() {
             <div
               data-testid="license-banner"
               style={{
-                padding: "10px 14px", borderRadius: 8, marginBottom: 14, fontSize: 13,
-                background: licenseBanner.type === "error" ? "#3F1D1D" : "#14321F",
-                color: licenseBanner.type === "error" ? "#FCA5A5" : "#86EFAC",
-                border: `1px solid ${licenseBanner.type === "error" ? "#7F1D1D" : "#166534"}`,
+              padding: "10px 14px", borderRadius: 8, marginBottom: 14, fontSize: 13,
+              ...(licenseBanner.type === "error" ? errBanner : okBanner),
               }}
             >
               {licenseBanner.text}

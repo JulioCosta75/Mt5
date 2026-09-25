@@ -540,6 +540,110 @@ input:focus, select:focus { border-color: var(--bd-focus); }
     color: var(--text-secondary);
 }
 
+.unavailable-block {
+    padding: 18px 22px;
+    color: var(--text-tertiary);
+    font-size: 12px;
+    line-height: 1.45;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.unavailable-label {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--brand-gold);
+    font-weight: 600;
+}
+.unavailable-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.chart-window-toggle {
+    display: inline-flex;
+    gap: 2px;
+}
+.chart-window-toggle .btn {
+    padding: 2px 8px;
+    font-size: 10px;
+}
+
+.alert-meta {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 6px;
+}
+.alert-severity {
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+.alert-account,
+.alert-time {
+    font-size: 10px;
+    color: var(--text-tertiary);
+}
+.alert-time {
+    margin-left: auto;
+}
+.alert-body {
+    font-size: 12px;
+    color: var(--text-primary);
+    line-height: 1.45;
+}
+
+.reports-layout [data-testid="reports-generate-button"] {
+    color: var(--bg-base);
+    background: var(--brand-gold);
+    border-color: var(--brand-gold);
+    font-weight: 600;
+}
+.reports-layout [data-testid="reports-generate-button"]:hover {
+    background: var(--brand-gold-bright);
+    border-color: var(--brand-gold-bright);
+    color: var(--bg-base);
+}
+.reports-layout .section-heading {
+    margin-top: 4px;
+}
+
+.audit-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 14px;
+}
+.audit-layout .alert-row {
+    padding: 14px 18px;
+    gap: 12px;
+}
+
+.risk-within-limits {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+.risk-within-limits[data-within="true"] { color: var(--sig-pos); }
+.risk-within-limits[data-within="false"] { color: var(--sig-neg); }
+
+.risk-unavailable-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding: 0 22px 22px;
+    border-top: 1px solid var(--bd-default);
+}
+.risk-unavailable-grid .unavailable-block {
+    padding: 16px;
+    border: 1px solid var(--bd-subtle);
+    background: var(--bg-base);
+}
+
 @media (max-width: 1024px) {
     .hero-strip,
     .risk-hero,
@@ -583,6 +687,14 @@ input:focus, select:focus { border-color: var(--bd-focus); }
     }
     .risk-layout {
         gap: 14px;
+    }
+    .audit-layout {
+        grid-template-columns: 1fr;
+    }
+    .risk-unavailable-grid {
+        grid-template-columns: 1fr;
+        padding-left: 14px;
+        padding-right: 14px;
     }
 }
 

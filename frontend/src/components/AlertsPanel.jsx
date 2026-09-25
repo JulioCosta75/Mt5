@@ -31,19 +31,21 @@ export default function AlertsPanel({ alerts, onAck, isSample = false }) {
             data-testid={`alert-${a.id}`}
           >
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
-                <span style={{
-                  fontSize: 9.5, fontWeight: 700, letterSpacing: "0.1em",
-                  color: a.severity === "CRITICAL" ? "var(--sig-neg)" : a.severity === "WARNING" ? "var(--sig-warn)" : "var(--sig-info)",
-                }}>
+              <div className="alert-meta">
+                <span
+                  className="alert-severity"
+                  style={{
+                    color: a.severity === "CRITICAL" ? "var(--sig-neg)" : a.severity === "WARNING" ? "var(--sig-warn)" : "var(--sig-info)",
+                  }}
+                >
                   {isSample ? `SIM · ${a.severity}` : a.severity}
                 </span>
-                <span className="mono" style={{ fontSize: 10, color: "var(--text-tertiary)" }}>{a.account_id}</span>
-                <span className="mono" style={{ fontSize: 10, color: "var(--text-tertiary)", marginLeft: "auto" }}>
+                <span className="mono alert-account">{a.account_id}</span>
+                <span className="mono alert-time">
                   {fmt.relative(a.timestamp)}
                 </span>
               </div>
-              <div style={{ fontSize: 12, color: "var(--text-primary)", lineHeight: 1.4 }}>
+              <div className="alert-body">
                 {isSample ? `[SAMPLE] ${a.message}` : a.message}
               </div>
             </div>

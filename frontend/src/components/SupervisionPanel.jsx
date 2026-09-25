@@ -8,14 +8,14 @@ const STATUS_CLASS = {
 };
 
 function statusColor(status) {
-  if (status === "OK") return "var(--sig-pos, #22C55E)";
-  if (status === "WARNING") return "var(--sig-warn, #F59E0B)";
-  if (status === "ALERT") return "var(--sig-neg, #EF4444)";
+  if (status === "OK") return "var(--sig-pos)";
+  if (status === "WARNING") return "var(--sig-warn)";
+  if (status === "ALERT") return "var(--sig-neg)";
   return "var(--text-tertiary)";
 }
 
 function ServiceDot({ label, ok }) {
-  const color = ok === true ? "#22C55E" : ok === false ? "#EF4444" : "#71717A";
+  const color = ok === true ? "var(--sig-pos)" : ok === false ? "var(--sig-neg)" : "var(--text-tertiary)";
   const text = ok === true ? "OK" : ok === false ? "DOWN" : "N/A";
   return (
     <div

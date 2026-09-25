@@ -360,7 +360,7 @@ function ReportExpanded({ report }) {
       </div>
 
       <div>
-        <div style={{ color: "var(--text-tertiary)", fontSize: 10, marginBottom: 4 }}>Metrics</div>
+        <div className="section-heading" style={{ marginBottom: 4 }}>Metrics</div>
         <div className="mono" style={{ display: "flex", flexWrap: "wrap", gap: "8px 14px" }}>
           <span>equity {fmt.money(metrics.equity, report.currency)}</span>
           <span className={pnlClass(metrics.daily_pnl)}>daily PnL {fmt.money(metrics.daily_pnl, report.currency)}</span>
@@ -370,7 +370,7 @@ function ReportExpanded({ report }) {
       </div>
 
       <div>
-        <div style={{ color: "var(--text-tertiary)", fontSize: 10, marginBottom: 4 }}>Limits</div>
+        <div className="section-heading" style={{ marginBottom: 4 }}>Limits</div>
         <div style={{ display: "grid", gap: 4 }}>
           <LimitCell
             label="Drawdown"
@@ -404,7 +404,7 @@ function ReportExpanded({ report }) {
 
       {comparison ? (
         <div>
-          <div style={{ color: "var(--text-tertiary)", fontSize: 10, marginBottom: 4 }}>
+          <div className="section-heading" style={{ marginBottom: 4 }}>
             vs previous ({comparison.previous_report_id || "—"})
           </div>
           <div className="mono" style={{ display: "flex", flexWrap: "wrap", gap: "8px 14px" }}>
@@ -420,7 +420,7 @@ function ReportExpanded({ report }) {
       )}
 
       <div>
-        <div style={{ color: "var(--text-tertiary)", fontSize: 10, marginBottom: 4 }}>
+        <div className="section-heading" style={{ marginBottom: 4 }}>
           Open positions ({openPos.length})
         </div>
         {openPos.length === 0 ? (
@@ -437,7 +437,7 @@ function ReportExpanded({ report }) {
       </div>
 
       <div>
-        <div style={{ color: "var(--text-tertiary)", fontSize: 10, marginBottom: 4 }}>
+        <div className="section-heading" style={{ marginBottom: 4 }}>
           Closed since previous ({closed.length})
         </div>
         {closed.length === 0 ? (
@@ -454,7 +454,7 @@ function ReportExpanded({ report }) {
       </div>
 
       <div>
-        <div style={{ color: "var(--text-tertiary)", fontSize: 10, marginBottom: 4 }}>
+        <div className="section-heading" style={{ marginBottom: 4 }}>
           Alerts since previous ({alertEvents.length})
         </div>
         {alertEvents.length === 0 ? (
@@ -472,7 +472,7 @@ function ReportExpanded({ report }) {
       </div>
 
       <div>
-        <div style={{ color: "var(--text-tertiary)", fontSize: 10, marginBottom: 4 }}>Conclusion</div>
+        <div className="section-heading" style={{ marginBottom: 4 }}>Conclusion</div>
         <div style={{ color: "var(--text-secondary)", lineHeight: 1.45 }}>
           {report.conclusion || report.message || "—"}
         </div>
@@ -529,6 +529,7 @@ export function ReportsView({ accounts = [], onAfterGenerate } = {}) {
   };
 
   return (
+    <div className="reports-layout" data-testid="reports-layout">
     <div className="panel" data-testid="reports-panel">
       <div className="panel-header" style={{ gap: 10, flexWrap: "wrap" }}>
         <span className="panel-title">
@@ -624,6 +625,7 @@ export function ReportsView({ accounts = [], onAfterGenerate } = {}) {
         </table>
       </div>
     </div>
+    </div>
   );
 }
 
@@ -642,7 +644,7 @@ export function AuditView({ alerts, onAck, isSample = false }) {
   }, []);
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 360px", gap: 14 }}>
+    <div className="audit-layout" data-testid="audit-layout">
       <div className="panel" data-testid="audit-panel">
         <div className="panel-header">
           <span className="panel-title">

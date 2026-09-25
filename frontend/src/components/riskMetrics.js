@@ -12,3 +12,19 @@ export function barPct(current, limit) {
 export function resolveHeroLayout(heroLayout, showHeroBars) {
   return heroLayout || (showHeroBars ? "overview" : null);
 }
+
+/**
+ * Display-only: current DD vs max_daily_loss_pct and open positions vs
+ * max_open_positions — the same two comparisons already drawn as bars.
+ * Returns null when a comparator is missing; never invents a third rule.
+ */
+export function withinExistingLimits(account, limits) {
+  if (!account || !limits) return null;
+  const dd = Math.abs(Number(account.current_drawdown));
+  const ddLimit = Number(limits.max_daily_loss_pct);
+  const open = Number(account.open_positions);
+  const openLimit = Number(limits.max_open_positions);
+  if (!Number.isFinite(dd) || !Number.isFinite(ddLimit) || ddLimit <= 0) return null;
+  if (!Number.isFinite(open) || !Number.isFinite(openLimit) || openLimit <= 0) return null;
+  return dd <= ddLimit && open <= openLimit;
+}

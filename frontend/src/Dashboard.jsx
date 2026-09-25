@@ -338,19 +338,19 @@ export default function Dashboard() {
                     <Row label="Risk Engine" value={<span className="cell-warn" data-testid="system-risk-engine">SIMULATION</span>} />
                     <Row label="Telegram Notif" value={<span className="cell-warn" data-testid="system-telegram">NOT CONFIGURED</span>} />
                     <Row label="Last Heartbeat" value={<span data-testid="system-heartbeat">{kpis ? `SAMPLE · ${fmt.timeShort(kpis.server_time)}` : "SAMPLE · —"}</span>} />
-                    <Row label="Strategies Loaded" value={<span className="mono cell-warn" data-testid="system-strategies">SAMPLE · 6</span>} />
+                    <Row label="Strategies Loaded" value={<span className="mono cell-warn" data-testid="system-strategies">SAMPLE · —</span>} />
                     <Row label="Backend" value={<span className="cell-pos" data-testid="system-backend">OK</span>} />
                     <Row label="Store" value={<span className="cell-pos" data-testid="system-store">OK</span>} />
                     <Row label="Dashboard" value={<span className="cell-pos" data-testid="system-dashboard">OK</span>} />
                   </>
                 ) : (
                   <>
-                    <Row label="API Latency" value="42 ms" />
+                    <Row label="API Latency" value={<span className="cell-warn" data-testid="system-api-latency">Unavailable<span className="kbd" style={{ marginLeft: 6 }}>C7</span></span>} />
                     <Row label="MT5 Bridge" value={<span className="cell-pos">CONNECTED</span>} />
                     <Row label="Risk Engine" value={<span className="cell-pos">ACTIVE</span>} />
                     <Row label="Telegram Notif" value={<span className="cell-pos">ENABLED</span>} />
                     <Row label="Last Heartbeat" value={kpis ? fmt.timeShort(kpis.server_time) : "—"} />
-                    <Row label="Strategies Loaded" value={<span className="mono">6</span>} />
+                    <Row label="Strategies Loaded" value={<span className="mono cell-warn" data-testid="system-strategies">Unavailable</span>} />
                   </>
                 )}
               </div>

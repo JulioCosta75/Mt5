@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { api, fmt, pnlClass } from "@/lib/api";
-import { barPct, resolveHeroLayout } from "./riskMetrics";
+import { barPct, resolveHeroLayout, withinExistingLimits } from "./riskMetrics";
 
-export { barPct, resolveHeroLayout };
+export { barPct, resolveHeroLayout, withinExistingLimits };
 
 function Stat({ label, value, mono = true, cls = "" }) {
   return (
@@ -133,6 +133,48 @@ function ClassicStatGrid({ account }) {
   );
 }
 
+const UNAVAILABLE_CONTRACTS = [
+  {
+    id: "C2",
+    testId: "risk-unavailable-instrument-pct",
+    label: "Instrument % of equity",
+    reason: "Needs contract size / tick value from the bridge.",
+  },
+  {
+    id: "C3",
+    testId: "risk-unavailable-sector",
+    label: "Sector exposure",
+    reason: "Needs a documented symbol→sector map.",
+  },
+  {
+    id: "C4",
+    testId: "risk-unavailable-correlation",
+    label: "Position correlation",
+    reason: "Needs per-symbol returns. Not Phase 3 knowledge correlation.",
+  },
+  {
+    id: "C5",
+    testId: "risk-unavailable-var",
+    label: "VaR / portfolio risk",
+    reason: "Needs a founder-written VaR formula.",
+  },
+];
+
+function UnavailableContracts() {
+  return (
+    <div className="risk-unavailable-grid" data-testid="risk-unavailable-contracts">
+      {UNAVAILABLE_CONTRACTS.map((item) => (
+        <div key={item.id} className="unavailable-block" data-testid={item.testId} data-contract={item.id}>
+          <span className="unavailable-label">{item.label}</span>
+          <span className="unavailable-value">Unavailable</span>
+          <span className="kbd">{item.id}</span>
+          <span>{item.reason}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function RiskPanel({
   account,
   onUpdate,
@@ -143,6 +185,7 @@ export default function RiskPanel({
   const [limits, setLimits] = useState(account.risk_limits);
   const [saving, setSaving] = useState(false);
   const layout = resolveHeroLayout(heroLayout, showHeroBars);
+  const withinLimits = layout === "full" ? withinExistingLimits(account, limits) : null;
 
   const saveLimits = async () => {
     setSaving(true);
@@ -163,6 +206,15 @@ export default function RiskPanel({
           Risk · {account.id} · {account.login}
           {isSample ? <span className="kbd" style={{ marginLeft: 8 }} data-testid="risk-sample-label">SAMPLE DATA</span> : null}
         </span>
+        {withinLimits !== null ? (
+          <span
+            className="risk-within-limits"
+            data-testid="risk-within-limits"
+            data-within={withinLimits ? "true" : "false"}
+          >
+            {withinLimits ? "Within existing limits" : "Outside existing limits"}
+          </span>
+        ) : null}
       </div>
       {layout === "full" ? (
         <FullHeroMetrics account={account} limits={limits} />
@@ -221,6 +273,7 @@ export default function RiskPanel({
           </button>
         </div>
       </div>
+      {layout === "full" ? <UnavailableContracts /> : null}
     </div>
   );
 }

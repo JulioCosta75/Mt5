@@ -1,6 +1,27 @@
 import fs from "fs";
 import path from "path";
-import { barPct, resolveHeroLayout } from "./riskMetrics";
+import { barPct, resolveHeroLayout, withinExistingLimits } from "./riskMetrics";
+describe("withinExistingLimits uses only current DD and open positions vs existing limits", () => {
+  const account = { current_drawdown: -3, open_positions: 2 };
+  const limits = { max_daily_loss_pct: 5, max_open_positions: 4, max_position_size_lots: 1 };
+
+  test("true when abs(DD) and open positions are within the two existing limits", () => {
+    expect(withinExistingLimits(account, limits)).toBe(true);
+    expect(withinExistingLimits({ ...account, current_drawdown: 5 }, limits)).toBe(true);
+  });
+
+  test("false when DD or open positions exceed those limits", () => {
+    expect(withinExistingLimits({ ...account, current_drawdown: -6 }, limits)).toBe(false);
+    expect(withinExistingLimits({ ...account, open_positions: 5 }, limits)).toBe(false);
+  });
+
+  test("null when a comparator is missing — does not invent a third rule", () => {
+    expect(withinExistingLimits(account, { max_daily_loss_pct: 5 })).toBe(null);
+    expect(withinExistingLimits(account, { max_open_positions: 4 })).toBe(null);
+    expect(withinExistingLimits(null, limits)).toBe(null);
+    expect(withinExistingLimits(account, { max_daily_loss_pct: 0, max_open_positions: 4 })).toBe(null);
+  });
+});
 
 const panelSrc = fs.readFileSync(path.join(__dirname, "RiskPanel.jsx"), "utf8");
 const viewsSrc = fs.readFileSync(path.join(__dirname, "TabViews.jsx"), "utf8");
@@ -95,5 +116,17 @@ describe("Risk tab full hero is the original 8 cells, bars only where a limit ex
     expect(saveCall[0]).toMatch(/max_open_positions:\s*parseInt\(limits\.max_open_positions,\s*10\)/);
     expect(saveCall[0]).not.toMatch(/max_drawdown|leverage|margin_level|equity|daily_pnl/);
     expect(panelSrc.match(/api\.updateRisk/g) || []).toHaveLength(1);
+  });
+
+  test("full layout shows Unavailable contracts C2–C5 and does not call Phase 3 correlation", () => {
+    expect(panelSrc).toMatch(/data-testid="risk-within-limits"/);
+    expect(panelSrc).toMatch(/data-testid="risk-unavailable-instrument-pct"/);
+    expect(panelSrc).toMatch(/data-testid="risk-unavailable-sector"/);
+    expect(panelSrc).toMatch(/data-testid="risk-unavailable-correlation"/);
+    expect(panelSrc).toMatch(/data-testid="risk-unavailable-var"/);
+    expect(panelSrc).toMatch(/data-contract=\{item\.id\}/);
+    expect(panelSrc).not.toMatch(/knowledge\/v1\/correlation/);
+    expect(panelSrc).not.toMatch(/api\.knowledge/);
+    expect(panelSrc).toMatch(/layout === "full" \? <UnavailableContracts \/>/);
   });
 });
