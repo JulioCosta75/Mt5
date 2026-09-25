@@ -120,11 +120,11 @@ describe("Risk tab full hero is the original 8 cells, bars only where a limit ex
 
   test("full layout shows Unavailable contracts C2–C5 and does not call Phase 3 correlation", () => {
     expect(panelSrc).toMatch(/data-testid="risk-within-limits"/);
-    expect(panelSrc).toMatch(/data-testid="risk-unavailable-instrument-pct"/);
-    expect(panelSrc).toMatch(/data-testid="risk-unavailable-sector"/);
-    expect(panelSrc).toMatch(/data-testid="risk-unavailable-correlation"/);
-    expect(panelSrc).toMatch(/data-testid="risk-unavailable-var"/);
-    expect(panelSrc).toMatch(/data-contract=\{item\.id\}/);
+    expect(panelSrc).toMatch(/testId: "risk-unavailable-instrument-pct"/);
+    expect(panelSrc).toMatch(/testId: "risk-unavailable-sector"/);
+    expect(panelSrc).toMatch(/testId: "risk-unavailable-correlation"/);
+    expect(panelSrc).toMatch(/testId: "risk-unavailable-var"/);
+    expect(panelSrc).toMatch(/data-testid=\{item\.testId\}/);
     expect(panelSrc).not.toMatch(/knowledge\/v1\/correlation/);
     expect(panelSrc).not.toMatch(/api\.knowledge/);
     expect(panelSrc).toMatch(/layout === "full" \? <UnavailableContracts \/>/);
