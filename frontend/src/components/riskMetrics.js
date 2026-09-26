@@ -9,6 +9,15 @@ export function barPct(current, limit) {
   return Math.min(100, Math.max(0, (c / l) * 100));
 }
 
+/**
+ * Display-only fill for drawdown bars. current_drawdown is signed (negative);
+ * the limit is a positive magnitude. barPct itself must stay unsigned so
+ * margin/positions bars are unchanged.
+ */
+export function drawdownBarPct(current, limit) {
+  return barPct(Math.abs(Number(current)), limit);
+}
+
 export function resolveHeroLayout(heroLayout, showHeroBars) {
   return heroLayout || (showHeroBars ? "overview" : null);
 }

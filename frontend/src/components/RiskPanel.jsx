@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { api, fmt, pnlClass } from "@/lib/api";
-import { barPct, resolveHeroLayout, withinExistingLimits } from "./riskMetrics";
+import { barPct, drawdownBarPct, resolveHeroLayout, withinExistingLimits } from "./riskMetrics";
 
-export { barPct, resolveHeroLayout, withinExistingLimits };
+export { barPct, drawdownBarPct, resolveHeroLayout, withinExistingLimits };
 
 function Stat({ label, value, mono = true, cls = "" }) {
   return (
@@ -42,7 +42,7 @@ function OverviewHeroMetrics({ account, limits }) {
         value={fmt.pct(account.current_drawdown)}
         valueClass="cell-neg"
         showBar
-        fill={barPct(account.current_drawdown, limits.max_daily_loss_pct)}
+        fill={drawdownBarPct(account.current_drawdown, limits.max_daily_loss_pct)}
         limitLabel={`limit ${limits.max_daily_loss_pct}%`}
       />
       <RiskMetric
@@ -98,7 +98,7 @@ function FullHeroMetrics({ account, limits }) {
         value={fmt.pct(account.current_drawdown)}
         valueClass="cell-neg"
         showBar
-        fill={barPct(account.current_drawdown, limits.max_daily_loss_pct)}
+        fill={drawdownBarPct(account.current_drawdown, limits.max_daily_loss_pct)}
         limitLabel={`limit ${limits.max_daily_loss_pct}%`}
       />
       <RiskMetric

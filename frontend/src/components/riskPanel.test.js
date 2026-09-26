@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { barPct, resolveHeroLayout, withinExistingLimits } from "./riskMetrics";
+import { barPct, drawdownBarPct, resolveHeroLayout, withinExistingLimits } from "./riskMetrics";
 describe("withinExistingLimits uses only current DD and open positions vs existing limits", () => {
   const account = { current_drawdown: -3, open_positions: 2 };
   const limits = { max_daily_loss_pct: 5, max_open_positions: 4, max_position_size_lots: 1 };
@@ -49,6 +49,28 @@ describe("barPct is display-only and never invents a limit", () => {
   });
 });
 
+describe("drawdownBarPct uses magnitude only; signed label stays in the panel", () => {
+  test("drawdown -3 with limit 5 fills 60%", () => {
+    expect(drawdownBarPct(-3, 5)).toBe(60);
+    expect(drawdownBarPct(3, 5)).toBe(60);
+  });
+
+  test("barPct itself still zeros a negative current so margin/positions stay unchanged", () => {
+    expect(barPct(-3, 5)).toBe(0);
+    expect(barPct(150, 200)).toBe(75);
+    expect(barPct(2, 4)).toBe(50);
+  });
+
+  test("both drawdown fills use drawdownBarPct; displayed value stays signed fmt.pct", () => {
+    expect((panelSrc.match(/drawdownBarPct\(account\.current_drawdown,\s*limits\.max_daily_loss_pct\)/g) || []).length).toBe(2);
+    expect((panelSrc.match(/value=\{fmt\.pct\(account\.current_drawdown\)\}/g) || []).length).toBe(2);
+    expect(panelSrc).not.toMatch(/value=\{fmt\.pct\(Math\.abs/);
+    expect(panelSrc).not.toMatch(/barPct\(account\.current_drawdown/);
+    expect(panelSrc).toMatch(/barPct\(account\.margin_level,\s*200\)/);
+    expect(panelSrc).toMatch(/barPct\(account\.open_positions,\s*limits\.max_open_positions\)/);
+  });
+});
+
 describe("heroLayout mapping keeps Overview compact and Risk tab full", () => {
   test("heroLayout=full wins over showHeroBars", () => {
     expect(resolveHeroLayout("full", true)).toBe("full");
@@ -90,7 +112,9 @@ describe("Risk tab full hero is the original 8 cells, bars only where a limit ex
     expect(full).not.toMatch(/barPct\(account\.max_drawdown/);
     expect(full).not.toMatch(/barPct\(account\.leverage/);
     expect(full).toMatch(/barPct\(account\.margin_level,\s*200\)/);
-    expect(full).toMatch(/barPct\(account\.current_drawdown,\s*limits\.max_daily_loss_pct\)/);
+    expect(full).toMatch(/drawdownBarPct\(account\.current_drawdown,\s*limits\.max_daily_loss_pct\)/);
+    expect(full).toMatch(/value=\{fmt\.pct\(account\.current_drawdown\)\}/);
+    expect(full).not.toMatch(/barPct\(account\.current_drawdown/);
     const showBarCount = (full.match(/showBar/g) || []).length;
     expect(showBarCount).toBe(2);
   });
