@@ -330,6 +330,9 @@ class Launcher:
         backend_env["ATLAS_SQLITE_PATH"] = str(self.paths.data / "atlas.db")
         backend_env.setdefault("ATLAS_AUTO_SNAPSHOT_INTERVAL_SEC", "1800")
         backend_env.setdefault("ATLAS_REPORT_RETENTION_DAYS", "90")
+        # Experimental surfaces stay off unless the operator already set them.
+        backend_env.setdefault("PHASE3_KNOWLEDGE_ENGINE_ENABLED", "false")
+        backend_env.setdefault("ATLAS_NOTIFICATIONS_ENABLED", "false")
         backend_env["SERVE_FRONTEND"] = "true"
         backend_env["FRONTEND_BUILD"] = str(self.paths.frontend_build)
 

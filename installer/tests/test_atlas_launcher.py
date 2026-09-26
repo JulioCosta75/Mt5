@@ -108,6 +108,8 @@ def test_launcher_builds_expected_commands(tmp_path, monkeypatch):
         python=Path(sys.executable),
         icon=paths.icon,
     )
+    monkeypatch.delenv("PHASE3_KNOWLEDGE_ENGINE_ENABLED", raising=False)
+    monkeypatch.delenv("ATLAS_NOTIFICATIONS_ENABLED", raising=False)
     launcher = al.Launcher(paths, open_browser=False)
     children = launcher.build_children()
     names = [c.spec.name for c in children]
@@ -116,6 +118,29 @@ def test_launcher_builds_expected_commands(tmp_path, monkeypatch):
     assert "uvicorn" in children[1].spec.args
     assert children[1].spec.env["SERVE_FRONTEND"] == "true"
     assert children[1].spec.env["ATLAS_STORE"] == "sqlite"
+    assert children[1].spec.env["PHASE3_KNOWLEDGE_ENGINE_ENABLED"] == "false"
+    assert children[1].spec.env["ATLAS_NOTIFICATIONS_ENABLED"] == "false"
+
+
+def test_launcher_does_not_override_operator_experimental_flags(tmp_path, monkeypatch):
+    root = _make_fake_root(tmp_path)
+    paths = al.resolve_paths(str(root))
+    paths = al.AtlasPaths(
+        root=paths.root,
+        backend=paths.backend,
+        bridge=paths.bridge,
+        frontend_build=paths.frontend_build,
+        data=paths.data,
+        logs=paths.logs,
+        python=Path(sys.executable),
+        icon=paths.icon,
+    )
+    monkeypatch.setenv("PHASE3_KNOWLEDGE_ENGINE_ENABLED", "true")
+    monkeypatch.setenv("ATLAS_NOTIFICATIONS_ENABLED", "true")
+    launcher = al.Launcher(paths, open_browser=False)
+    backend_env = launcher.build_children()[1].spec.env
+    assert backend_env["PHASE3_KNOWLEDGE_ENGINE_ENABLED"] == "true"
+    assert backend_env["ATLAS_NOTIFICATIONS_ENABLED"] == "true"
 
 
 def test_open_dashboard_once_per_session(tmp_path, monkeypatch):
