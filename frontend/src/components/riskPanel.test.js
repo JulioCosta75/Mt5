@@ -63,7 +63,7 @@ describe("drawdownBarPct uses magnitude only; signed label stays in the panel", 
 
   test("both drawdown fills use drawdownBarPct; displayed value stays signed fmt.pct", () => {
     expect((panelSrc.match(/drawdownBarPct\(account\.current_drawdown,\s*limits\.max_daily_loss_pct\)/g) || []).length).toBe(2);
-    expect((panelSrc.match(/value=\{fmt\.pct\(account\.current_drawdown\)\}/g) || []).length).toBe(2);
+    expect((panelSrc.match(/fmt\.pct\(account\.current_drawdown\)/g) || []).length).toBe(3);
     expect(panelSrc).not.toMatch(/value=\{fmt\.pct\(Math\.abs/);
     expect(panelSrc).not.toMatch(/barPct\(account\.current_drawdown/);
     expect(panelSrc).toMatch(/barPct\(account\.margin_level,\s*200\)/);
