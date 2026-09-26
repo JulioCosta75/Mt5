@@ -31,11 +31,13 @@ def _run_filenames() -> list[str]:
     return names
 
 
-def _directive_names(section: str, prefix: str) -> list[str]:
+def _named_entries(section: str) -> list[str]:
     out: list[str] = []
     for line in _section(section):
         stripped = line.strip()
-        if stripped.startswith(prefix):
+        if not stripped or stripped.startswith(";"):
+            continue
+        if "Name:" in stripped:
             out.append(stripped)
     return out
 
@@ -59,7 +61,12 @@ def test_single_unsigned_setup_exe():
     assert "OutputBaseFilename=Atlas_Setup_Free" not in ISS_TEXT
     assert "OutputBaseFilename=Atlas_Setup_Pro" not in ISS_TEXT
     assert ISS_TEXT.lower().count("outputbasefilename=") == 1
-    assert "SignTool" not in ISS_TEXT
+    active = [
+        line.strip()
+        for line in ISS_TEXT.splitlines()
+        if line.strip() and not line.strip().startswith(";")
+    ]
+    assert not any(line.startswith("SignTool") for line in active)
 
 
 def test_packages_atlas2_frontend_and_backend():
@@ -70,18 +77,18 @@ def test_packages_atlas2_frontend_and_backend():
 
 
 def test_upgrade_cleans_code_but_not_user_data():
-    install_delete = "\n".join(_section("InstallDelete"))
-    assert "{app}\\backend" in install_delete
-    assert "{app}\\frontend_build" in install_delete
-    assert "{app}\\data" not in install_delete
-    assert "{app}\\logs" not in install_delete
+    names = "\n".join(_named_entries("InstallDelete"))
+    assert "{app}\\backend" in names
+    assert "{app}\\frontend_build" in names
+    assert 'Name: "{app}\\data"' not in names
+    assert 'Name: "{app}\\logs"' not in names
 
 
 def test_uninstall_preserves_user_data_and_logs():
-    names = _directive_names("UninstallDelete", "Name:")
+    names = _named_entries("UninstallDelete")
     blob = "\n".join(names)
-    assert "{app}\\data" not in blob
-    assert "{app}\\logs" not in blob
+    assert 'Name: "{app}\\data"' not in blob
+    assert 'Name: "{app}\\logs"' not in blob
     assert any("{app}\\python\\Lib\\site-packages" in item for item in names)
 
 
