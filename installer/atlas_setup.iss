@@ -93,8 +93,15 @@ Source: "LICENSE.txt";      DestDir: "{app}";        Flags: ignoreversion
 Source: "README_INSTALL.txt"; DestDir: "{app}";      Flags: ignoreversion
 
 [Dirs]
-Name: "{app}\data"
-Name: "{app}\logs"
+; uninsneveruninstall: Inno's default is to recursively delete a [Dirs]
+; entry (and everything a user later put in it) on uninstall. Without this
+; flag, uninstall silently wipes real operator data (atlas.db, mt5_config.json,
+; bridge_data.db, atlas_launcher.lock) and every log file — confirmed on a
+; real Windows uninstall run: the .log showed each one individually deleted
+; even though [UninstallDelete] below never lists them. [UninstallDelete] is
+; additive cleanup, not a protection — it cannot override a [Dirs] entry.
+Name: "{app}\data"; Flags: uninsneveruninstall
+Name: "{app}\logs"; Flags: uninsneveruninstall
 
 [InstallDelete]
 ; Clean code tree on upgrade (preserve {app}\data and {app}\logs).

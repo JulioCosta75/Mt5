@@ -91,6 +91,16 @@ def test_uninstall_preserves_user_data_and_logs():
     assert 'Name: "{app}\\logs"' not in blob
     assert any("{app}\\python\\Lib\\site-packages" in item for item in names)
 
+    # Regression (confirmed on a real Windows uninstall run 2026-09-27): a
+    # [Dirs] entry is fully deleted by Inno's uninstaller by default,
+    # regardless of what [UninstallDelete] does or does not list — the
+    # asserts above alone passed while a real uninstall still wiped
+    # atlas.db, mt5_config.json, bridge_data.db and every log file.
+    # uninsneveruninstall is the only flag that actually prevents that.
+    dirs = "\n".join(_named_entries("Dirs"))
+    assert 'Name: "{app}\\data"; Flags: uninsneveruninstall' in dirs
+    assert 'Name: "{app}\\logs"; Flags: uninsneveruninstall' in dirs
+
 
 def test_install_creates_data_and_logs_dirs():
     dirs = "\n".join(_section("Dirs"))
