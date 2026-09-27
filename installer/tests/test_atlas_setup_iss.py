@@ -96,3 +96,8 @@ def test_install_creates_data_and_logs_dirs():
     dirs = "\n".join(_section("Dirs"))
     assert "{app}\\data" in dirs
     assert "{app}\\logs" in dirs
+
+
+def test_build_helper_download_url_is_not_packaged():
+    files = "\n".join(_section("Files"))
+    assert "download_url.py" not in files
