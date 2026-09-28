@@ -1,0 +1,13 @@
+platform: Linux-6.12.94+-x86_64-with-glibc2.39
+system: Linux x86_64
+HEAD: a6614dd9ebfdda7b803b9f3a5d3ff292f53c8c04
+branch: cursor/atlas2-free-pro-installer-b11c
+VERSION: 0.3.0
+which iscc: None
+which ISCC: None
+which wine: None
+which wine64: None
+ISCC_ENV: None
+dist exists: False
+workers: none (probed separately)
+SignTool in ISS active lines: False

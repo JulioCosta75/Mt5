@@ -1,0 +1,11 @@
+yarn run v1.22.22
+$ craco test --watchAll=false '--testPathPattern=riskPanel|remainingVisual' --passWithNoTests
+PASS src/components/riskPanel.test.js
+PASS src/components/remainingVisual.test.js
+
+Test Suites: 2 passed, 2 total
+Tests:       25 passed, 25 total
+Snapshots:   0 total
+Time:        0.371 s, estimated 1 s
+Ran all test suites matching /riskPanel|remainingVisual/i.
+Done in 0.82s.
