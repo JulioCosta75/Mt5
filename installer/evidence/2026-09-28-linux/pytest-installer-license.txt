@@ -1,0 +1,159 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /workspace/backend
+configfile: pytest.ini
+plugins: xdist-3.8.0, anyio-4.15.1
+created: 2/2 workers
+2 workers [56 items]
+
+scheduling tests via LoadScopeScheduling
+
+backend::test_run_section_does_not_open_dashboard_bat 
+backend/tests/test_license.py::TestLicenseStates::test_free_without_key 
+[gw0] [  1%] PASSED backend::test_run_section_does_not_open_dashboard_bat 
+backend::test_open_dashboard_bat_still_ships_for_start_menu 
+[gw0] [  3%] PASSED backend::test_open_dashboard_bat_still_ships_for_start_menu 
+backend::test_single_unsigned_setup_exe 
+[gw0] [  5%] PASSED backend::test_single_unsigned_setup_exe 
+backend::test_packages_atlas2_frontend_and_backend 
+[gw0] [  7%] PASSED backend::test_packages_atlas2_frontend_and_backend 
+backend::test_upgrade_cleans_code_but_not_user_data 
+[gw0] [  8%] PASSED backend::test_upgrade_cleans_code_but_not_user_data 
+backend::test_uninstall_preserves_user_data_and_logs 
+[gw0] [ 10%] PASSED backend::test_uninstall_preserves_user_data_and_logs 
+backend::test_install_creates_data_and_logs_dirs 
+[gw0] [ 12%] PASSED backend::test_install_creates_data_and_logs_dirs 
+backend::test_build_helper_download_url_is_not_packaged 
+[gw0] [ 14%] PASSED backend::test_build_helper_download_url_is_not_packaged 
+[gw1] [ 16%] PASSED backend/tests/test_license.py::TestLicenseStates::test_free_without_key 
+backend/tests/test_license.py::TestLicenseStates::test_valid_key_activates_pro 
+backend::test_resolve_paths_prefers_explicit_root 
+[gw0] [ 17%] PASSED backend::test_resolve_paths_prefers_explicit_root 
+backend::test_resolve_paths_dev_layout_mt5_bridge 
+[gw0] [ 19%] PASSED backend::test_resolve_paths_dev_layout_mt5_bridge 
+backend::test_resolve_paths_localappdata 
+[gw0] [ 21%] PASSED backend::test_resolve_paths_localappdata 
+backend::test_child_restart_exhausted 
+[gw1] [ 23%] PASSED backend/tests/test_license.py::TestLicenseStates::test_valid_key_activates_pro 
+backend/tests/test_license.py::TestLicenseStates::test_invalid_key_stays_free 
+[gw1] [ 25%] PASSED backend/tests/test_license.py::TestLicenseStates::test_invalid_key_stays_free 
+backend/tests/test_license.py::TestLicenseStates::test_expired_key_is_not_pro 
+[gw1] [ 26%] PASSED backend/tests/test_license.py::TestLicenseStates::test_expired_key_is_not_pro 
+backend/tests/test_license.py::TestLicenseStates::test_network_failure_keeps_cached_pro 
+[gw1] [ 28%] PASSED backend/tests/test_license.py::TestLicenseStates::test_network_failure_keeps_cached_pro 
+backend/tests/test_license.py::TestLicenseStates::test_grace_expired_without_revalidation_returns_free 
+[gw1] [ 30%] PASSED backend/tests/test_license.py::TestLicenseStates::test_grace_expired_without_revalidation_returns_free 
+backend/tests/test_license.py::TestLicenseStates::test_revalidate_at_most_once_per_day 
+[gw1] [ 32%] PASSED backend/tests/test_license.py::TestLicenseStates::test_revalidate_at_most_once_per_day 
+backend/tests/test_license.py::TestLicenseStates::test_http_5xx_is_network_not_invalid 
+[gw1] [ 33%] PASSED backend/tests/test_license.py::TestLicenseStates::test_http_5xx_is_network_not_invalid 
+backend/tests/test_license.py::TestLicenseStates::test_activate_network_error_does_not_grant_pro 
+[gw1] [ 35%] PASSED backend/tests/test_license.py::TestLicenseStates::test_activate_network_error_does_not_grant_pro 
+backend/tests/test_license.py::TestLicenseEndpoints::test_get_license_free_default 
+[gw1] [ 37%] PASSED backend/tests/test_license.py::TestLicenseEndpoints::test_get_license_free_default 
+backend/tests/test_license.py::TestLicenseEndpoints::test_activate_valid 
+[gw1] [ 39%] PASSED backend/tests/test_license.py::TestLicenseEndpoints::test_activate_valid 
+backend/tests/test_license.py::TestLicenseEndpoints::test_activate_invalid 
+[gw1] [ 41%] PASSED backend/tests/test_license.py::TestLicenseEndpoints::test_activate_invalid 
+backend/tests/test_license.py::TestLicenseEndpoints::test_activate_empty_key 
+[gw1] [ 42%] PASSED backend/tests/test_license.py::TestLicenseEndpoints::test_activate_empty_key 
+backend/tests/test_license.py::TestLicenseEndpoints::test_activate_network_error 
+[gw1] [ 44%] PASSED backend/tests/test_license.py::TestLicenseEndpoints::test_activate_network_error 
+backend/tests/test_license.py::TestLicenseEndpoints::test_mt5_config_first_account_still_works 
+[gw1] [ 46%] PASSED backend/tests/test_license.py::TestLicenseEndpoints::test_mt5_config_first_account_still_works 
+backend/tests/test_license.py::TestAccountLimit::test_free_allows_first_account_save 
+[gw1] [ 48%] PASSED backend/tests/test_license.py::TestAccountLimit::test_free_allows_first_account_save 
+backend/tests/test_license.py::TestAccountLimit::test_free_blocks_second_simultaneous_account 
+[gw1] [ 50%] PASSED backend/tests/test_license.py::TestAccountLimit::test_free_blocks_second_simultaneous_account 
+backend/tests/test_license.py::TestAccountLimit::test_pro_allows_unlimited_accounts 
+[gw1] [ 51%] PASSED backend/tests/test_license.py::TestAccountLimit::test_pro_allows_unlimited_accounts 
+backend/tests/test_license.py::TestAccountLimit::test_clients_capped_on_free 
+[gw1] [ 53%] PASSED backend/tests/test_license.py::TestAccountLimit::test_clients_capped_on_free 
+backend/tests/test_license.py::TestAccountLimit::test_clients_unlimited_on_pro 
+[gw1] [ 55%] PASSED backend/tests/test_license.py::TestAccountLimit::test_clients_unlimited_on_pro 
+backend/tests/test_license.py::TestScrub::test_scrub_redacts_assignment_and_explicit_secret 
+[gw1] [ 57%] PASSED backend/tests/test_license.py::TestScrub::test_scrub_redacts_assignment_and_explicit_secret 
+backend/tests/test_license.py::TestScrub::test_stored_error_does_not_contain_key 
+[gw1] [ 58%] PASSED backend/tests/test_license.py::TestScrub::test_stored_error_does_not_contain_key 
+backend/tests/test_license.py::TestAtlasDbMigration::test_new_table_does_not_destroy_existing 
+[gw1] [ 60%] PASSED backend/tests/test_license.py::TestAtlasDbMigration::test_new_table_does_not_destroy_existing 
+[gw0] [ 62%] PASSED backend::test_child_restart_exhausted 
+backend::test_launcher_builds_expected_commands 
+[gw0] [ 64%] PASSED backend::test_launcher_builds_expected_commands 
+backend::test_launcher_does_not_override_operator_experimental_flags 
+[gw0] [ 66%] PASSED backend::test_launcher_does_not_override_operator_experimental_flags 
+backend::test_open_dashboard_once_per_session 
+[gw0] [ 67%] PASSED backend::test_open_dashboard_once_per_session 
+backend::test_open_dashboard_url_uses_edge_first 
+[gw0] [ 69%] PASSED backend::test_open_dashboard_url_uses_edge_first 
+backend::test_open_dashboard_url_shows_message_when_edge_missing 
+[gw0] [ 71%] PASSED backend::test_open_dashboard_url_shows_message_when_edge_missing 
+backend::test_open_dashboard_url_shows_message_when_edge_paths_missing_files 
+[gw0] [ 73%] PASSED backend::test_open_dashboard_url_shows_message_when_edge_paths_missing_files 
+backend::test_open_url_via_edge_skips_missing_then_uses_next 
+[gw0] [ 75%] PASSED backend::test_open_url_via_edge_skips_missing_then_uses_next 
+backend::test_staged_backend_includes_license_and_excludes_secrets 
+[gw0] [ 76%] PASSED backend::test_staged_backend_includes_license_and_excludes_secrets 
+backend::test_payload_trees_do_not_embed_live_secrets 
+[gw0] [ 78%] PASSED backend::test_payload_trees_do_not_embed_live_secrets 
+backend::test_installer_scripts_do_not_embed_live_secrets 
+[gw0] [ 80%] PASSED backend::test_installer_scripts_do_not_embed_live_secrets 
+backend::test_atlas2_dashboard_sources_are_present_for_frontend_build 
+[gw0] [ 82%] PASSED backend::test_atlas2_dashboard_sources_are_present_for_frontend_build 
+backend::test_verify_rejects_html 
+[gw0] [ 83%] PASSED backend::test_verify_rejects_html 
+backend::test_verify_rejects_too_small 
+[gw0] [ 85%] PASSED backend::test_verify_rejects_too_small 
+backend::test_verify_requires_member 
+[gw0] [ 87%] PASSED backend::test_verify_requires_member 
+backend::test_urllib_downloads_and_verifies_zip 
+[gw0] [ 89%] PASSED backend::test_urllib_downloads_and_verifies_zip 
+backend::test_urllib_rejects_http_error_html 
+[gw0] [ 91%] PASSED backend::test_urllib_rejects_http_error_html 
+backend::test_cli_verify_only 
+[gw0] [ 92%] PASSED backend::test_cli_verify_only 
+backend::test_yarn_lockfile_is_classic_v1 
+[gw0] [ 94%] PASSED backend::test_yarn_lockfile_is_classic_v1 
+backend::test_package_manager_is_yarn_1_22_22 
+[gw0] [ 96%] PASSED backend::test_package_manager_is_yarn_1_22_22 
+backend::test_build_bat_uses_corepack_yarn_not_npm_ci 
+[gw0] [ 98%] PASSED backend::test_build_bat_uses_corepack_yarn_not_npm_ci 
+backend::test_build_bat_python_download_is_verified 
+[gw0] [100%] PASSED backend::test_build_bat_python_download_is_verified 
+
+=============================== warnings summary ===============================
+tests/test_license.py::TestLicenseEndpoints::test_get_license_free_default
+  /home/ubuntu/.local/lib/python3.12/site-packages/starlette/testclient.py:41: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+tests/test_license.py::TestLicenseEndpoints::test_get_license_free_default
+  /workspace/backend/server.py:1177: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+tests/test_license.py::TestLicenseEndpoints::test_get_license_free_default
+tests/test_license.py::TestLicenseEndpoints::test_get_license_free_default
+  /home/ubuntu/.local/lib/python3.12/site-packages/fastapi/applications.py:4495: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+tests/test_license.py::TestLicenseEndpoints::test_get_license_free_default
+  /workspace/backend/server.py:1184: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 56 passed, 5 warnings in 5.71s ========================
