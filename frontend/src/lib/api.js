@@ -1,7 +1,9 @@
 import axios from "axios";
+import { resolveApiBase } from "./apiBase";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-export const API = `${BACKEND_URL}/api`;
+export { resolveApiBase };
+
+export const API = resolveApiBase(process.env.REACT_APP_BACKEND_URL);
 
 const client = axios.create({ baseURL: API, timeout: 15000 });
 
