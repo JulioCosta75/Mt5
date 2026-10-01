@@ -12,7 +12,7 @@ REM  Bump BUILD_REV whenever build.bat changes so a running VPS can prove
 REM  (from its own console output) exactly which script it is executing.
 REM  If you DO NOT see this banner + the [setup] auto-install lines below,
 REM  you are running an OLD build.bat -> re-clone / checkout the correct branch.
-set "BUILD_REV=iscc-autoinstall-r2"
+set "BUILD_REV=atlas2-free-pro-r2"
 
 echo.
 echo === Atlas installer builder ===
@@ -47,24 +47,41 @@ if not defined ISCC_EXE (
 echo Using Inno Setup compiler: "%ISCC_EXE%"
 
 where powershell >nul 2>nul || (echo [ERROR] PowerShell required. & exit /b 1)
-where node       >nul 2>nul || echo [WARN] node not found - frontend pre-build will be skipped. Use prebuilt payload\frontend_build\ instead.
-where yarn       >nul 2>nul || echo [INFO] yarn not found, will use npm if available.
+where node       >nul 2>nul || (echo [ERROR] Node.js is required to build the dashboard. Install Node 18+ and rerun. & exit /b 1)
+where corepack   >nul 2>nul || (echo [ERROR] Corepack not found. Node.js 18+ includes Corepack. Install a current Node and rerun. & exit /b 1)
 
 REM ---- Folders ----
 if not exist payload mkdir payload
 if not exist dist    mkdir dist
 
 REM ---- 1) Download embedded Python 3.11 ----------------------
+REM PowerShell Invoke-WebRequest is NOT the primary method: some Windows
+REM images fail python.org with a TLS/credentials error. urllib (and curl)
+REM succeed on the same URL. Never extract until the ZIP is verified.
 set PYVER=3.11.9
 set PYZIP=python-%PYVER%-embed-amd64.zip
+set "PYURL=https://www.python.org/ftp/python/%PYVER%/%PYZIP%"
 if not exist payload\python\python.exe (
     echo.
     echo [1/6] Downloading Python %PYVER% embeddable...
-    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-      "Invoke-WebRequest 'https://www.python.org/ftp/python/%PYVER%/%PYZIP%' -OutFile '%PYZIP%'" || exit /b 1
-    if not exist payload\python mkdir payload\python
-    powershell -NoProfile -Command "Expand-Archive -Force '%PYZIP%' 'payload\python'"
-    del %PYZIP%
+    echo       URL: %PYURL%
+    call :download_python_zip "%PYURL%" "%PYZIP%" 5000000
+    if errorlevel 1 (
+        echo [ERROR] Could not download a verified Python embeddable ZIP.
+        exit /b 1
+    )
+    if exist payload\python rmdir /S /Q payload\python
+    mkdir payload\python
+    call :extract_python_zip "%PYZIP%" payload\python
+    if errorlevel 1 (
+        echo [ERROR] Failed to extract %PYZIP%
+        exit /b 1
+    )
+    if not exist payload\python\python.exe (
+        echo [ERROR] ZIP extracted but payload\python\python.exe is missing. Refusing to continue.
+        exit /b 1
+    )
+    del /F /Q "%PYZIP%" >nul 2>nul
     REM Enable site-packages in embeddable Python:
     powershell -NoProfile -Command ^
       "(Get-Content payload\python\python311._pth) -replace '#import site','import site' | Set-Content payload\python\python311._pth"
@@ -117,17 +134,55 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$b=[ordered]@{version='%ATLAS_VER%';build='%GITSHA%';built_at=((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'));channel='release'}; $j=($b|ConvertTo-Json -Compress); [System.IO.File]::WriteAllText((Join-Path (Get-Location) 'payload\backend\build_info.json'), $j, (New-Object System.Text.UTF8Encoding $false))" || exit /b 1
 echo OK
 
-REM ---- 4) Build frontend (or use prebuilt) -------------------
+REM ---- 4) Build frontend via Corepack Yarn 1.22.22 (no npm fallback) ----
 echo.
-echo [4/6] Building frontend ^(clean rebuild^)...
+echo [4/6] Building frontend ^(clean rebuild, Corepack Yarn 1.22.22^)...
 if exist payload\frontend_build rmdir /S /Q payload\frontend_build
 pushd ..\frontend
-if exist node_modules ( echo node_modules ok ) else ( call yarn install --frozen-lockfile || call npm ci || exit /b 1 )
+if not exist yarn.lock (
+    echo [ERROR] frontend\yarn.lock is missing.
+    echo         A clean clone needs the committed Yarn 1 lockfile. Do not use npm ci.
+    popd
+    exit /b 1
+)
+if not exist package.json (
+    echo [ERROR] frontend\package.json is missing.
+    popd
+    exit /b 1
+)
+echo [frontend] Corepack Yarn:
+call corepack yarn --version
+if errorlevel 1 (
+    echo [ERROR] corepack yarn failed. Node 18+ with Corepack is required ^(packageManager yarn@1.22.22^).
+    popd
+    exit /b 1
+)
+REM Yarn classic 1.x is the supported resolver for date-fns@4.1.0 + react-day-picker@8.10.1
+REM (npm 7+ peer-dep conflict). Do not --force / --legacy-peer-deps / npm ci.
+call corepack yarn install --frozen-lockfile
+if errorlevel 1 (
+    echo [ERROR] yarn install --frozen-lockfile failed. Lockfile and package.json are out of sync, or the registry is unreachable.
+    popd
+    exit /b 1
+)
 REM Same-origin: dashboard is served by the backend, so no external API base.
 set "REACT_APP_BACKEND_URL="
-call yarn build || call npm run build || exit /b 1
+call corepack yarn build
+if errorlevel 1 (
+    echo [ERROR] corepack yarn build failed.
+    popd
+    exit /b 1
+)
 popd
+if not exist ..\frontend\build\index.html (
+    echo [ERROR] frontend\build\index.html missing after yarn build.
+    exit /b 1
+)
 xcopy /E /I /Y ..\frontend\build payload\frontend_build >nul
+if errorlevel 1 (
+    echo [ERROR] Failed to copy frontend\build to payload\frontend_build
+    exit /b 1
+)
 echo OK
 
 REM ---- 5) (MT5 setup wizard removed — configured from the Dashboard) --
@@ -136,13 +191,18 @@ if exist payload\wizard rmdir /S /Q payload\wizard
 REM ---- 5) Compile Inno Setup ---------------------------------
 echo.
 echo [5/5] Compiling Atlas_Setup.exe...
+REM Unsigned on purpose — founder applies the Microsoft signature after review.
 "%ISCC_EXE%" "/DMyAppVersion=%ATLAS_VER%" atlas_setup.iss || exit /b 1
 
 echo.
 echo ============================================
 echo  Build complete: dist\Atlas_Setup.exe
+echo  (unsigned — do not distribute until signed)
 echo ============================================
-dir /B dist\Atlas_Setup.exe
+dir dist\Atlas_Setup.exe
+echo.
+echo SHA-256:
+certutil -hashfile dist\Atlas_Setup.exe SHA256
 endlocal
 exit /b 0
 
@@ -267,3 +327,113 @@ REM ------------------------------------------------------------------
 REM %1 = quoted candidate path to ISCC.exe. Sets ISCC_EXE if it exists.
 if exist "%~1" set "ISCC_EXE=%~1"
 goto :eof
+
+REM ------------------------------------------------------------------
+:download_python_zip
+REM %1 = URL  %2 = dest ZIP  %3 = min bytes
+set "_DL_URL=%~1"
+set "_DL_OUT=%~2"
+set "_DL_MIN=%~3"
+if not defined _DL_MIN set "_DL_MIN=5000000"
+if exist "%_DL_OUT%" del /F /Q "%_DL_OUT%" >nul 2>nul
+set "PY_LAUNCH="
+where py >nul 2>nul
+if not errorlevel 1 set "PY_LAUNCH=py -3"
+if not defined PY_LAUNCH (
+    where python >nul 2>nul
+    if not errorlevel 1 set "PY_LAUNCH=python"
+)
+if not defined PY_LAUNCH (
+    where python3 >nul 2>nul
+    if not errorlevel 1 set "PY_LAUNCH=python3"
+)
+if defined PY_LAUNCH (
+    echo [download] Python found: %PY_LAUNCH%  ^(urllib, then curl, then IWR^)
+    %PY_LAUNCH% "%~dp0scripts\download_url.py" --min-bytes %_DL_MIN% --expect-member python.exe --timeout 90 "%_DL_URL%" "%_DL_OUT%"
+    if not errorlevel 1 exit /b 0
+    echo [download] Python helper failed; trying curl/IWR from this script...
+)
+call :download_without_python "%_DL_URL%" "%_DL_OUT%" %_DL_MIN%
+exit /b %ERRORLEVEL%
+
+REM ------------------------------------------------------------------
+:download_without_python
+REM %1 URL  %2 dest  %3 min bytes
+set "_NU_URL=%~1"
+set "_NU_OUT=%~2"
+set "_NU_MIN=%~3"
+where curl >nul 2>nul
+if not errorlevel 1 (
+    echo [download] trying curl.exe ...
+    curl.exe -L --fail --retry 3 --retry-delay 2 --connect-timeout 30 -A "Atlas-installer-build/1.0" -o "%_NU_OUT%" "%_NU_URL%"
+    if not errorlevel 1 (
+        call :verify_zip_nopy "%_NU_OUT%" %_NU_MIN%
+        if not errorlevel 1 exit /b 0
+        echo [download] curl wrote a file that failed ZIP verification.
+        del /F /Q "%_NU_OUT%" >nul 2>nul
+    ) else (
+        echo [download] curl failed.
+    )
+) else (
+    echo [download] curl not on PATH.
+)
+echo [download] trying PowerShell Invoke-WebRequest ^(last resort^) ...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}; Invoke-WebRequest -Uri '%_NU_URL%' -OutFile '%_NU_OUT%' -UseBasicParsing -TimeoutSec 90 -UserAgent 'Atlas-installer-build/1.0'"
+if errorlevel 1 (
+    echo [download] Invoke-WebRequest failed.
+    del /F /Q "%_NU_OUT%" >nul 2>nul
+    exit /b 1
+)
+call :verify_zip_nopy "%_NU_OUT%" %_NU_MIN%
+if errorlevel 1 (
+    echo [download] IWR wrote a file that failed ZIP verification ^(often an HTML error page^).
+    del /F /Q "%_NU_OUT%" >nul 2>nul
+    exit /b 1
+)
+exit /b 0
+
+REM ------------------------------------------------------------------
+:verify_zip_nopy
+REM %1 file  %2 min bytes. Uses file size + tar listing when Python is absent.
+set "_ZF=%~1"
+set "_ZMIN=%~2"
+if not exist "%_ZF%" (
+    echo [ERROR] expected ZIP missing: %_ZF%
+    exit /b 1
+)
+for %%A in ("%_ZF%") do set "_ZSIZE=%%~zA"
+if !_ZSIZE! LSS !_ZMIN! (
+    echo [ERROR] %_ZF% is !_ZSIZE! bytes; need at least !_ZMIN!. Refusing to extract.
+    exit /b 1
+)
+tar -tf "%_ZF%" 2>nul | findstr /I /C:"python.exe" >nul
+if errorlevel 1 (
+    echo [ERROR] %_ZF% is not a ZIP containing python.exe. Refusing to extract.
+    exit /b 1
+)
+echo [download] verified %_ZF% ^(!_ZSIZE! bytes, contains python.exe^)
+exit /b 0
+
+REM ------------------------------------------------------------------
+:extract_python_zip
+REM %1 zip  %2 dest dir
+set "_EX_ZIP=%~1"
+set "_EX_DIR=%~2"
+set "PY_LAUNCH="
+where py >nul 2>nul
+if not errorlevel 1 set "PY_LAUNCH=py -3"
+if not defined PY_LAUNCH (
+    where python >nul 2>nul
+    if not errorlevel 1 set "PY_LAUNCH=python"
+)
+if not defined PY_LAUNCH (
+    where python3 >nul 2>nul
+    if not errorlevel 1 set "PY_LAUNCH=python3"
+)
+if defined PY_LAUNCH (
+    %PY_LAUNCH% -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" "%_EX_ZIP%" "%_EX_DIR%"
+    if not errorlevel 1 exit /b 0
+    echo [extract] Python zipfile failed; trying Expand-Archive.
+)
+powershell -NoProfile -Command "Expand-Archive -Force '%_EX_ZIP%' '%_EX_DIR%'"
+exit /b %ERRORLEVEL%
