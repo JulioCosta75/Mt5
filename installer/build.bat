@@ -22,7 +22,7 @@ echo.
 REM ---- Resolve version (single source of truth: backend\VERSION) ----
 set "ATLAS_VER="
 if exist "..\backend\VERSION" for /f "usebackq delims=" %%V in ("..\backend\VERSION") do set "ATLAS_VER=%%V"
-if not defined ATLAS_VER set "ATLAS_VER=0.3.0"
+if not defined ATLAS_VER set "ATLAS_VER=0.3.1"
 set "GITSHA="
 for /f "delims=" %%G in ('git rev-parse --short HEAD 2^>nul') do set "GITSHA=%%G"
 if not defined GITSHA set "GITSHA=nogit"

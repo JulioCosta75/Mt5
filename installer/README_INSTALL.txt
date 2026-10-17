@@ -50,7 +50,7 @@ API root:     http://127.0.0.1:8001/api/
 
 Checking which version is running
 ---------------------------------
-  • Dashboard header (top-right), e.g.  v0.3.0
+  • Dashboard header (top-right), e.g.  v0.3.1
   • Health page footer
   • API:  http://127.0.0.1:8001/api/system/version
 

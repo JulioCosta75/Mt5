@@ -11,7 +11,7 @@
 ; ===========================================================================
 #define MyAppName      "Atlas"
 #ifndef MyAppVersion
-  #define MyAppVersion "0.3.0"
+  #define MyAppVersion "0.3.1"
 #endif
 #define MyAppPublisher "Quant.Supervise"
 #define MyAppURL       "https://quant.supervise"
