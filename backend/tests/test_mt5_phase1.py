@@ -219,11 +219,14 @@ class _MT5Server:
             cwd=str(BACKEND_DIR), env=env,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         )
-        # wait for ready
+        # Windows takes about 2s to refuse a connection to a closed local
+        # port. With the bridge down, /api/kpis needs that long, so a 2s
+        # readiness timeout never observes a ready server. 5s only fixes
+        # this probe; it does not make the dashboard faster.
         deadline = time.time() + 25
         while time.time() < deadline:
             try:
-                r = requests.get(f"http://127.0.0.1:{self.port}/api/kpis", timeout=2)
+                r = requests.get(f"http://127.0.0.1:{self.port}/api/kpis", timeout=5)
                 if r.status_code < 500:
                     return
             except requests.RequestException:
