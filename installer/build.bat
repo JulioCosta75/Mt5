@@ -12,7 +12,7 @@ REM  Bump BUILD_REV whenever build.bat changes so a running VPS can prove
 REM  (from its own console output) exactly which script it is executing.
 REM  If you DO NOT see this banner + the [setup] auto-install lines below,
 REM  you are running an OLD build.bat -> re-clone / checkout the correct branch.
-set "BUILD_REV=atlas2-free-pro-r2"
+set "BUILD_REV=atlas2-free-pro-r3"
 
 echo.
 echo === Atlas installer builder ===
@@ -191,13 +191,13 @@ if exist payload\wizard rmdir /S /Q payload\wizard
 REM ---- 5) Compile Inno Setup ---------------------------------
 echo.
 echo [5/5] Compiling Atlas_Setup.exe...
-REM Unsigned on purpose — founder applies the Microsoft signature after review.
+REM Unsigned beta (D1). Testers see the SmartScreen warning; see BETA_GUIDE.md.
 "%ISCC_EXE%" "/DMyAppVersion=%ATLAS_VER%" atlas_setup.iss || exit /b 1
 
 echo.
 echo ============================================
 echo  Build complete: dist\Atlas_Setup.exe
-echo  (unsigned — do not distribute until signed)
+echo  (unsigned beta build — testers see a SmartScreen warning, see BETA_GUIDE.md)
 echo ============================================
 dir dist\Atlas_Setup.exe
 echo.
