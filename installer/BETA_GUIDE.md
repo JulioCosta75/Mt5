@@ -18,10 +18,11 @@ That warning is expected. Do not turn SmartScreen off.
 
 ## Install
 
-No administrator password for the Atlas install. It goes to
-`%LOCALAPPDATA%\Atlas`. When asked, enter the **demo** login, password,
-and server. Leave the terminal path empty unless MT5 is not in the
-usual place.
+The install needs an **Internet** connection and takes about **one
+minute** (it downloads Python packages). No administrator password. It
+goes to `%LOCALAPPDATA%\Atlas`. When asked, enter the **demo** login,
+password, and server. Leave the terminal path empty unless MT5 is not
+in the usual place.
 
 ## First start
 
@@ -35,6 +36,9 @@ Configuration Mode.
 
 The header version should be **v0.3.1**.
 
+If MetaTrader 5 is closed, the dashboard can be slow (about 2 seconds
+per request) until MT5 is open again.
+
 ## Logs
 
 `%LOCALAPPDATA%\Atlas\logs`
@@ -42,14 +46,18 @@ The header version should be **v0.3.1**.
 `launcher.log`, `backend.out.log`, `backend.err.log`, `bridge.out.log`,
 `bridge.err.log`.
 
+The logs include the MT5 account number and the server. They never
+include the password.
+
 Zip that folder and send it to the person who sent the installer.
 Do not send `%LOCALAPPDATA%\Atlas\data`: it holds the demo password.
 
 ## Uninstall
 
 Windows Settings → Apps → Atlas → Uninstall, or the Start menu shortcut.
-Program files go away. **Data and logs stay** in `%LOCALAPPDATA%\Atlas`.
-Delete that folder yourself only if you want them gone.
+Uninstall removes the program files. It leaves `data\`, `logs\`, and the
+`backend\` and `bridge\` folders, including the demo password in
+`bridge\.env`. To remove everything, delete `%LOCALAPPDATA%\Atlas`.
 
 ---
 
@@ -73,7 +81,8 @@ O aviso é esperado. Não desligue o SmartScreen.
 
 ## Instalar
 
-A instalação do Atlas não pede senha de administrador. Fica em
+A instalação precisa de **Internet** e demora cerca de **1 minuto**
+(descarrega pacotes Python). Não pede senha de administrador. Fica em
 `%LOCALAPPDATA%\Atlas`. Quando pedir, use o login, a senha e o servidor
 da conta **demo**. Deixe o caminho do terminal vazio, salvo se o MT5
 não estiver no sítio habitual.
@@ -89,6 +98,9 @@ isso a ponte não vê a conta demo. No Atlas, abra Settings e use
 
 A versão no cabeçalho deve ser **v0.3.1**.
 
+Com o MetaTrader 5 fechado, o painel pode ficar lento (cerca de 2
+segundos por pedido) até o MT5 voltar a estar aberto.
+
 ## Registos
 
 `%LOCALAPPDATA%\Atlas\logs`
@@ -96,12 +108,16 @@ A versão no cabeçalho deve ser **v0.3.1**.
 `launcher.log`, `backend.out.log`, `backend.err.log`, `bridge.out.log`,
 `bridge.err.log`.
 
+Os registos têm o número da conta MT5 e o servidor. Nunca têm a
+palavra-passe.
+
 Compacte essa pasta e envie-a a quem lhe mandou o instalador.
 Não envie `%LOCALAPPDATA%\Atlas\data`: tem a senha da demo.
 
 ## Desinstalar
 
 Definições do Windows → Aplicações → Atlas → Desinstalar, ou o atalho
-do menu Iniciar. Os ficheiros do programa saem. **Os dados e os
-registos ficam** em `%LOCALAPPDATA%\Atlas`. Apague essa pasta só se
-os quiser mesmo eliminar.
+do menu Iniciar. A desinstalação tira os ficheiros do programa. Deixa
+`data\`, `logs\` e as pastas `backend\` e `bridge\`, incluindo a
+palavra-passe demo em `bridge\.env`. Para apagar tudo, apague
+`%LOCALAPPDATA%\Atlas`.
