@@ -20,8 +20,9 @@ import requests
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://mt5-bridge-setup.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
 
-# Make /app/backend importable for the in-process tests
-BACKEND_DIR = Path("/app/backend").resolve()
+# In-process tests import this checkout. They must not write MT5_BRIDGE_URL
+# into backend/.env (that file is the operator's, not the test's).
+BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
@@ -29,6 +30,7 @@ if str(BACKEND_DIR) not in sys.path:
 # ---------------------------------------------------------------------------
 # 1) Regression — mock-mode behaviour against the deployed preview URL
 # ---------------------------------------------------------------------------
+@pytest.mark.external
 class TestMockRegression:
     """Verifies the existing public API still works in mock mode."""
 

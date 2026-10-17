@@ -1,6 +1,10 @@
 """Phase 1 branding & health integration checks against the deployed preview."""
 import os
+
+import pytest
 import requests
+
+pytestmark = pytest.mark.external
 
 BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://mt5-bridge-setup.preview.emergentagent.com").rstrip("/")
 API = f"{BASE}/api"

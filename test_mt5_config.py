@@ -6,12 +6,19 @@ Tests the NEW MT5 configuration endpoints on the running Atlas backend.
 IMPORTANT: These tests mutate a single config, so they MUST be run in the exact sequence below.
 """
 
-import requests
 import json
+import os
 from datetime import datetime
 
-# Base URL from frontend/.env
-BASE_URL = "https://mt5-bridge-setup.preview.emergentagent.com/api"
+import pytest
+import requests
+
+pytestmark = pytest.mark.external
+
+# Base URL from frontend/.env. Not called unless --external and the variable are set.
+BASE_URL = os.environ.get(
+    "REACT_APP_BACKEND_URL", "https://mt5-bridge-setup.preview.emergentagent.com"
+).rstrip("/") + "/api"
 
 def print_section(title):
     print(f"\n{'='*80}")

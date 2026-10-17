@@ -184,4 +184,30 @@ with `main` as the production branch. On the Emergent platform, use the
 
 ---
 
+## 8. Tests
+
+From the repository root. Offline is the default: nothing in this command
+calls the internet. `backend/pytest.ini` selects pytest-xdist (`-n 2`),
+so that plugin has to be installed. It does not change the skip rule.
+
+```bash
+PYTHONPATH=backend python -m pytest backend/tests installer/tests
+```
+
+`backend/tests/test_mt5_api.py`, `test_mt5_phase1.py` (the preview class),
+`test_phase1_branding.py` and `test_phase2_supervision.py` are marked
+`external`. So are the root scripts `test_mt5_config.py` and `backend_test.py`.
+They are skipped unless both of these are set:
+
+```bash
+REACT_APP_BACKEND_URL=http://127.0.0.1:8001 \
+  PYTHONPATH=backend python -m pytest backend/tests --external
+```
+
+`REACT_APP_BACKEND_URL` has to be the backend you intend to call. The old
+preview host is not used when the variable is absent. The command above
+loads `backend/pytest.ini` (`-n 2 --dist loadscope`).
+
+---
+
 © 2026 Forge Factory Lab · Sr. Atlas — Phase 1.
