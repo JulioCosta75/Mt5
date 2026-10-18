@@ -31,10 +31,13 @@ from typing import Callable, Optional
 
 MAX_RESTARTS = 3
 BACKEND_URL = "http://127.0.0.1:8001/"
-HEALTH_URL = "http://127.0.0.1:8001/api/system/health"
+# /api/system/version does not call the bridge. /api/system/health does, and a
+# slow MT5 connect used to eat the whole wait so the dashboard never opened.
+BACKEND_READY_URL = "http://127.0.0.1:8001/api/system/version"
 POLL_INTERVAL_S = 1.0
 STARTUP_GRACE_S = 8.0
 DASHBOARD_WAIT_S = 45.0
+BACKEND_READY_TIMEOUT_S = 5.0
 DASHBOARD_OPEN_HINT = (
     "Atlas is running. Open http://localhost:8001 in your browser to view the dashboard."
 )
@@ -431,18 +434,28 @@ class Launcher:
             time.sleep(POLL_INTERVAL_S)
 
     def _open_browser_when_ready(self) -> None:
+        """Open the dashboard once the backend answers.
+
+        A slow or down MT5 bridge must not delay or cancel this. The probe is
+        the backend version endpoint, not bridge health.
+        """
         import urllib.request
 
         deadline = time.time() + DASHBOARD_WAIT_S
         while not self._stop.is_set() and time.time() < deadline:
             try:
-                with urllib.request.urlopen(HEALTH_URL, timeout=2) as resp:
+                with urllib.request.urlopen(
+                    BACKEND_READY_URL, timeout=BACKEND_READY_TIMEOUT_S
+                ) as resp:
                     if 200 <= getattr(resp, "status", 200) < 500:
                         self.open_dashboard(force=False)
                         return
             except Exception:
                 time.sleep(1.0)
-        log.warning("Dashboard not reachable within %.0fs; not opening browser", DASHBOARD_WAIT_S)
+        log.warning(
+            "Backend not reachable within %.0fs; not opening browser",
+            DASHBOARD_WAIT_S,
+        )
 
 
 # ---------------------------------------------------------------------------
