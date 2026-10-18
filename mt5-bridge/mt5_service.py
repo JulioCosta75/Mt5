@@ -30,6 +30,9 @@ except Exception as _imp_err:  # noqa: BLE001  (ImportError on non-Windows, etc.
 logger = logging.getLogger(__name__)
 _lock = threading.Lock()
 
+# Backoff between MT5 connect attempts. The HTTP server must not wait for these.
+RETRY_DELAYS_S = (15, 30, 60, 300)
+
 
 class MT5Error(RuntimeError):
     def __init__(self, code: int, message: str):
@@ -56,6 +59,92 @@ class MT5Service:
         self.configured = configured
         self._initialized = False
         self._last_error: str | None = None
+        self._state = "not_configured" if not configured else "connecting"
+        self._next_retry_at: datetime | None = None
+        self._state_lock = threading.Lock()
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def _scrub(self, text: str | None) -> str | None:
+        if not text:
+            return text
+        secret = self.password or ""
+        if secret and secret in text:
+            return text.replace(secret, "***")
+        return text
+
+    def _set_link(self, state: str, *, last_error: str | None = None,
+                  clear_error: bool = False, next_retry_at: datetime | None = None) -> None:
+        with self._state_lock:
+            self._state = state
+            if clear_error:
+                self._last_error = None
+            elif last_error is not None:
+                self._last_error = self._scrub(last_error)
+            self._next_retry_at = next_retry_at
+
+    def start_background(self) -> None:
+        """Return immediately. MT5 connect runs on a daemon thread."""
+        if not self.configured:
+            self._set_link("not_configured", clear_error=True, next_retry_at=None)
+            return
+        self._stop.clear()
+        self._set_link("connecting", next_retry_at=None)
+        self._thread = threading.Thread(
+            target=self._connect_loop, name="mt5-connect", daemon=True
+        )
+        self._thread.start()
+
+    def stop_background(self) -> None:
+        self._stop.set()
+        thread = self._thread
+        if thread is not None and thread.is_alive() and threading.current_thread() is not thread:
+            thread.join(timeout=1.0)
+
+    def _connect_loop(self) -> None:
+        attempt = 0
+        while not self._stop.is_set():
+            self._set_link("connecting", next_retry_at=None)
+            try:
+                self.initialize()
+            except MT5Error as exc:
+                delay = RETRY_DELAYS_S[min(attempt, len(RETRY_DELAYS_S) - 1)]
+                attempt += 1
+                nxt = datetime.now(timezone.utc) + timedelta(seconds=delay)
+                msg = self._scrub(str(exc)) or ""
+                state = "ipc_timeout" if exc.code == -10005 or "-10005" in msg or "IPC timeout" in msg else "connecting"
+                self._set_link(state, last_error=msg, next_retry_at=nxt)
+                logger.warning(
+                    "MT5 connect failed (%s); next attempt at %s",
+                    msg,
+                    nxt.isoformat(),
+                )
+                if self._stop.wait(delay):
+                    return
+                continue
+            if self._stop.is_set():
+                return
+            if not self._initialized:
+                self._set_link("not_configured", clear_error=True, next_retry_at=None)
+                return
+            self._set_link("connected", clear_error=True, next_retry_at=None)
+            attempt = 0
+            while not self._stop.wait(5):
+                if not self._still_connected():
+                    break
+
+    def _still_connected(self) -> bool:
+        if not self._initialized:
+            return False
+        if not _MT5_AVAILABLE:
+            return True
+        if not _lock.acquire(blocking=False):
+            return True
+        try:
+            term = mt5.terminal_info()
+            return bool(term and term.connected)
+        finally:
+            _lock.release()
 
     # ---- lifecycle ----
     def initialize(self):
@@ -171,10 +260,17 @@ class MT5Service:
             self._warn_if_algo_trading_disabled()
 
     def shutdown(self):
-        with _lock:
-            if self._initialized:
+        self._stop.set()
+        # initialize() may be inside a long IPC call. Do not block HTTP shutdown on it.
+        if not _lock.acquire(timeout=0.5):
+            logger.info("MT5 initialize still in progress; not waiting to shut the terminal down")
+            return
+        try:
+            if self._initialized and _MT5_AVAILABLE:
                 mt5.shutdown()
                 self._initialized = False
+        finally:
+            _lock.release()
 
     def _warn_if_algo_trading_disabled(self) -> None:
         """Log a clear user-facing warning when Algo Trading is off."""
@@ -198,55 +294,51 @@ class MT5Service:
 
     # ---- queries ----
     def health(self) -> dict:
-        if not self.configured:
-            # Unconfigured but alive: the whole point of graceful degradation.
-            return {
-                "status": "unconfigured",
-                "configured": False,
-                "terminal_connected": False,
-                "account_logged_in": False,
-                "trade_allowed": False,
-                "login": None,
-                "server": None,
-                "last_error": None,
-                "message": ("MetaTrader 5 account not configured yet. Set it up "
-                            "from the installer or the dashboard Settings page — "
-                            "the bridge will connect automatically on restart."),
-                "server_time": datetime.now(timezone.utc).isoformat(),
-            }
-        if not _MT5_AVAILABLE:
-            return {
-                "status": "degraded",
-                "configured": True,
-                "terminal_connected": False,
-                "account_logged_in": False,
-                "trade_allowed": False,
-                "login": self.login,
-                "server": self.server,
-                "last_error": f"MetaTrader5 library unavailable: {_MT5_IMPORT_ERROR}",
-                "message": ("The MetaTrader5 Python library is not available on "
-                            "this host. Reinstall Atlas or run install_deps."),
-                "server_time": datetime.now(timezone.utc).isoformat(),
-            }
-        with _lock:
-            term = mt5.terminal_info()
-            acc = mt5.account_info() if self._initialized else None
-        connected = bool(self._initialized and term and term.connected)
+        """Fast status. Must not wait on initialize() or on the MT5 lock."""
+        with self._state_lock:
+            state = self._state
+            last_error = self._scrub(self._last_error)
+            nxt = self._next_retry_at
+        term = None
+        acc = None
+        if state == "connected" and _MT5_AVAILABLE and _lock.acquire(blocking=False):
+            try:
+                term = mt5.terminal_info()
+                acc = mt5.account_info() if self._initialized else None
+            finally:
+                _lock.release()
+        connected = state == "connected"
         trade_allowed = bool(term and term.trade_allowed)
-        message = None
-        if connected and not trade_allowed:
+        if connected and term is None:
+            # initialize() still holds the MT5 lock, or the library is not loaded.
+            terminal_connected = True
+            account_logged_in = True
+        elif term is not None:
+            terminal_connected = bool(term.connected)
+            account_logged_in = bool(acc)
+        else:
+            terminal_connected = False
+            account_logged_in = False
+        if not self.configured or state == "not_configured":
+            message = (
+                "MetaTrader 5 account not configured yet. Set it up "
+                "from the installer or the dashboard Settings page."
+            )
+        elif connected and term is not None and not trade_allowed:
             message = self._algo_trading_message()
-        elif not connected and self._last_error:
-            message = self._last_error
+        else:
+            message = last_error
         return {
-            "status": "ok" if connected else "degraded",
-            "configured": True,
-            "terminal_connected": bool(term and term.connected),
-            "account_logged_in": bool(acc),
+            "state": state,
+            "status": state,
+            "configured": bool(self.configured),
+            "terminal_connected": terminal_connected,
+            "account_logged_in": account_logged_in,
             "trade_allowed": trade_allowed,
-            "login": self.login,
-            "server": self.server,
-            "last_error": self._last_error,
+            "login": self.login if self.configured else None,
+            "server": self.server if self.configured else None,
+            "last_error": last_error,
+            "next_retry_at": nxt.isoformat() if nxt else None,
             "message": message,
             "server_time": datetime.now(timezone.utc).isoformat(),
         }

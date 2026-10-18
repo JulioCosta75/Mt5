@@ -33,6 +33,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger("mt5-bridge")
 
+
+class _RedactSecret(logging.Filter):
+    """Drop the MT5 password if a log line ever includes it."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.secret = ""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        secret = self.secret
+        if secret:
+            message = record.getMessage()
+            if secret in message:
+                record.msg = message.replace(secret, "***")
+                record.args = ()
+        return True
+
+
+_redact = _RedactSecret()
+_redact.secret = settings.mt5_password or ""
+logging.getLogger().addFilter(_redact)
+
 storage = Storage(settings.sqlite_path)
 mt5_service = MT5Service(
     login=settings.mt5_login,
@@ -46,6 +68,8 @@ recorder = SnapshotRecorder(mt5_service, storage, settings.snapshot_interval_sec
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # HTTP comes up before any MT5 attempt. initialize() can block for minutes
+    # (IPC timeout); that work stays on the connect thread.
     if not settings.configured:
         logger.warning(
             "Bridge starting in UNCONFIGURED mode — no MT5 account set. "
@@ -53,13 +77,11 @@ async def lifespan(_app: FastAPI):
             "installer or the dashboard Settings page and restart to connect."
         )
     else:
-        try:
-            mt5_service.initialize()
-        except MT5Error as e:
-            logger.error("MT5 initialize failed at startup: %s", e)
-            # Keep running so /health can report the failure; consumer can decide
+        logger.info("Bridge HTTP is up. MT5 connection runs in the background.")
         recorder.start()
+    mt5_service.start_background()
     yield
+    mt5_service.stop_background()
     recorder.stop()
     mt5_service.shutdown()
 
