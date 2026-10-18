@@ -16,6 +16,8 @@ import threading
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
+import ipc_candidates
+
 try:
     import MetaTrader5 as mt5  # type: ignore
     _MT5_AVAILABLE = True
@@ -163,6 +165,14 @@ class MT5Service:
             self._initialized = False
             self._last_error = f"MetaTrader5 library unavailable: {_MT5_IMPORT_ERROR}"
             raise MT5Error(-1, self._last_error)
+        try:
+            extra = ipc_candidates.prepare_initialize()
+        except ValueError as exc:
+            self._initialized = False
+            self._last_error = f"IPC candidate not applied: {exc}"
+            raise MT5Error(-1, self._last_error) from exc
+        if extra:
+            logger.info("IPC candidate servers-dat is on; portable launch requested")
         with _lock:
             # Prefer path + timeout only so an already-matching saved session
             # can be reused without a second login round-trip. On a virgin
@@ -171,6 +181,7 @@ class MT5Service:
             # Keep the path-only timeout moderate so a clean profile fails
             # over to the credential path without a multi-minute hang.
             kwargs: dict[str, Any] = {"timeout": 45_000}
+            kwargs.update(extra)
             if self.terminal_path:
                 kwargs["path"] = self.terminal_path
             ok = mt5.initialize(**kwargs)
