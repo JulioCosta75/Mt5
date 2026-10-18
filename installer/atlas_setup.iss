@@ -165,7 +165,16 @@ begin
     'Enter your MT5 login details so Atlas can connect right after setup.' + #13#10 +
     'They are stored locally on this computer only and are never sent' + #13#10 +
     'anywhere by Atlas. Leave all fields blank to configure later from the' + #13#10 +
-    'dashboard Settings page.');
+    'dashboard Settings page.' + #13#10 + #13#10 +
+    'Install the MetaTrader 5 from your broker (for example Pepperstone),' + #13#10 +
+    'not only the generic MetaQuotes installer. A new generic install does' + #13#10 +
+    'not connect. Sign in to the demo and let the terminal finish opening' + #13#10 +
+    'the account. In Tools, Options, Expert Advisors, turn algorithmic' + #13#10 +
+    'trading on and leave the external Python API enabled. Then close' + #13#10 +
+    'MetaTrader 5. Do not use Run as administrator.' + #13#10 + #13#10 +
+    'Instale o MetaTrader 5 da corretora (por exemplo Pepperstone), nao so' + #13#10 +
+    'o instalador generico da MetaQuotes. Uma instalacao generica nova nao' + #13#10 +
+    'liga. Inicie sessao na demo e deixe o terminal acabar de abrir a conta.');
   MT5Page.Add('MT5 Login (number):', False);
   MT5Page.Add('MT5 Password:', True);
   MT5Page.Add('MT5 Server / Broker (e.g. Darwinex-Live):', False);

@@ -217,11 +217,13 @@ class WizardApp(tk.Tk):
                "  •  Start the Atlas services (bridge + backend)\n"
                "  •  Verify the connection and open the dashboard\n\n"
                "Prerequisites:\n"
-               "  ✓  MetaTrader 5 installed (you do not need to open it first —\n"
-               "     Atlas launches the terminal and logs in with the credentials you enter)\n"
-               "  ✓  After first connect: enable Tools → Options → Expert Advisors →\n"
-               "     \"Allow algorithmic trading\" if Atlas warns that it is off\n"
-               "  ✓  This wizard runs with administrator privileges")
+               "  ✓  The MetaTrader 5 from your broker (for example Pepperstone).\n"
+               "     A new generic MetaQuotes install does not connect.\n"
+               "     Sign in to the demo and let the terminal finish opening the account.\n"
+               "  ✓  Tools → Options → Expert Advisors: algorithmic trading on, and\n"
+               "     \"Disable algorithmic trading via external Python API\" off.\n"
+               "     Then close MetaTrader 5. Do not use Run as administrator.\n"
+               "     Atlas and MetaTrader 5 must run as the same Windows user.")
         tk.Label(self.body, text=msg, fg="#F4F4F5", bg="#0A0A0A",
                  font=("Segoe UI", 10), justify="left").pack(anchor="w")
 

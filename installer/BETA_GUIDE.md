@@ -29,10 +29,17 @@ in the usual place.
 The Atlas icon sits in the system tray. The dashboard is
 `http://127.0.0.1:8001/`.
 
+Use the MetaTrader 5 from your broker (for example Pepperstone), not
+only the generic MetaQuotes installer. A new generic install does not
+connect. Sign in to the **demo** and let the terminal finish opening
+the account.
+
 In MetaTrader 5, turn **Algo Trading** on (toolbar button, green).
-Without it the bridge cannot see the demo account. In Atlas, open
-Settings and use **Save & Connect** if the header still says
-Configuration Mode.
+Open Tools → Options → Expert Advisors and leave **Disable algorithmic
+trading via external Python API** off. Then close MetaTrader 5.
+Start Atlas and MetaTrader 5 as the same Windows user.
+Do not use Run as administrator. In Atlas, open Settings and use
+**Save & Connect** if the header still says Configuration Mode.
 
 The header version should be **v0.3.1**.
 
@@ -92,8 +99,17 @@ não estiver no sítio habitual.
 O ícone do Atlas fica na área de notificação. O painel é
 `http://127.0.0.1:8001/`.
 
-No MetaTrader 5, ligue **Algo Trading** (botão da barra, verde). Sem
-isso a ponte não vê a conta demo. No Atlas, abra Settings e use
+Use o MetaTrader 5 da corretora (por exemplo Pepperstone), não só o
+instalador genérico da MetaQuotes. Uma instalação genérica nova não
+liga. Inicie sessão na conta **demo** e deixe o terminal acabar de
+abrir a conta.
+
+No MetaTrader 5, ligue **Algo Trading** (botão da barra, verde).
+Abra Ferramentas → Opções → Expert Advisors e deixe desligada a opção
+**Disable algorithmic trading via external Python API** (bloquear a
+API Python externa). Depois feche o MetaTrader 5.
+Arranque o Atlas e o MetaTrader 5 com o mesmo utilizador do Windows.
+Não use «Executar como administrador». No Atlas, abra Settings e use
 **Save & Connect** se o cabeçalho ainda disser Configuration Mode.
 
 A versão no cabeçalho deve ser **v0.3.1**.

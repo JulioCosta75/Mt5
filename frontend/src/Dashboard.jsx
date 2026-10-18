@@ -292,15 +292,17 @@ export default function Dashboard() {
             <b>MetaTrader 5 is not connected (<span data-testid="mt5-link-state">{bridgeState || "not_configured"}</span>).</b>
             {" "}Open it and sign in. Atlas keeps trying on its own.
             <ol>
-              <li>Open MetaTrader 5 and sign in to the demo account.</li>
-              <li>Turn Algo Trading on.</li>
+              <li>Install your broker's MetaTrader 5 (for example Pepperstone), not only the generic MetaQuotes installer.</li>
+              <li>Open MetaTrader 5 and sign in to the demo account. Let it finish opening the account.</li>
+              <li>Turn Algo Trading on. In Tools → Options → Expert Advisors, leave Disable algorithmic trading via external Python API off, then close MetaTrader 5.</li>
               <li>{"Wait for the next automatic try, or use Settings → Save & Connect."}</li>
             </ol>
             <b>O MetaTrader 5 não está ligado (<span data-testid="mt5-link-state-pt">{bridgeState || "not_configured"}</span>).</b>
             {" "}Abra-o e inicie sessão. O Atlas volta a tentar sozinho.
             <ol>
-              <li>Abra o MetaTrader 5 e inicie sessão na conta demo.</li>
-              <li>Ligue o Algo Trading.</li>
+              <li>Instale o MetaTrader 5 da corretora (por exemplo Pepperstone), não só o instalador genérico da MetaQuotes.</li>
+              <li>Abra o MetaTrader 5 e inicie sessão na conta demo. Deixe o terminal acabar de abrir a conta.</li>
+              <li>Ligue o Algo Trading. Em Ferramentas → Opções → Expert Advisors, deixe desligada a opção que bloqueia a API Python externa e feche o MetaTrader 5.</li>
               <li>{"Aguarde a nova tentativa automática ou use Settings → Save & Connect."}</li>
             </ol>
           </div>
