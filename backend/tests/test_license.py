@@ -60,6 +60,16 @@ def _lemon_response(valid: bool, status: str | None = None, error: str | None = 
 
 @pytest.fixture
 def isolated_db(tmp_path, monkeypatch):
+    repo = Path(__file__).resolve().parents[2]
+    checkout_envs = [repo / "backend" / ".env", repo / "mt5-bridge" / ".env"]
+    before = {path: path.read_bytes() if path.exists() else None for path in checkout_envs}
+    install = tmp_path / "install"
+    backend = install / "backend"
+    bridge = install / "mt5-bridge"
+    backend.mkdir(parents=True)
+    bridge.mkdir()
+    monkeypatch.setattr(mt5_config, "INSTALL_ROOT", install)
+    monkeypatch.setattr(mt5_config, "BACKEND_DIR", backend)
     db = tmp_path / "atlas.db"
     monkeypatch.setenv("ATLAS_SQLITE_PATH", str(db))
     monkeypatch.setenv("ATLAS_DATA_DIR", str(tmp_path))
@@ -71,7 +81,9 @@ def isolated_db(tmp_path, monkeypatch):
     monkeypatch.delenv("MT5_BRIDGE_TOKENS", raising=False)
     clock = _Clock(T0)
     monkeypatch.setattr(lic, "_now", clock)
-    return db, clock
+    yield db, clock
+    after = {path: path.read_bytes() if path.exists() else None for path in checkout_envs}
+    assert after == before, "license tests must not write .env into the checkout"
 
 
 def _assert_no_key(payload, *keys: str) -> None:
@@ -515,3 +527,31 @@ class TestLicenseEndpoints:
         assert lic_state["pro"] is False
         assert lic_state["accounts_configured"] >= 1
         assert lic_state["can_add_account"] is False
+
+
+def test_windows_apply_writes_env_outside_the_checkout(isolated_db):
+    """The Windows .env writers must follow the patched install root, not the checkout."""
+    cfg = mt5_config.save_config({
+        "login": "12345678",
+        "password": "secret123",
+        "server": "Darwinex-Live",
+        "bridge_port": 8002,
+    })
+    mt5_config._write_bridge_env(cfg)
+    mt5_config._write_backend_env(
+        f"http://127.0.0.1:{cfg['bridge_port']}", cfg["bridge_token"]
+    )
+    install = mt5_config.INSTALL_ROOT
+    bridge_env = (install / "mt5-bridge" / ".env").read_text(encoding="utf-8")
+    backend_env = (install / "backend" / ".env").read_text(encoding="utf-8")
+    assert "MT5_LOGIN=12345678" in bridge_env
+    assert "MT5_PASSWORD=secret123" in bridge_env
+    assert "MT5_SERVER=Darwinex-Live" in bridge_env
+    assert "MT5_BRIDGE_TOKEN=" in backend_env
+    repo = Path(__file__).resolve().parents[2]
+    for relative in ("backend/.env", "mt5-bridge/.env"):
+        path = repo / relative
+        if path.exists():
+            text = path.read_text(encoding="utf-8")
+            assert "secret123" not in text
+            assert "MT5_LOGIN=12345678" not in text

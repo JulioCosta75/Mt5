@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import sys
 import threading
 import time
@@ -49,6 +50,8 @@ def _load_bridge(monkeypatch, tmp_path: Path, **env: str):
     monkeypatch.setenv("BRIDGE_TOKEN", "test-token")
     for key, value in env.items():
         monkeypatch.setenv(key, value)
+    # A checkout mt5-bridge/.env must not mark the bridge configured.
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: False)
     sys.path.insert(0, str(BRIDGE))
     for name in _BRIDGE_MODULES:
         sys.modules.pop(name, None)
@@ -114,6 +117,31 @@ def test_ipc_timeout_schedules_another_attempt(monkeypatch, tmp_path):
         assert password not in text
         assert password not in (body.get("last_error") or "")
         assert "password" not in body
+
+
+def test_stray_dotenv_cannot_mark_the_bridge_configured(monkeypatch, tmp_path):
+    import dotenv
+
+    def plant(*args, **kwargs):
+        os.environ["MT5_LOGIN"] = "12345678"
+        os.environ["MT5_PASSWORD"] = "secret123"
+        os.environ["MT5_SERVER"] = "Darwinex-Live"
+        return True
+
+    monkeypatch.setattr(dotenv, "load_dotenv", plant)
+    mod = _load_bridge(monkeypatch, tmp_path)
+    called = {"n": 0}
+
+    def explode():
+        called["n"] += 1
+        raise AssertionError("initialize should not run when MT5 is not configured")
+
+    mod.mt5_service.initialize = explode
+    with TestClient(mod.app) as client:
+        body = client.get("/health").json()
+    assert body["state"] == "not_configured"
+    assert called["n"] == 0
+    assert "secret123" not in str(body)
 
 
 def test_not_configured_does_not_retry(monkeypatch, tmp_path):
