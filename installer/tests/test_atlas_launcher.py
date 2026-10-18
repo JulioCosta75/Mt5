@@ -203,6 +203,44 @@ def test_open_dashboard_url_shows_message_when_edge_paths_missing_files(
     assert shown == [True]
 
 
+def test_dashboard_opens_when_backend_responds_even_if_bridge_is_slow(tmp_path, monkeypatch):
+    root = _make_fake_root(tmp_path)
+    paths = al.resolve_paths(str(root))
+    launcher = al.Launcher(paths, open_browser=True)
+    opened: list[float] = []
+
+    def _open(force: bool = False) -> bool:
+        opened.append(time.perf_counter())
+        return True
+
+    monkeypatch.setattr(launcher, "open_dashboard", _open)
+
+    def urlopen(url, timeout=0):
+        address = str(url)
+        assert "system/health" not in address
+        assert ":8002" not in address
+        assert address == al.BACKEND_READY_URL
+
+        class _Resp:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        return _Resp()
+
+    import urllib.request
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    started = time.perf_counter()
+    launcher._open_browser_when_ready()
+    assert time.perf_counter() - started < 2
+    assert len(opened) == 1
+
+
 def test_open_url_via_edge_skips_missing_then_uses_next(tmp_path, monkeypatch):
     missing = tmp_path / "missing" / "msedge.exe"
     edge = tmp_path / "msedge.exe"
