@@ -151,6 +151,7 @@ const
   AtlasPyDllName = 'python311.dll';
 
 var
+  MT5Prepare: TOutputMsgWizardPage;
   MT5Page: TInputQueryWizardPage;
   MT5Ready: Boolean;
 
@@ -159,22 +160,22 @@ var
   AnswersSrc, AnswersDst: String;
 begin
   MT5Ready := False;
-  MT5Page := CreateInputQueryPage(wpSelectTasks,
+  MT5Prepare := CreateOutputMsgPage(wpSelectTasks,
+    'Before Atlas',
+    'Do these three steps in MetaTrader 5 first',
+    '1. Install the MetaTrader 5 from your broker (for example Pepperstone), not the generic MetaQuotes installer.' + #13#10 +
+    '2. Open MetaTrader 5 and sign in to the demo account (File → Login to Trade Account).' + #13#10 +
+    '3. Leave MetaTrader 5 open with Algo Trading on.' + #13#10 + #13#10 +
+    '1. Instale o MetaTrader 5 da corretora (por exemplo Pepperstone), não o instalador genérico da MetaQuotes.' + #13#10 +
+    '2. Abra o MetaTrader 5 e entre na conta demo (Ficheiro → Entrar numa Conta de Negociação).' + #13#10 +
+    '3. Deixe o MetaTrader 5 aberto com o Algo Trading ligado.');
+  MT5Page := CreateInputQueryPage(MT5Prepare.ID,
     'MetaTrader 5 Account',
     'Connect Atlas to your MetaTrader 5 account',
     'Enter your MT5 login details so Atlas can connect right after setup.' + #13#10 +
     'They are stored locally on this computer only and are never sent' + #13#10 +
     'anywhere by Atlas. Leave all fields blank to configure later from the' + #13#10 +
-    'dashboard Settings page.' + #13#10 + #13#10 +
-    'Install the MetaTrader 5 from your broker (for example Pepperstone),' + #13#10 +
-    'not only the generic MetaQuotes installer. A new generic install does' + #13#10 +
-    'not connect. Sign in to the demo and let the terminal finish opening' + #13#10 +
-    'the account. In Tools, Options, Expert Advisors, turn algorithmic' + #13#10 +
-    'trading on and leave the external Python API enabled. Then close' + #13#10 +
-    'MetaTrader 5. Do not use Run as administrator.' + #13#10 + #13#10 +
-    'Instale o MetaTrader 5 da corretora (por exemplo Pepperstone), nao so' + #13#10 +
-    'o instalador generico da MetaQuotes. Uma instalacao generica nova nao' + #13#10 +
-    'liga. Inicie sessao na demo e deixe o terminal acabar de abrir a conta.');
+    'dashboard Settings page.');
   MT5Page.Add('MT5 Login (number):', False);
   MT5Page.Add('MT5 Password:', True);
   MT5Page.Add('MT5 Server / Broker (e.g. Darwinex-Live):', False);

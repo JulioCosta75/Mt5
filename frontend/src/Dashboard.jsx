@@ -290,20 +290,22 @@ export default function Dashboard() {
         >
           <div>
             <b>MetaTrader 5 is not connected (<span data-testid="mt5-link-state">{bridgeState || "not_configured"}</span>).</b>
-            {" "}Open it and sign in. Atlas keeps trying on its own.
+            {bridgeState === "ipc_timeout" && (
+              " After you sign in to the demo account, Atlas tries again on its own."
+            )}
             <ol>
-              <li>Install your broker's MetaTrader 5 (for example Pepperstone), not only the generic MetaQuotes installer.</li>
-              <li>Open MetaTrader 5 and sign in to the demo account. Let it finish opening the account.</li>
-              <li>Turn Algo Trading on. In Tools → Options → Expert Advisors, leave Disable algorithmic trading via external Python API off, then close MetaTrader 5.</li>
-              <li>{"Wait for the next automatic try, or use Settings → Save & Connect."}</li>
+              <li>Install the MetaTrader 5 from your broker (for example Pepperstone), not the generic MetaQuotes installer.</li>
+              <li>Open MetaTrader 5 and sign in to the demo account (File → Login to Trade Account).</li>
+              <li>Leave MetaTrader 5 open with Algo Trading on.</li>
             </ol>
             <b>O MetaTrader 5 não está ligado (<span data-testid="mt5-link-state-pt">{bridgeState || "not_configured"}</span>).</b>
-            {" "}Abra-o e inicie sessão. O Atlas volta a tentar sozinho.
+            {bridgeState === "ipc_timeout" && (
+              " Depois de entrar na conta demo, o Atlas volta a tentar sozinho."
+            )}
             <ol>
-              <li>Instale o MetaTrader 5 da corretora (por exemplo Pepperstone), não só o instalador genérico da MetaQuotes.</li>
-              <li>Abra o MetaTrader 5 e inicie sessão na conta demo. Deixe o terminal acabar de abrir a conta.</li>
-              <li>Ligue o Algo Trading. Em Ferramentas → Opções → Expert Advisors, deixe desligada a opção que bloqueia a API Python externa e feche o MetaTrader 5.</li>
-              <li>{"Aguarde a nova tentativa automática ou use Settings → Save & Connect."}</li>
+              <li>Instale o MetaTrader 5 da corretora (por exemplo Pepperstone), não o instalador genérico da MetaQuotes.</li>
+              <li>Abra o MetaTrader 5 e entre na conta demo (Ficheiro → Entrar numa Conta de Negociação).</li>
+              <li>Deixe o MetaTrader 5 aberto com o Algo Trading ligado.</li>
             </ol>
           </div>
         </div>

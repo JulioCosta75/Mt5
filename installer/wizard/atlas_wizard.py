@@ -138,8 +138,8 @@ class WizardApp(tk.Tk):
         self.btn_back.pack(side="left")
         self.btn_next.pack(side="right")
 
-        self.steps = [self.step_welcome, self.step_detect, self.step_creds,
-                      self.step_apply, self.step_verify]
+        self.steps = [self.step_welcome, self.step_prepare, self.step_detect,
+                      self.step_creds, self.step_apply, self.step_verify]
         self.render()
 
     def _apply_theme(self):
@@ -216,14 +216,8 @@ class WizardApp(tk.Tk):
                "  •  Write the configuration files\n"
                "  •  Start the Atlas services (bridge + backend)\n"
                "  •  Verify the connection and open the dashboard\n\n"
-               "Prerequisites:\n"
-               "  ✓  The MetaTrader 5 from your broker (for example Pepperstone).\n"
-               "     A new generic MetaQuotes install does not connect.\n"
-               "     Sign in to the demo and let the terminal finish opening the account.\n"
-               "  ✓  Tools → Options → Expert Advisors: algorithmic trading on, and\n"
-               "     \"Disable algorithmic trading via external Python API\" off.\n"
-               "     Then close MetaTrader 5. Do not use Run as administrator.\n"
-               "     Atlas and MetaTrader 5 must run as the same Windows user.")
+               "The next screen is three steps in MetaTrader 5,\n"
+               "before you enter the demo account.")
         tk.Label(self.body, text=msg, fg="#F4F4F5", bg="#0A0A0A",
                  font=("Segoe UI", 10), justify="left").pack(anchor="w")
 
@@ -246,10 +240,22 @@ class WizardApp(tk.Tk):
             ttk.Entry(self.body, textvariable=self.mt5_terminal_path, width=80).pack(anchor="w", pady=(8, 16), fill="x")
 
         tk.Label(self.body,
-                 text=("Recommended: pick the install Atlas should launch. If left blank,\n"
-                       "the Bridge auto-discovers terminal64.exe. Close any open MT5 window\n"
-                       "before starting Atlas so the bridge can launch a clean session."),
+                 text=("Recommended: pick your broker's MetaTrader 5. If left blank,\n"
+                       "the Bridge auto-discovers terminal64.exe. Leave that terminal\n"
+                       "open, with Algo Trading on, before you continue."),
                  fg="#A1A1AA", bg="#0A0A0A", font=("Segoe UI", 9), justify="left").pack(anchor="w")
+
+    def step_prepare(self):
+        self._title("Before Atlas",
+                    "Do these three steps in MetaTrader 5. Then enter the demo account.")
+        msg = ("1. Install the MetaTrader 5 from your broker (for example Pepperstone), not the generic MetaQuotes installer.\n"
+               "2. Open MetaTrader 5 and sign in to the demo account (File → Login to Trade Account).\n"
+               "3. Leave MetaTrader 5 open with Algo Trading on.\n\n"
+               "1. Instale o MetaTrader 5 da corretora (por exemplo Pepperstone), não o instalador genérico da MetaQuotes.\n"
+               "2. Abra o MetaTrader 5 e entre na conta demo (Ficheiro → Entrar numa Conta de Negociação).\n"
+               "3. Deixe o MetaTrader 5 aberto com o Algo Trading ligado.")
+        tk.Label(self.body, text=msg, fg="#F4F4F5", bg="#0A0A0A",
+                 font=("Segoe UI", 10), justify="left", wraplength=640).pack(anchor="w")
 
     def step_creds(self):
         self._title("MT5 Account Credentials",

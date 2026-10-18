@@ -1,8 +1,15 @@
 # Atlas beta — tester guide
 
+Do these three steps in MetaTrader 5 before Atlas:
+
+1. Install the MetaTrader 5 from your broker (for example Pepperstone), not the generic MetaQuotes installer.
+2. Open MetaTrader 5 and sign in to the demo account (File → Login to Trade Account).
+3. Leave MetaTrader 5 open with Algo Trading on.
+
+If the connection fails, send the logs.
+
 One unsigned installer (`Atlas_Setup.exe`). Windows 10 or 11, 64-bit.
-MetaTrader 5 is already installed and you are logged into a **demo**
-account. Atlas does not promise profits and does not limit losses.
+Atlas does not promise profits and does not limit losses.
 
 Free is one MT5 account. A Pro key is not part of this beta.
 
@@ -29,17 +36,10 @@ in the usual place.
 The Atlas icon sits in the system tray. The dashboard is
 `http://127.0.0.1:8001/`.
 
-Use the MetaTrader 5 from your broker (for example Pepperstone), not
-only the generic MetaQuotes installer. A new generic install does not
-connect. Sign in to the **demo** and let the terminal finish opening
-the account.
-
-In MetaTrader 5, turn **Algo Trading** on (toolbar button, green).
-Open Tools → Options → Expert Advisors and leave **Disable algorithmic
-trading via external Python API** off. Then close MetaTrader 5.
-Start Atlas and MetaTrader 5 as the same Windows user.
-Do not use Run as administrator. In Atlas, open Settings and use
-**Save & Connect** if the header still says Configuration Mode.
+The three steps at the top of this guide come first: the broker's
+MetaTrader 5, a demo sign-in, and Algo Trading left on with the
+terminal open. In Atlas, open Settings and use **Save & Connect** if
+the header still says Configuration Mode.
 
 The header version should be **v0.3.1**.
 
@@ -70,9 +70,16 @@ Uninstall removes the program files. It leaves `data\`, `logs\`, and the
 
 # Atlas beta — guia do tester
 
+Faça estes três passos no MetaTrader 5 antes do Atlas:
+
+1. Instale o MetaTrader 5 da corretora (por exemplo Pepperstone), não o instalador genérico da MetaQuotes.
+2. Abra o MetaTrader 5 e entre na conta demo (Ficheiro → Entrar numa Conta de Negociação).
+3. Deixe o MetaTrader 5 aberto com o Algo Trading ligado.
+
+Se a ligação falhar, envie os logs.
+
 Um instalador sem assinatura (`Atlas_Setup.exe`). Windows 10 ou 11,
-64 bits. O MetaTrader 5 já está instalado e a sessão é uma conta
-**demo**. O Atlas não promete lucros e não limita perdas.
+64 bits. O Atlas não promete lucros e não limita perdas.
 
 Free é uma conta MT5. Esta beta não inclui chave Pro.
 
@@ -99,18 +106,10 @@ não estiver no sítio habitual.
 O ícone do Atlas fica na área de notificação. O painel é
 `http://127.0.0.1:8001/`.
 
-Use o MetaTrader 5 da corretora (por exemplo Pepperstone), não só o
-instalador genérico da MetaQuotes. Uma instalação genérica nova não
-liga. Inicie sessão na conta **demo** e deixe o terminal acabar de
-abrir a conta.
-
-No MetaTrader 5, ligue **Algo Trading** (botão da barra, verde).
-Abra Ferramentas → Opções → Expert Advisors e deixe desligada a opção
-**Disable algorithmic trading via external Python API** (bloquear a
-API Python externa). Depois feche o MetaTrader 5.
-Arranque o Atlas e o MetaTrader 5 com o mesmo utilizador do Windows.
-Não use «Executar como administrador». No Atlas, abra Settings e use
-**Save & Connect** se o cabeçalho ainda disser Configuration Mode.
+Os três passos no início deste guia vêm primeiro: o MetaTrader 5 da
+corretora, a entrada na conta demo, e o Algo Trading ligado com o
+terminal aberto. No Atlas, abra Settings e use **Save & Connect** se o
+cabeçalho ainda disser Configuration Mode.
 
 A versão no cabeçalho deve ser **v0.3.1**.
 
