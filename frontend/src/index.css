@@ -322,6 +322,9 @@ input:focus, select:focus { border-color: var(--bd-focus); }
     line-height: 1.4;
 }
 .config-mode-banner b { color: var(--text-primary); font-weight: 600; }
+.mt5-link-banner { align-items: flex-start; flex-wrap: wrap; }
+.mt5-link-banner ol { margin: 4px 0 0; padding-left: 18px; }
+.mt5-link-banner li { margin: 2px 0; }
 
 .hero-strip {
     display: grid;

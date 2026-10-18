@@ -1,7 +1,33 @@
 import React from "react";
 import { fmt } from "@/lib/api";
 
-export default function KpiTicker({ kpis, className = "" }) {
+export default function KpiTicker({ kpis, className = "", unavailable = false }) {
+  if (unavailable) {
+    return (
+      <div className={`ticker-row ${className}`.trim()} data-testid="kpi-ticker-unavailable">
+        <span className="ticker-item" data-testid="kpi-total-equity">
+          <span className="label">Total Equity</span>
+          <span className="val">Unavailable</span>
+        </span>
+        <span className="ticker-item" data-testid="kpi-daily-pnl">
+          <span className="label">Daily P&amp;L</span>
+          <span className="val">Unavailable</span>
+        </span>
+        <span className="ticker-item" data-testid="kpi-avg-dd">
+          <span className="label">Avg DD</span>
+          <span className="val">Unavailable</span>
+        </span>
+        <span className="ticker-item" data-testid="kpi-open-positions">
+          <span className="label">Open Pos</span>
+          <span className="val">Unavailable</span>
+        </span>
+        <span className="ticker-item" data-testid="kpi-accounts">
+          <span className="label">Accounts</span>
+          <span className="val">Unavailable</span>
+        </span>
+      </div>
+    );
+  }
   if (!kpis) {
     return (
       <div className={`ticker-row ${className}`.trim()} data-testid="kpi-ticker-loading">

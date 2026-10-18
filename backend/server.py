@@ -732,11 +732,13 @@ async def system_health():
                 h = await client.health()
                 info.update({
                     "reachable": True,
+                    "state": h.get("state"),
                     "terminal_connected": h.get("terminal_connected"),
                     "account_logged_in": h.get("account_logged_in"),
                     "login": h.get("login"),
                     "server": h.get("server"),
                     "last_error": h.get("last_error"),
+                    "next_retry_at": h.get("next_retry_at"),
                     "trade_allowed": h.get("trade_allowed"),
                     "message": h.get("message"),
                 })

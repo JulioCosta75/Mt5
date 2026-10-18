@@ -151,10 +151,13 @@ export default function Dashboard() {
   const [mt5Status, setMt5Status] = useState(null);
   const [knowledgeEnabled, setKnowledgeEnabled] = useState(false);
   const [healthMode, setHealthMode] = useState(null);
+  const [systemHealth, setSystemHealth] = useState(null);
   const selectedIdRef = useRef(null);
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
 
   const isSample = isSamplePresentation(mt5Status, healthMode);
+  const bridgeState = systemHealth?.bridge?.state || null;
+  const mt5Offline = healthMode === "mt5" && bridgeState !== "connected";
   const loadGlobals = useCallback(async () => {
     const settled = await Promise.allSettled([api.kpis(), api.accounts(), api.alerts()]);
     const kpis = settled[0].status === "fulfilled" ? settled[0].value : null;
@@ -206,9 +209,15 @@ export default function Dashboard() {
       }
       try {
         const h = await api.systemHealth();
-        if (!cancelled) setHealthMode(h.mode || null);
+        if (!cancelled) {
+          setSystemHealth(h);
+          setHealthMode(h.mode || null);
+        }
       } catch (e) {
-        if (!cancelled) setHealthMode(null);
+        if (!cancelled) {
+          setSystemHealth(null);
+          setHealthMode(null);
+        }
       }
       try {
         const k = await api.knowledgeStatus();
@@ -218,6 +227,27 @@ export default function Dashboard() {
       }
     })();
     return () => { cancelled = true; };
+  }, []);
+
+  // Keep the MT5 banner in step with the bridge. The connect loop retries
+  // on its own; this only re-reads status.
+  useEffect(() => {
+    let cancelled = false;
+    const pull = async () => {
+      try {
+        const h = await api.systemHealth();
+        if (cancelled) return;
+        setSystemHealth(h);
+        setHealthMode(h.mode || null);
+      } catch (e) {
+        /* keep the last status; a missed poll is not a disconnect */
+      }
+    };
+    const id = setInterval(pull, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, []);
 
   useEffect(() => {
@@ -253,7 +283,30 @@ export default function Dashboard() {
   return (
     <div className="App" data-testid="dashboard">
       <Header refreshing={refreshing} onRefresh={onRefresh} sessionId={sessionId} activeTab={activeTab} onTabChange={setActiveTab} buildInfo={buildInfo} showRevolution={knowledgeEnabled} />
-      {isSample && (
+      {mt5Offline && (
+        <div
+          data-testid="mt5-link-banner"
+          className="config-mode-banner mt5-link-banner"
+        >
+          <div>
+            <b>MetaTrader 5 is not connected (<span data-testid="mt5-link-state">{bridgeState || "not_configured"}</span>).</b>
+            {" "}Open it and sign in. Atlas keeps trying on its own.
+            <ol>
+              <li>Open MetaTrader 5 and sign in to the demo account.</li>
+              <li>Turn Algo Trading on.</li>
+              <li>{"Wait for the next automatic try, or use Settings → Save & Connect."}</li>
+            </ol>
+            <b>O MetaTrader 5 não está ligado (<span data-testid="mt5-link-state-pt">{bridgeState || "not_configured"}</span>).</b>
+            {" "}Abra-o e inicie sessão. O Atlas volta a tentar sozinho.
+            <ol>
+              <li>Abra o MetaTrader 5 e inicie sessão na conta demo.</li>
+              <li>Ligue o Algo Trading.</li>
+              <li>{"Aguarde a nova tentativa automática ou use Settings → Save & Connect."}</li>
+            </ol>
+          </div>
+        </div>
+      )}
+      {isSample && !mt5Offline && (
         <div
           data-testid="config-mode-banner"
           className="config-mode-banner"
@@ -276,11 +329,11 @@ export default function Dashboard() {
       )}
       {activeTab === "Overview" ? (
         <>
-          <OverviewHero kpis={kpis} mt5Status={mt5Status} isSample={isSample} />
-          <KpiTicker kpis={kpis} className="ticker-row-compact" />
+          <OverviewHero kpis={kpis} mt5Status={mt5Status} isSample={isSample} unavailable={mt5Offline} />
+          <KpiTicker kpis={kpis} className="ticker-row-compact" unavailable={mt5Offline} />
         </>
       ) : (
-        <KpiTicker kpis={kpis} />
+        <KpiTicker kpis={kpis} unavailable={mt5Offline} />
       )}
 
       {loading ? (
@@ -346,7 +399,9 @@ export default function Dashboard() {
                 ) : (
                   <>
                     <Row label="API Latency" value={<span className="cell-warn" data-testid="system-api-latency">Unavailable<span className="kbd" style={{ marginLeft: 6 }}>C7</span></span>} />
-                    <Row label="MT5 Bridge" value={<span className="cell-pos">CONNECTED</span>} />
+                    <Row label="MT5 Bridge" value={mt5Offline
+                      ? <span className="cell-warn" data-testid="system-mt5-bridge-state">{bridgeState || "not_configured"}</span>
+                      : <span className="cell-pos">CONNECTED</span>} />
                     <Row label="Risk Engine" value={<span className="cell-pos">ACTIVE</span>} />
                     <Row label="Telegram Notif" value={<span className="cell-pos">ENABLED</span>} />
                     <Row label="Last Heartbeat" value={kpis ? fmt.timeShort(kpis.server_time) : "—"} />

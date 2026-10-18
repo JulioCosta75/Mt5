@@ -41,19 +41,23 @@ function HeroCard({ testId, icon, label, word, wordClass, detail, fill }) {
   );
 }
 
-export default function OverviewHero({ kpis, mt5Status, isSample = false }) {
-  const health = healthFromKpis(kpis);
-  const mt5 = mt5FromStatus(mt5Status, isSample);
+export default function OverviewHero({ kpis, mt5Status, isSample = false, unavailable = false }) {
+  const health = unavailable
+    ? { word: "Unavailable", signal: "cell-warn", fill: 0, detail: "MetaTrader 5 is not connected." }
+    : healthFromKpis(kpis);
+  const mt5 = unavailable
+    ? { word: "OFFLINE", signal: "cell-warn", fill: 8, detail: "MetaTrader 5 is not connected." }
+    : mt5FromStatus(mt5Status, isSample);
   const live = kpis?.accounts_live;
   const total = kpis?.accounts_total;
-  const liveKnown = live !== null && live !== undefined && total;
+  const liveKnown = !unavailable && live !== null && live !== undefined && total;
   const accountsFill = liveKnown && Number(total) > 0
     ? Math.min(100, Math.max(0, (Number(live) / Number(total)) * 100))
     : 0;
-  const accountsWord = liveKnown ? String(live) : "—";
-  const accountsDetail = liveKnown
-    ? `${live} of ${total} live`
-    : "Waiting for accounts feed";
+  const accountsWord = unavailable ? "Unavailable" : (liveKnown ? String(live) : "—");
+  const accountsDetail = unavailable
+    ? "Unavailable"
+    : (liveKnown ? `${live} of ${total} live` : "Waiting for accounts feed");
 
   return (
     <section className="hero-strip" data-testid="overview-hero">
