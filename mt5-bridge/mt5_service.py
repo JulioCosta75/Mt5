@@ -38,6 +38,33 @@ class MT5Error(RuntimeError):
         self.message = message
 
 
+def format_login_error(code: int, err: Any) -> str:
+    """User-facing login failure text. Keeps technical codes for support."""
+    if code == -10005:
+        return (
+            "login failed: IPC timeout (-10005). "
+            "Close MetaTrader 5 completely, then restart the bridge "
+            "so it can launch and log in cold. On older terminal "
+            "builds, ensure a matching saved session or upgrade MT5."
+        )
+    if code == -6:
+        return (
+            "Não foi possível entrar na conta MT5. Confirma o login, a password "
+            "e o nome do servidor em Definições — um dos três está incorreto "
+            "ou a password expirou."
+        )
+    if code in (-2, -4):
+        return (
+            "Servidor MT5 não encontrado. Confirma o nome exato do servidor em "
+            "Definições (ex: PepperstoneUK-Demo) — verifica maiúsculas e o nome "
+            "completo da corretora."
+        )
+    return (
+        "Não foi possível ligar à MT5. "
+        f"Detalhe técnico para suporte: {err}"
+    )
+
+
 def _check(result, action: str):
     if result is None or result is False:
         err = mt5.last_error()
@@ -154,16 +181,13 @@ class MT5Service:
                 err = mt5.last_error()
                 code = err[0] if isinstance(err, tuple) else -1
                 mt5.shutdown()
+                self._last_error = format_login_error(code, err)
+                # Preserve configured login in the IPC-timeout guidance (same as before).
                 if code == -10005:
                     self._last_error = (
-                        "login failed: IPC timeout (-10005). "
-                        "Close MetaTrader 5 completely, then restart the bridge "
-                        "so it can launch and log in cold. On older terminal "
-                        "builds, ensure a matching saved session or upgrade MT5 "
+                        f"{self._last_error} "
                         f"(configured MT5_LOGIN={self.login})."
                     )
-                else:
-                    self._last_error = f"login failed: {err}"
                 raise MT5Error(code, self._last_error)
             self._initialized = True
             self._last_error = None
