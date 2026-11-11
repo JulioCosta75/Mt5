@@ -14,6 +14,8 @@ import SupervisionPanel from "@/components/SupervisionPanel";
 import { StrategiesView, RiskView, ReportsView, AuditView } from "@/components/TabViews";
 import RevolutionView from "@/pages/Revolution";
 
+const MT5_STATUS_POLL_MS = 30000;
+
 const TABS = ["Overview", "Strategies", "Risk", "Reports", "Audit"];
 
 function Header({ refreshing, onRefresh, sessionId, activeTab, onTabChange, buildInfo, showRevolution }) {
@@ -188,6 +190,23 @@ export default function Dashboard() {
     return () => { cancelled = true; };
   }, [loadGlobals]);
 
+  // MT5 connection status follows the backend's bridge measurements, so it is
+  // re-read on mount, on every feed refresh and every 30 s.
+  const loadMt5Status = useCallback(async () => {
+    try {
+      const c = await api.getMt5Config();
+      setMt5Status(c.status || null);
+    } catch (e) {
+      setMt5Status(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMt5Status();
+    const id = setInterval(loadMt5Status, MT5_STATUS_POLL_MS);
+    return () => clearInterval(id);
+  }, [loadMt5Status]);
+
   // running build/version + connection mode (verifies which deployment is live)
   useEffect(() => {
     let cancelled = false;
@@ -197,12 +216,6 @@ export default function Dashboard() {
         if (!cancelled) setBuildInfo(v);
       } catch (e) {
         if (!cancelled) setBuildInfo(null);
-      }
-      try {
-        const c = await api.getMt5Config();
-        if (!cancelled) setMt5Status(c.status || null);
-      } catch (e) {
-        if (!cancelled) setMt5Status(null);
       }
       try {
         const h = await api.systemHealth();
@@ -235,7 +248,7 @@ export default function Dashboard() {
       } catch (_) {
         /* live MT5: ignore */
       }
-      await loadGlobals();
+      await Promise.all([loadGlobals(), loadMt5Status()]);
       const sid = selectedIdRef.current;
       if (sid) await loadAccountDetail(sid);
     } finally {

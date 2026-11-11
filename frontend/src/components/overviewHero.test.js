@@ -22,6 +22,8 @@ describe("Overview hero uses existing KPI / MT5 status fields", () => {
 
   test("MT5 card follows existing config states", () => {
     expect(mt5FromStatus({ state: "connected" }, false).word).toBe("CONNECTED");
+    expect(mt5FromStatus({ state: "bridge_down" }, false).word).toBe("BRIDGE DOWN");
+    expect(mt5FromStatus({ state: "bridge_down" }, false).signal).toBe("cell-neg");
     expect(mt5FromStatus({ state: "pending_restart" }, false).word).toBe("PENDING");
     expect(mt5FromStatus({ state: "unconfigured" }, false).word).toBe("OFFLINE");
     expect(mt5FromStatus({ state: "connected" }, true).word).toBe("OFFLINE");

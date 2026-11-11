@@ -136,6 +136,7 @@ export default function Settings() {
   const state = status?.state || "unconfigured";
   const stateMeta = {
     connected: { label: "Connected", color: "var(--sig-pos)", desc: "Atlas is connected to your MetaTrader 5 account." },
+    bridge_down: { label: "Bridge down", color: "var(--sig-neg)", desc: "Atlas is configured for MetaTrader 5, but the bridge is not responding. Check that MT5 is running and logged in." },
     pending_restart: { label: "Applying / Pending restart", color: "var(--sig-warn)", desc: "Settings saved. Atlas is restarting to connect to MetaTrader 5." },
     unconfigured: { label: "Configuration Mode", color: "var(--sig-warn)", desc: "No MetaTrader 5 account connected yet. Enter your credentials below." },
   }[state] || { label: state, color: "var(--text-secondary)", desc: "" };

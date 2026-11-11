@@ -444,6 +444,10 @@ def _supervision_snapshot() -> dict:
     return _supervision_snapshot_from_accounts(ACCOUNTS, bridge_ok=None)
 
 
+# Last bridge reachability measured by _mt5_live_accounts (None = not measured yet).
+_LAST_BRIDGE_OK: Optional[bool] = None
+
+
 async def _mt5_live_accounts() -> tuple[list[dict], bool]:
     """Fetch enriched accounts from configured MT5 bridge(s). Returns (accounts, bridge_ok)."""
     import httpx
@@ -519,6 +523,8 @@ async def _mt5_live_accounts() -> tuple[list[dict], bool]:
         except Exception as e:  # noqa: BLE001
             logging.getLogger("server").warning("cache account fallback failed: %s", e)
 
+    global _LAST_BRIDGE_OK
+    _LAST_BRIDGE_OK = any_reachable
     return out, any_reachable
 
 
@@ -775,7 +781,9 @@ class MT5ConfigIn(BaseModel):
 
 def _connection_status(cfg: dict) -> dict:
     configured = bool(cfg.get("configured"))
-    if MT5_MODE:
+    if MT5_MODE and _LAST_BRIDGE_OK is False:
+        state = "bridge_down"      # MT5 mode, but the last bridge check failed
+    elif MT5_MODE:
         state = "connected"        # backend started with a bridge URL
     elif configured:
         state = "pending_restart"  # saved; waiting for services to pick it up
