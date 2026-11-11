@@ -781,6 +781,11 @@ def _connection_status(cfg: dict) -> dict:
         state = "pending_restart"  # saved; waiting for services to pick it up
     else:
         state = "unconfigured"     # Configuration Mode
+    warnings = []
+    if configured and not str(cfg.get("terminal_path") or "").strip():
+        # Without a path the bridge cannot start MT5; it only works while the
+        # terminal is already open and logged in.
+        warnings.append("terminal_path_missing")
     return {
         "mode": "mt5" if MT5_MODE else "mock",
         "configured": configured,
@@ -790,6 +795,7 @@ def _connection_status(cfg: dict) -> dict:
         "login": cfg.get("login") or None,
         "bridge_port": cfg.get("bridge_port"),
         "updated_at": cfg.get("updated_at"),
+        "warnings": warnings,
     }
 
 

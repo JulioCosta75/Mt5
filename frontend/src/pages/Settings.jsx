@@ -145,6 +145,9 @@ export default function Settings() {
   const showFreeLimitNotice = Boolean(
     status?.configured && license && !license.pro
   );
+  const terminalPathMissing = Boolean(
+    status?.warnings?.includes("terminal_path_missing")
+  );
 
   const inputStyle = {
     width: "100%", padding: "9px 11px", background: "var(--bg-panel)", color: "var(--text-primary)",
@@ -209,6 +212,12 @@ export default function Settings() {
 
           <label style={labelStyle}>Terminal path (optional)</label>
           <input data-testid="mt5-terminal" style={inputStyle} value={form.terminal_path} onChange={setField("terminal_path")} placeholder="C:\\Program Files\\MetaTrader 5\\terminal64.exe" />
+          {terminalPathMissing && (
+            <p data-testid="mt5-terminal-warning" role="status" style={{ color: "var(--sig-warn)", fontSize: 12, margin: "6px 0 0" }}>
+              Terminal path is empty. Atlas only works if MetaTrader 5 is already open and logged in.
+              Set the path to terminal64.exe so the bridge can start it.
+            </p>
+          )}
 
           <label style={labelStyle}>Bridge port</label>
           <input data-testid="mt5-port" style={inputStyle} value={form.bridge_port} onChange={setField("bridge_port")} placeholder="8002" inputMode="numeric" />
