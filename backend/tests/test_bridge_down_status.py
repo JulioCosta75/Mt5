@@ -44,3 +44,18 @@ def test_live_accounts_records_bridge_result(monkeypatch):
     accounts, ok = asyncio.run(server._mt5_live_accounts())
     assert ok is False
     assert server._LAST_BRIDGE_OK is False
+
+
+def test_status_follows_failure_then_recovery(monkeypatch):
+    """The config endpoint reflects each new bridge measurement (down, then back up)."""
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(server, "MT5_MODE", True)
+    monkeypatch.setattr(server._mt5cfg, "load", lambda: dict(CFG))
+    client = TestClient(server.app)
+
+    monkeypatch.setattr(server, "_LAST_BRIDGE_OK", False)
+    assert client.get("/api/mt5/config").json()["status"]["state"] == "bridge_down"
+
+    monkeypatch.setattr(server, "_LAST_BRIDGE_OK", True)
+    assert client.get("/api/mt5/config").json()["status"]["state"] == "connected"
