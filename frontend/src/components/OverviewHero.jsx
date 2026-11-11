@@ -21,6 +21,9 @@ export function mt5FromStatus(mt5Status, isSample) {
   if (state === "pending_restart") {
     return { word: "PENDING", signal: "cell-warn", fill: 50, detail: "Settings saved. Atlas is restarting." };
   }
+  if (state === "bridge_down") {
+    return { word: "BRIDGE DOWN", signal: "cell-neg", fill: 15, detail: "MetaTrader 5 is not responding. Data shown may be outdated." };
+  }
   if (state === "connected") {
     return { word: "CONNECTED", signal: "cell-pos", fill: 100, detail: "Atlas is connected to your MetaTrader 5 account." };
   }
