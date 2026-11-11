@@ -1217,10 +1217,10 @@ async def healthcheck_page():
 # Must be mounted LAST so /api/* routes take precedence.
 # ------------------------------------------------------------
 if os.environ.get("SERVE_FRONTEND", "false").lower() == "true":
-    from fastapi.staticfiles import StaticFiles
+    from spa_static import SPAStaticFiles
     fb = Path(os.environ.get("FRONTEND_BUILD", str(ROOT_DIR / ".." / "frontend_build")))
     if (fb / "index.html").exists():
-        app.mount("/", StaticFiles(directory=str(fb), html=True), name="frontend")
+        app.mount("/", SPAStaticFiles(directory=str(fb), html=True), name="frontend")
         logging.getLogger("server").info("Serving frontend from %s", fb)
     else:
         logging.getLogger("server").warning("SERVE_FRONTEND=true but %s/index.html missing", fb)
