@@ -80,9 +80,11 @@ def _save(cfg: dict) -> None:
 
 
 def masked(cfg: dict) -> dict:
-    """Config safe to send to the browser — password is never returned."""
-    out = {k: cfg.get(k) for k in DEFAULTS if k != "password"}
+    """Config safe to send to the browser — password and bridge token are never returned."""
+    secret = {"password", "bridge_token"}
+    out = {k: cfg.get(k) for k in DEFAULTS if k not in secret}
     out["password_set"] = bool(cfg.get("password"))
+    out["bridge_token_set"] = bool(cfg.get("bridge_token"))
     return out
 
 
