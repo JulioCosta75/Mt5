@@ -19,6 +19,7 @@ anywhere itself.
 from __future__ import annotations
 
 import json
+import ntpath
 import os
 import secrets
 import subprocess
@@ -111,6 +112,11 @@ def licensed_bridge_urls(urls: list) -> list:
     return apply_account_cap(list(urls))
 
 
+# MetaTrader 5 terminal executables the bridge can launch. MetaEditor and
+# other tools in the same folder are rejected.
+_TERMINAL_EXECUTABLES = {"terminal64.exe", "terminal.exe"}
+
+
 def validate(payload: dict) -> None:
     login = str(payload.get("login", "")).strip()
     if not login.isdigit():
@@ -119,6 +125,15 @@ def validate(payload: dict) -> None:
         raise ConfigError("MT5 password is required.")
     if not str(payload.get("server", "")).strip():
         raise ConfigError("MT5 server / broker is required (e.g. Darwinex-Live).")
+    terminal_path = str(payload.get("terminal_path", "") or "").strip().strip('"').strip()
+    if terminal_path:
+        name = ntpath.basename(terminal_path).lower()
+        if name not in _TERMINAL_EXECUTABLES:
+            raise ConfigError(
+                "Terminal path must point to terminal64.exe (the MetaTrader 5 terminal), "
+                f"not {ntpath.basename(terminal_path) or 'a folder'}. "
+                "Leave it empty if MetaTrader 5 is always open."
+            )
     port = payload.get("bridge_port", 8002)
     try:
         port_i = int(port)
