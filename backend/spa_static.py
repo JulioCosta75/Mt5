@@ -23,7 +23,8 @@ class SPAStaticFiles(StaticFiles):
 
 
 def _is_client_route(path: str) -> bool:
-    clean = path.strip("/")
+    # Starlette builds this path with os.path, so on Windows it uses "\\".
+    clean = path.replace("\\", "/").strip("/")
     if clean == "api" or clean.startswith("api/"):
         return False
     last = clean.rsplit("/", 1)[-1]

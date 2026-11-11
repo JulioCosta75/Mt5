@@ -57,7 +57,18 @@ def test_missing_asset_stays_404(client):
 
 @pytest.mark.parametrize(
     ("path", "expected"),
-    [("settings", True), ("a/b", True), ("api", False), ("api/x", False), ("x.js", False), ("static/a.css", False)],
+    [
+        ("settings", True),
+        ("a/b", True),
+        ("api", False),
+        ("api/x", False),
+        ("x.js", False),
+        ("static/a.css", False),
+        # Windows-normalized paths from StaticFiles.get_path()
+        ("api\\does-not-exist", False),
+        ("reports\\123", True),
+        ("static\\a.css", False),
+    ],
 )
 def test_is_client_route(path, expected):
     assert _is_client_route(path) is expected
