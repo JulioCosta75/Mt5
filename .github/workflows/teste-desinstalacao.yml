@@ -10,7 +10,7 @@ on:
 jobs:
   desinstalar:
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with: { ref: main, path: antigo }
@@ -28,7 +28,8 @@ jobs:
         shell: pwsh
         run: |
           $app = "$env:LOCALAPPDATA\Atlas"
-          $p = Start-Process antigo\installer\dist\Atlas_Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/MERGETASKS="!openbrowser,!desktopicon"',"/LOG=$env:RUNNER_TEMP\1_instalar_antigo.log" -Wait -PassThru
+          $p = Start-Process antigo\installer\dist\Atlas_Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/MERGETASKS="!openbrowser,!desktopicon"',"/LOG=$env:RUNNER_TEMP\1_instalar_antigo.log" -PassThru
+          if (-not $p.WaitForExit(900000)) { 'instalador sem terminar ao fim de 15 min'; exit 1 }
           "codigo de saida: $($p.ExitCode)"
           if ($p.ExitCode -ne 0) { exit 1 }
           for ($i = 0; $i -lt 24 -and -not (Test-Path "$app\data\atlas.db"); $i++) { Start-Sleep 5 }
@@ -40,7 +41,8 @@ jobs:
         shell: pwsh
         run: |
           $app = "$env:LOCALAPPDATA\Atlas"
-          $p = Start-Process novo\installer\dist\Atlas_Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/MERGETASKS="!openbrowser,!desktopicon"',"/LOG=$env:RUNNER_TEMP\2_atualizar.log" -Wait -PassThru
+          $p = Start-Process novo\installer\dist\Atlas_Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/MERGETASKS="!openbrowser,!desktopicon"',"/LOG=$env:RUNNER_TEMP\2_atualizar.log" -PassThru
+          if (-not $p.WaitForExit(900000)) { 'instalador sem terminar ao fim de 15 min'; exit 1 }
           "codigo de saida: $($p.ExitCode)"
           if ($p.ExitCode -ne 0) { exit 1 }
           Start-Sleep 30
@@ -51,7 +53,7 @@ jobs:
         shell: pwsh
         run: |
           $app = "$env:LOCALAPPDATA\Atlas"
-          Start-Process "$app\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/LOG=$env:RUNNER_TEMP\3_desinstalar.log" -Wait
+          Start-Process "$app\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/LOG=$env:RUNNER_TEMP\3_desinstalar.log" -PassThru | Out-Null
           # O desinstalador copia-se para uma pasta temporária e termina logo; espera pela cópia.
           for ($i = 0; $i -lt 60; $i++) {
             $vivo = Get-Process | Where-Object { $_.ProcessName -like '_iu*' -or $_.ProcessName -like 'unins*' }
@@ -79,7 +81,8 @@ jobs:
         shell: pwsh
         run: |
           $app = "$env:LOCALAPPDATA\Atlas"
-          $p = Start-Process novo\installer\dist\Atlas_Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/MERGETASKS="!openbrowser,!desktopicon"',"/LOG=$env:RUNNER_TEMP\4_reinstalar.log" -Wait -PassThru
+          $p = Start-Process novo\installer\dist\Atlas_Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/MERGETASKS="!openbrowser,!desktopicon"',"/LOG=$env:RUNNER_TEMP\4_reinstalar.log" -PassThru
+          if (-not $p.WaitForExit(900000)) { 'instalador sem terminar ao fim de 15 min'; exit 1 }
           if ($p.ExitCode -ne 0) { exit 1 }
           if (-not (Test-Path "$app\data\marcador_antigo.txt")) { 'FAIL dados perdidos na reinstalação'; exit 1 }
           'RESULTADO: PASS (reinstalação encontrou os dados)'
