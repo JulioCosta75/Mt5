@@ -540,3 +540,88 @@ begin
   DeleteFile(ExpandConstant('{userstartup}\Atlas.lnk'));
   Result := True;
 end;
+
+// ---------------------------------------------------------------------------
+// Keep operator data across uninstall, whatever older installs recorded.
+//
+// The uninstall log accumulates entries from EVERY version ever installed
+// over this folder. Builds before the Free/Pro installer registered
+// {app}\data and {app}\logs without uninsneveruninstall and listed them in
+// [UninstallDelete], so a later uninstall still deleted them (seen on the
+// founder's Windows test, 2026-11-12). The [Dirs] flag above cannot undo
+// those old entries. Instead, move both folders out of {app} before the
+// uninstaller removes files, and move them back afterwards.
+// ---------------------------------------------------------------------------
+var
+  KeepRoot: String;
+
+function KeepRootPath(): String;
+begin
+  // Sibling of {app} on the same volume, so RenameFile is a cheap move.
+  Result := ExpandConstant('{localappdata}\Atlas.keep-') +
+            GetDateTimeString('yyyymmdd-hhnnss', #0, #0);
+end;
+
+procedure MoveOutIfPresent(const Name: String);
+var
+  Src, Dst: String;
+begin
+  Src := ExpandConstant('{app}\') + Name;
+  Dst := KeepRoot + '\' + Name;
+  if DirExists(Src) then
+  begin
+    if not RenameFile(Src, Dst) then
+      Log('Atlas keep: could not move ' + Src + ' to ' + Dst);
+  end;
+end;
+
+function MoveBackIfKept(const Name: String): Boolean;
+var
+  Src, Dst: String;
+begin
+  Result := True;
+  Src := KeepRoot + '\' + Name;
+  Dst := ExpandConstant('{app}\') + Name;
+  if not DirExists(Src) then Exit;
+  if DirExists(Dst) then
+  begin
+    // Never overwrite: leave the kept copy where it is for the operator.
+    Result := False;
+    Exit;
+  end;
+  Result := RenameFile(Src, Dst);
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Ok: Boolean;
+begin
+  if CurUninstallStep = usUninstall then
+  begin
+    KeepRoot := KeepRootPath();
+    if ForceDirectories(KeepRoot) then
+    begin
+      MoveOutIfPresent('data');
+      MoveOutIfPresent('logs');
+    end
+    else
+    begin
+      Log('Atlas keep: could not create ' + KeepRoot);
+      KeepRoot := '';
+    end;
+  end
+  else if (CurUninstallStep = usPostUninstall) and (KeepRoot <> '') then
+  begin
+    ForceDirectories(ExpandConstant('{app}'));
+    Ok := MoveBackIfKept('data');
+    Ok := MoveBackIfKept('logs') and Ok;
+    if Ok then
+      RemoveDir(KeepRoot)
+    else
+      MsgBox('Atlas was uninstalled. Your data and logs were kept in:' + #13#10 +
+             KeepRoot + #13#10 + #13#10 +
+             'Move the "data" and "logs" folders back into' + #13#10 +
+             ExpandConstant('{app}') + ' before reinstalling, or keep them as a backup.',
+             mbInformation, MB_OK);
+  end;
+end;

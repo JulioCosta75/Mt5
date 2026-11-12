@@ -111,3 +111,34 @@ def test_install_creates_data_and_logs_dirs():
 def test_build_helper_download_url_is_not_packaged():
     files = "\n".join(_section("Files"))
     assert "download_url.py" not in files
+
+
+def _code_section() -> str:
+    return "\n".join(_section("Code"))
+
+
+def test_uninstall_moves_data_and_logs_out_and_back():
+    """Older installs logged data/logs for deletion; the [Code] guard must survive that."""
+    code = _code_section()
+    assert "procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);" in code
+    # Moved out before files are removed, moved back after.
+    assert "CurUninstallStep = usUninstall" in code
+    assert "CurUninstallStep = usPostUninstall" in code
+    assert "MoveOutIfPresent('data');" in code
+    assert "MoveOutIfPresent('logs');" in code
+    assert "MoveBackIfKept('data')" in code
+    assert "MoveBackIfKept('logs')" in code
+    # Same volume as {app} so the move is a rename, never a copy+delete.
+    assert "{localappdata}\\Atlas.keep-" in code
+
+
+def test_uninstall_keep_never_overwrites_and_tells_operator():
+    code = _code_section()
+    body = code.split("function MoveBackIfKept", 1)[1].split("end;\n\nprocedure", 1)[0]
+    assert "if DirExists(Dst) then" in body
+    assert "Result := False;" in body
+    assert "kept in:" in code  # message shows where the data was kept
+
+
+def test_uninstall_keep_has_single_handler():
+    assert ISS_TEXT.count("procedure CurUninstallStepChanged") == 1
