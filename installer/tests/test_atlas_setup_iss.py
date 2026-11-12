@@ -111,3 +111,63 @@ def test_install_creates_data_and_logs_dirs():
 def test_build_helper_download_url_is_not_packaged():
     files = "\n".join(_section("Files"))
     assert "download_url.py" not in files
+
+
+def _code_section() -> str:
+    return "\n".join(_section("Code"))
+
+
+def _func(code: str, header: str) -> str:
+    body = code.split(header, 1)[1]
+    return body.split("\nend;", 1)[0]
+
+
+def test_uninstall_moves_data_out_before_deletion_or_cancels():
+    """Older installs logged data/logs for deletion; preservation must happen first."""
+    code = _code_section()
+    init = _func(code, "function InitializeUninstall(): Boolean;")
+    assert "Result := PreserveOperatorData();" in init
+    preserve = _func(code, "function PreserveOperatorData(): Boolean;")
+    assert "MoveOut('data', KeptData)" in preserve
+    assert "MoveOut('logs', KeptLogs)" in preserve
+    # Any failure cancels the uninstall (Result stays False) after undoing moves.
+    assert "Result := False;" in preserve
+    assert "RestoreKeptData();" in preserve
+    assert "uninstall was cancelled" in preserve
+
+
+def test_keep_root_is_fresh_and_on_same_volume():
+    code = _code_section()
+    reserve = _func(code, "function ReserveKeepRoot(): Boolean;")
+    assert "{localappdata}\\Atlas.keep-" in reserve
+    assert "(not DirExists(Candidate))" in reserve
+    assert "CreateDir(Candidate)" in reserve
+    assert "ForceDirectories" not in reserve
+
+
+def test_restore_only_what_was_moved_and_never_overwrites():
+    code = _code_section()
+    back = _func(code, "function MoveBack(const Name: String; Kept: Boolean): Boolean;")
+    assert "if not Kept then Exit;" in back
+    assert "if DirExists(Dst) then" in back
+    restore = _func(code, "procedure RestoreKeptData();")
+    assert "kept in:" in restore
+    assert "KeepRoot := '';" in restore
+
+
+def test_restore_runs_after_uninstall_and_after_cancelled_confirmation():
+    code = _code_section()
+    deinit = _func(code, "procedure DeinitializeUninstall();")
+    assert "RestoreKeptData();" in deinit
+    assert ISS_TEXT.count("procedure DeinitializeUninstall") == 1
+    assert "CurUninstallStepChanged" not in ISS_TEXT
+
+
+def test_helpers_declared_before_initialize_uninstall():
+    order = [
+        ISS_TEXT.index("function ReserveKeepRoot"),
+        ISS_TEXT.index("procedure RestoreKeptData"),
+        ISS_TEXT.index("function PreserveOperatorData"),
+        ISS_TEXT.index("function InitializeUninstall"),
+    ]
+    assert order == sorted(order)

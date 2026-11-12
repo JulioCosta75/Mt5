@@ -523,6 +523,132 @@ begin
     Result := '';
 end;
 
+// ---------------------------------------------------------------------------
+// Keep operator data across uninstall, whatever older installs recorded.
+//
+// The uninstall log accumulates entries from EVERY version ever installed
+// over this folder. Builds before the Free/Pro installer registered
+// {app}\data and {app}\logs without uninsneveruninstall and listed them in
+// [UninstallDelete], so a later uninstall still deleted them (seen on the
+// founder's Windows test, 2026-11-12). The [Dirs] flag above cannot undo
+// those old entries.
+//
+// So, before anything is deleted (InitializeUninstall, after Atlas has been
+// stopped), both folders are moved to a NEW sibling folder reserved for this
+// run. If that cannot be done safely, the uninstall is cancelled and nothing
+// is deleted. DeinitializeUninstall then moves back only the folders this
+// run moved, never overwriting.
+// ---------------------------------------------------------------------------
+var
+  KeepRoot: String;
+  KeptData, KeptLogs: Boolean;
+
+function ReserveKeepRoot(): Boolean;
+var
+  Base, Candidate: String;
+  N: Integer;
+begin
+  Result := False;
+  KeepRoot := '';
+  Base := ExpandConstant('{localappdata}\Atlas.keep-') +
+          GetDateTimeString('yyyymmdd-hhnnss', #0, #0);
+  for N := 0 to 99 do
+  begin
+    if N = 0 then
+      Candidate := Base
+    else
+      Candidate := Base + '-' + IntToStr(N);
+    // Only a folder that did not exist and that we create now is ours.
+    if (not DirExists(Candidate)) and (not FileExists(Candidate)) and
+       CreateDir(Candidate) then
+    begin
+      KeepRoot := Candidate;
+      Result := True;
+      Exit;
+    end;
+  end;
+end;
+
+function MoveOut(const Name: String; var Kept: Boolean): Boolean;
+var
+  Src: String;
+begin
+  Kept := False;
+  Src := ExpandConstant('{app}\') + Name;
+  if not DirExists(Src) then
+  begin
+    Result := True;  // nothing to protect
+    Exit;
+  end;
+  Kept := RenameFile(Src, KeepRoot + '\' + Name);
+  Result := Kept;
+end;
+
+function MoveBack(const Name: String; Kept: Boolean): Boolean;
+var
+  Src, Dst: String;
+begin
+  Result := True;
+  if not Kept then Exit;           // only what this run moved
+  Src := KeepRoot + '\' + Name;
+  Dst := ExpandConstant('{app}\') + Name;
+  if DirExists(Dst) then
+  begin
+    Result := False;               // never overwrite; copy stays in KeepRoot
+    Exit;
+  end;
+  Result := RenameFile(Src, Dst);
+end;
+
+procedure RestoreKeptData();
+begin
+  if KeepRoot = '' then Exit;
+  ForceDirectories(ExpandConstant('{app}'));
+  if MoveBack('data', KeptData) and MoveBack('logs', KeptLogs) then
+    RemoveDir(KeepRoot)
+  else
+    MsgBox('Your Atlas data and logs were kept in:' + #13#10 +
+           KeepRoot + #13#10 + #13#10 +
+           'Move the "data" and "logs" folders back into' + #13#10 +
+           ExpandConstant('{app}') + ' before reinstalling, or keep them as a backup.',
+           mbInformation, MB_OK);
+  KeepRoot := '';
+end;
+
+function PreserveOperatorData(): Boolean;
+var
+  OkData, OkLogs: Boolean;
+begin
+  Result := False;
+  KeptData := False;
+  KeptLogs := False;
+  if not ReserveKeepRoot() then
+  begin
+    MsgBox('Atlas could not reserve a safe place to keep your data and logs,' + #13#10 +
+           'so the uninstall was cancelled. Nothing was removed.', mbError, MB_OK);
+    Exit;
+  end;
+  OkData := MoveOut('data', KeptData);
+  OkLogs := OkData and MoveOut('logs', KeptLogs);
+  if OkData and OkLogs then
+  begin
+    Result := True;
+    Exit;
+  end;
+  RestoreKeptData();  // put back whatever was moved before cancelling
+  MsgBox('Atlas could not move your data and logs to safety (a file may still' + #13#10 +
+         'be in use), so the uninstall was cancelled. Nothing was removed.' + #13#10 +
+         'Quit Atlas from the tray icon and try again.', mbError, MB_OK);
+end;
+
+procedure DeinitializeUninstall();
+begin
+  // Runs at the end in every case: after a completed uninstall, and also when
+  // the operator answers "No" to the uninstall confirmation that Inno shows
+  // after InitializeUninstall. Either way the kept folders go back.
+  RestoreKeptData();
+end;
+
 function InitializeUninstall(): Boolean;
 var
   Attempt: Integer;
@@ -538,5 +664,6 @@ begin
   // Optional: clean legacy services on uninstall with the same explained prompt.
   MaybeRemoveLegacyServices();
   DeleteFile(ExpandConstant('{userstartup}\Atlas.lnk'));
-  Result := True;
+  // Move operator data out before anything is deleted; cancel if that fails.
+  Result := PreserveOperatorData();
 end;
