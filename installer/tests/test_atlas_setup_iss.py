@@ -117,28 +117,57 @@ def _code_section() -> str:
     return "\n".join(_section("Code"))
 
 
-def test_uninstall_moves_data_and_logs_out_and_back():
-    """Older installs logged data/logs for deletion; the [Code] guard must survive that."""
+def _func(code: str, header: str) -> str:
+    body = code.split(header, 1)[1]
+    return body.split("\nend;", 1)[0]
+
+
+def test_uninstall_moves_data_out_before_deletion_or_cancels():
+    """Older installs logged data/logs for deletion; preservation must happen first."""
     code = _code_section()
-    assert "procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);" in code
-    # Moved out before files are removed, moved back after.
-    assert "CurUninstallStep = usUninstall" in code
-    assert "CurUninstallStep = usPostUninstall" in code
-    assert "MoveOutIfPresent('data');" in code
-    assert "MoveOutIfPresent('logs');" in code
-    assert "MoveBackIfKept('data')" in code
-    assert "MoveBackIfKept('logs')" in code
-    # Same volume as {app} so the move is a rename, never a copy+delete.
-    assert "{localappdata}\\Atlas.keep-" in code
+    init = _func(code, "function InitializeUninstall(): Boolean;")
+    assert "Result := PreserveOperatorData();" in init
+    preserve = _func(code, "function PreserveOperatorData(): Boolean;")
+    assert "MoveOut('data', KeptData)" in preserve
+    assert "MoveOut('logs', KeptLogs)" in preserve
+    # Any failure cancels the uninstall (Result stays False) after undoing moves.
+    assert "Result := False;" in preserve
+    assert "RestoreKeptData();" in preserve
+    assert "uninstall was cancelled" in preserve
 
 
-def test_uninstall_keep_never_overwrites_and_tells_operator():
+def test_keep_root_is_fresh_and_on_same_volume():
     code = _code_section()
-    body = code.split("function MoveBackIfKept", 1)[1].split("end;\n\nprocedure", 1)[0]
-    assert "if DirExists(Dst) then" in body
-    assert "Result := False;" in body
-    assert "kept in:" in code  # message shows where the data was kept
+    reserve = _func(code, "function ReserveKeepRoot(): Boolean;")
+    assert "{localappdata}\\Atlas.keep-" in reserve
+    assert "(not DirExists(Candidate))" in reserve
+    assert "CreateDir(Candidate)" in reserve
+    assert "ForceDirectories" not in reserve
 
 
-def test_uninstall_keep_has_single_handler():
-    assert ISS_TEXT.count("procedure CurUninstallStepChanged") == 1
+def test_restore_only_what_was_moved_and_never_overwrites():
+    code = _code_section()
+    back = _func(code, "function MoveBack(const Name: String; Kept: Boolean): Boolean;")
+    assert "if not Kept then Exit;" in back
+    assert "if DirExists(Dst) then" in back
+    restore = _func(code, "procedure RestoreKeptData();")
+    assert "kept in:" in restore
+    assert "KeepRoot := '';" in restore
+
+
+def test_restore_runs_after_uninstall_and_after_cancelled_confirmation():
+    code = _code_section()
+    deinit = _func(code, "procedure DeinitializeUninstall();")
+    assert "RestoreKeptData();" in deinit
+    assert ISS_TEXT.count("procedure DeinitializeUninstall") == 1
+    assert "CurUninstallStepChanged" not in ISS_TEXT
+
+
+def test_helpers_declared_before_initialize_uninstall():
+    order = [
+        ISS_TEXT.index("function ReserveKeepRoot"),
+        ISS_TEXT.index("procedure RestoreKeptData"),
+        ISS_TEXT.index("function PreserveOperatorData"),
+        ISS_TEXT.index("function InitializeUninstall"),
+    ]
+    assert order == sorted(order)
