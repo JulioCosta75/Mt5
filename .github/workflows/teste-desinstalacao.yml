@@ -1,0 +1,91 @@
+# Teste automático da desinstalação (Mt5#61), numa máquina Windows limpa.
+# Reproduz o passo 10 do teste de 2026-11-11: instala a versão da main,
+# atualiza para a versão do PR, cria dados e desinstala. Os dados têm de ficar.
+# Sem credenciais: instala sem conta MT5.
+name: teste-desinstalacao
+on:
+  push:
+    branches: [claude/teste-desinstalacao-61]
+  workflow_dispatch:
+jobs:
+  desinstalar:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main, path: antigo }
+      - uses: actions/checkout@v4
+        with: { path: novo }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Construir o instalador antigo (main)
+        shell: cmd
+        run: call antigo\installer\build.bat
+      - name: Construir o instalador novo (PR 61)
+        shell: cmd
+        run: call novo\installer\build.bat
+      - name: Instalar a versão antiga e criar dados
+        shell: pwsh
+        run: |
+          $app = "$env:LOCALAPPDATA\Atlas"
+          $p = Start-Process antigo\installer\dist\Atlas_Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/MERGETASKS="!openbrowser,!desktopicon"',"/LOG=$env:RUNNER_TEMP\1_instalar_antigo.log" -Wait -PassThru
+          "codigo de saida: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { exit 1 }
+          for ($i = 0; $i -lt 24 -and -not (Test-Path "$app\data\atlas.db"); $i++) { Start-Sleep 5 }
+          New-Item -ItemType Directory -Force "$app\data","$app\logs" | Out-Null
+          Set-Content "$app\data\marcador_antigo.txt" 'dados do operador'
+          Set-Content "$app\logs\marcador_antigo.log" 'registo do operador'
+          Get-ChildItem -Recurse "$app\data","$app\logs" | Select-Object FullName,Length | Format-Table -AutoSize
+      - name: Atualizar para a versão nova
+        shell: pwsh
+        run: |
+          $app = "$env:LOCALAPPDATA\Atlas"
+          $p = Start-Process novo\installer\dist\Atlas_Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/MERGETASKS="!openbrowser,!desktopicon"',"/LOG=$env:RUNNER_TEMP\2_atualizar.log" -Wait -PassThru
+          "codigo de saida: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { exit 1 }
+          Start-Sleep 30
+          Set-Content "$app\data\marcador_novo.txt" 'dados depois da atualizacao'
+          Get-ChildItem -Recurse "$app\data","$app\logs" | Select-Object FullName,Length | Format-Table -AutoSize
+          Get-ChildItem "$app\data" -File | Select-Object -ExpandProperty Name | Set-Content "$env:RUNNER_TEMP\data_antes.txt"
+      - name: Desinstalar
+        shell: pwsh
+        run: |
+          $app = "$env:LOCALAPPDATA\Atlas"
+          Start-Process "$app\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/LOG=$env:RUNNER_TEMP\3_desinstalar.log" -Wait
+          # O desinstalador copia-se para uma pasta temporária e termina logo; espera pela cópia.
+          for ($i = 0; $i -lt 60; $i++) {
+            $vivo = Get-Process | Where-Object { $_.ProcessName -like '_iu*' -or $_.ProcessName -like 'unins*' }
+            if (-not $vivo -and -not (Test-Path "$app\unins000.exe")) { break }
+            Start-Sleep 5
+          }
+          Get-ChildItem -Recurse $app -ErrorAction SilentlyContinue | Select-Object FullName,Length | Format-Table -AutoSize
+      - name: Verificar que os dados ficaram
+        shell: pwsh
+        run: |
+          $app = "$env:LOCALAPPDATA\Atlas"
+          $falhas = @()
+          foreach ($f in 'data\marcador_antigo.txt','data\marcador_novo.txt','logs\marcador_antigo.log') {
+            if (Test-Path "$app\$f") { "PASS fica: $f" } else { $falhas += "falta $f" }
+          }
+          foreach ($n in Get-Content "$env:RUNNER_TEMP\data_antes.txt") {
+            if (Test-Path "$app\data\$n") { "PASS fica: data\$n" } else { $falhas += "falta data\$n" }
+          }
+          foreach ($d in 'backend','bridge','frontend_build','unins000.exe') {
+            if (Test-Path "$app\$d") { $falhas += "programa não removido: $d" } else { "PASS removido: $d" }
+          }
+          if ($falhas) { $falhas | ForEach-Object { "FAIL $_" }; exit 1 }
+          'RESULTADO: PASS (desinstalação manteve data\ e logs\ e removeu o programa)'
+      - name: Reinstalar e confirmar que os dados continuam
+        shell: pwsh
+        run: |
+          $app = "$env:LOCALAPPDATA\Atlas"
+          $p = Start-Process novo\installer\dist\Atlas_Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/MERGETASKS="!openbrowser,!desktopicon"',"/LOG=$env:RUNNER_TEMP\4_reinstalar.log" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { exit 1 }
+          if (-not (Test-Path "$app\data\marcador_antigo.txt")) { 'FAIL dados perdidos na reinstalação'; exit 1 }
+          'RESULTADO: PASS (reinstalação encontrou os dados)'
+      - name: Guardar os registos do instalador
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: registos-desinstalacao
+          path: ${{ runner.temp }}/*.log
