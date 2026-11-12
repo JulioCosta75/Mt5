@@ -3,6 +3,10 @@
 ;  Output:  Atlas_Setup.exe   (per-user installer — no Administrator)
 ;  Install root: %LOCALAPPDATA%\Atlas
 ;  Runtime: tray launcher (no Windows services / NSSM)
+;  SKU:     one installer, one program (Free without a key, Pro with a
+;           valid Lemon Squeezy license already in the backend).
+;  Signing: none here — founder applies the Microsoft signature locally
+;           after review. Do not add SignTool.
 ;  Build:   Run build.bat (downloads payload deps + invokes ISCC.exe)
 ; ===========================================================================
 #define MyAppName      "Atlas"
@@ -89,8 +93,15 @@ Source: "LICENSE.txt";      DestDir: "{app}";        Flags: ignoreversion
 Source: "README_INSTALL.txt"; DestDir: "{app}";      Flags: ignoreversion
 
 [Dirs]
-Name: "{app}\data"
-Name: "{app}\logs"
+; uninsneveruninstall: Inno's default is to recursively delete a [Dirs]
+; entry (and everything a user later put in it) on uninstall. Without this
+; flag, uninstall silently wipes real operator data (atlas.db, mt5_config.json,
+; bridge_data.db, atlas_launcher.lock) and every log file — confirmed on a
+; real Windows uninstall run: the .log showed each one individually deleted
+; even though [UninstallDelete] below never lists them. [UninstallDelete] is
+; additive cleanup, not a protection — it cannot override a [Dirs] entry.
+Name: "{app}\data"; Flags: uninsneveruninstall
+Name: "{app}\logs"; Flags: uninsneveruninstall
 
 [InstallDelete]
 ; Clean code tree on upgrade (preserve {app}\data and {app}\logs).
@@ -129,8 +140,8 @@ Filename: "{app}\python\python.exe"; Parameters: """{app}\scripts\configure_atla
 Filename: "{app}\scripts\start_atlas_app.bat"; StatusMsg: "Starting Atlas..."; Flags: nowait
 
 [UninstallDelete]
-Type: filesandordirs; Name: "{app}\data"
-Type: filesandordirs; Name: "{app}\logs"
+; Preserve operator data and logs (SQLite, mt5_config, launcher lock).
+; Uninstall removes program files only. Site-packages is pip residue.
 Type: filesandordirs; Name: "{app}\python\Lib\site-packages"
 
 [Code]

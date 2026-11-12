@@ -1,0 +1,87 @@
+Atlas 2 installer evidence — 2026-09-28 (Linux cloud agent)
+============================================================
+This file records what was executed on HEAD after fast-forwarding to the
+founder uninstall fix. It is NOT a Windows build receipt.
+
+Branch:  cursor/atlas2-free-pro-installer-b11c
+HEAD:    a6614dd9ebfdda7b803b9f3a5d3ff292f53c8c04
+PR:      https://github.com/JulioCosta75/Mt5/pull/52 (draft vs main)
+main:    f77f9461f84b559c6c83734d13dd2b2ff3d6eb5a (no rebase needed; 0 commits on main not in branch)
+VERSION: 0.3.0 (backend/VERSION)
+SKU:     single unsigned Atlas_Setup.exe (ISS OutputBaseFilename=Atlas_Setup; no SignTool)
+
+Host
+----
+OS: Linux 6.12.94+ x86_64
+ISCC / wine / self-hosted Windows workers: ABSENT
+installer/dist/: ABSENT (never created on this host)
+
+Commands run (this host)
+------------------------
+1. git fetch origin main + installer branch
+   origin/main still f77f9461 — no rebase performed (would be empty).
+   Fast-forward 9c7a694 -> a6614dd (founder: uninstall data wipe via [Dirs]).
+
+2. python3 -m pytest installer/tests/*.py backend/tests/test_license.py -v
+   Result: 56 passed, 5 warnings. See pytest-installer-license.txt
+   Exit: 0
+
+3. cd frontend && corepack yarn --version
+   Result: 1.22.22
+   corepack yarn install --frozen-lockfile
+   Result: Already up-to-date. Exit 0
+   REACT_APP_BACKEND_URL= CI=true corepack yarn build
+   Result: Compiled successfully (main.b2c4daee.js 206.81 kB gzip). Exit 0
+   CI=true corepack yarn test --watchAll=false --testPathPattern='riskPanel|remainingVisual'
+   Result: 25 passed. See frontend-visual-tests.txt
+
+4. Payload staging (robocopy exclusions, Linux copy)
+   25 files in backend+bridge. No .env, no *.db, no phase3/notifications/education/ai_usage.
+   See payload-staging.txt
+
+5. Authenticode / Windows install matrix
+   NOT RUN — no Windows, no ISCC, no Atlas_Setup.exe on this host.
+
+Not produced
+------------
+installer/dist/Atlas_Setup.exe
+size / SHA-256 of setup exe
+Get-AuthenticodeSignature
+clean Windows install / first open / upgrade / uninstall / reinstall
+duplicate dashboard-tab check on a real session
+
+Windows command still required (clean clone, Node 18+ Corepack, Inno Setup 6):
+  git clone https://github.com/JulioCosta75/Mt5.git
+  cd Mt5
+  git checkout cursor/atlas2-free-pro-installer-b11c
+  cd installer
+  build.bat
+  dir dist\Atlas_Setup.exe
+  certutil -hashfile dist\Atlas_Setup.exe SHA256
+  powershell -NoProfile -Command "Get-AuthenticodeSignature .\dist\Atlas_Setup.exe | Format-List Status,StatusMessage"
+
+Expect banner: build.bat revision: atlas2-free-pro-r2
+Expect Authenticode: NotSigned unless the founder applies an existing local cert after this file.
+
+Free/Pro (code tests only; Lemon mocked; no live key)
+-----------------------------------------------------
+Free without key: 1 MT5 account — PASSED (test_license.py)
+Free blocks 2nd simultaneous account — PASSED
+Pro with mocked valid Lemon key: unlimited accounts — PASSED
+No license key in API/logs — PASSED
+
+Install/uninstall (script-level only)
+-------------------------------------
+[Run] does not call open_dashboard.bat — PASSED
+Launcher opens dashboard once per session — PASSED
+[Dirs] data/logs: uninsneveruninstall — PASSED (a6614dd)
+[UninstallDelete] does not name data/logs — PASSED
+
+Out of scope (honoured)
+-----------------------
+No merge to main
+No release tag
+No live Lemon Squeezy
+No Revolution / Phase 3 enablement
+No production DNS
+No credentials captured

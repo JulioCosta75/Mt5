@@ -54,6 +54,12 @@ Checking which version is running
   • Health page footer
   • API:  http://127.0.0.1:8001/api/system/version
 
+License (Free / Pro)
+--------------------
+This is a single Atlas program. Without a Pro license key the
+installation stays on the Free plan (1 MetaTrader 5 account). Paste a
+valid Pro key in Settings → License to unlock unlimited accounts.
+
 Upgrading
 ---------
   1. Run the new Atlas_Setup.exe (no Administrator needed).
@@ -65,6 +71,14 @@ Upgrading
   If you previously installed under Program Files with Windows services,
   uninstall that old copy (or let the new installer stop those legacy
   services) so only the LocalAppData install remains.
+
+Uninstalling
+------------
+Uninstall Atlas from Windows Settings → Apps, or use the Start Menu
+"Uninstall Atlas" shortcut. Program files are removed. Your data
+(\data) and logs (\logs) stay under %LOCALAPPDATA%\Atlas so a later
+reinstall can pick them up. Delete that folder yourself only if you
+want a full wipe.
 
 Logs
 ----
