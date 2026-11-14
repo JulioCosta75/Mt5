@@ -105,6 +105,29 @@ def account_from_bridge(bridge_account: dict, positions_count: int,
     }
 
 
+# ---- stale (cached) accounts ----
+STATUS_OFFLINE = "OFFLINE"
+
+
+def mark_stale(payload: dict) -> dict:
+    """Copy of a cached account snapshot, marked as not live.
+
+    Served when the bridge cannot return fresh account data (bridge down, or
+    MT5 restarted and the terminal session lost). The cached status was the
+    last live one, often "LIVE"; showing it again told the operator the
+    account was live while it was not (founder's demo test, 2026-11-13).
+    Balances stay as the last known values; status and connection do not.
+    "OFFLINE" is a new status value (founder authorization, 2026-11-14): the
+    dashboard renders any status other than LIVE/PAUSED as an error badge, and
+    the ERROR alert rule does not double the existing bridge-down alert.
+    """
+    out = dict(payload)
+    out["stale"] = True
+    out["status"] = STATUS_OFFLINE
+    out["connected"] = False
+    return out
+
+
 # ---- equity / drawdown ----
 def drawdown_from_equity(series: list[dict]) -> tuple[list[dict], float, float]:
     """Return (drawdown_series, max_dd_pct, current_dd_pct)."""

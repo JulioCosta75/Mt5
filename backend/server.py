@@ -451,7 +451,7 @@ _LAST_BRIDGE_OK: Optional[bool] = None
 async def _mt5_live_accounts() -> tuple[list[dict], bool]:
     """Fetch enriched accounts from configured MT5 bridge(s). Returns (accounts, bridge_ok)."""
     import httpx
-    from mt5_adapter import account_from_bridge, drawdown_from_equity
+    from mt5_adapter import account_from_bridge, drawdown_from_equity, mark_stale as _mark_stale
     from mt5_client import clients
 
     out: list[dict] = []
@@ -517,9 +517,7 @@ async def _mt5_live_accounts() -> tuple[list[dict], bool]:
             for d in cached_keys:
                 payload = d.get("payload")
                 if payload:
-                    payload = dict(payload)
-                    payload["stale"] = True
-                    out.append(payload)
+                    out.append(_mark_stale(payload))
         except Exception as e:  # noqa: BLE001
             logging.getLogger("server").warning("cache account fallback failed: %s", e)
 
