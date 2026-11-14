@@ -22,6 +22,9 @@ class SnapshotRecorder:
 
     def _tick(self):
         try:
+            # Reconnect first if the terminal session was lost (MT5 restarted).
+            if not self.mt5_service.ensure_connected():
+                return
             info = self.mt5_service.account_info()
             self.storage.insert_snapshot(self.mt5_service.login, info)
         except Exception as e:  # noqa: BLE001
