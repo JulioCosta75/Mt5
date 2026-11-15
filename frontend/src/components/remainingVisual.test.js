@@ -79,8 +79,11 @@ describe("A10 settings tokens and system telemetry Unavailable", () => {
     expect(settingsSrc).toMatch(/data-testid="mt5-save"/);
     expect(settingsSrc).toMatch(/data-testid="mt5-clear"/);
     expect(settingsSrc).toMatch(/data-testid="license-activate"/);
+    expect(settingsSrc).toMatch(/data-testid="license-deactivate"/);
+    expect(settingsSrc).toMatch(/Deactivate on this PC/);
     expect(settingsSrc).toMatch(/api\.saveMt5Config/);
     expect(settingsSrc).toMatch(/api\.activateLicense/);
+    expect(settingsSrc).toMatch(/api\.deactivateLicense/);
   });
 
   test("live System latency/strategies are Unavailable, not 42 ms or 6", () => {

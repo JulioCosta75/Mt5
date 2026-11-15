@@ -914,6 +914,18 @@ async def activate_license(payload: LicenseActivateIn):
     return state
 
 
+@app.post("/api/license/deactivate")
+async def deactivate_license():
+    try:
+        state = await asyncio.to_thread(_license.deactivate)
+    except _license.LicenseNetworkError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except _license.LicenseInvalidError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    _license_response_is_safe(state)
+    return state
+
+
 @app.put("/api/mt5/config")
 async def put_mt5_config(payload: MT5ConfigIn):
     try:

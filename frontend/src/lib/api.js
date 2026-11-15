@@ -29,6 +29,7 @@ export const api = {
   clearMt5Config: () => client.delete("/mt5/config").then(r => r.data),
   getLicense: () => client.get("/license").then(r => r.data),
   activateLicense: (license_key) => client.post("/license/activate", { license_key }).then(r => r.data),
+  deactivateLicense: () => client.post("/license/deactivate").then(r => r.data),
   // Phase 2 — Sr. Atlas supervision
   supervisionSnapshot: () => client.get("/supervision/snapshot").then(r => r.data),
   atlasReports: (params = {}) => client.get("/atlas/reports", { params }).then(r => r.data),

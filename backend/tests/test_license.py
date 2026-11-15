@@ -5,7 +5,9 @@ httpx is mocked; SQLite uses a per-test tempfile.
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import logging
 import sqlite3
 import sys
 from datetime import datetime, timedelta, timezone
@@ -25,7 +27,10 @@ import mt5_client  # noqa: E402
 
 VALID_KEY = "38b1460a-5104-4067-a91d-77b872934d51"
 INVALID_KEY = "00000000-0000-0000-0000-000000000000"
+OTHER_KEY = "11111111-1111-4111-8111-111111111111"
+INSTANCE_ID = "47596ad9-a811-4ebf-ac8a-03fc7b6d2a17"
 T0 = datetime(2026, 1, 10, 12, 0, 0, tzinfo=timezone.utc)
+_UNSET = object()
 
 
 class _Clock:
@@ -36,9 +41,24 @@ class _Clock:
         return self.when
 
 
-def _lemon_response(valid: bool, status: str | None = None, error: str | None = None, key: str = VALID_KEY):
+def _lemon_response(
+    valid: bool,
+    status: str | None = None,
+    error: str | None = None,
+    key: str = VALID_KEY,
+    *,
+    instance_id: str | None | object = _UNSET,
+    store_id: int = 1,
+    product_id: int = 4,
+    activated: bool | None = None,
+    deactivated: bool = False,
+):
+    if instance_id is _UNSET:
+        instance_id = INSTANCE_ID if valid else None
     body = {
         "valid": valid,
+        "activated": valid if activated is None else activated,
+        "deactivated": deactivated,
         "error": error,
         "license_key": None if not valid and status is None else {
             "id": 1,
@@ -49,8 +69,16 @@ def _lemon_response(valid: bool, status: str | None = None, error: str | None = 
             "created_at": "2026-01-01T00:00:00.000000Z",
             "expires_at": None,
         },
-        "instance": None,
-        "meta": {"product_name": "Atlas Pro"},
+        "instance": None if not instance_id else {
+            "id": instance_id,
+            "name": "atlas-test",
+            "created_at": "2026-01-01T00:00:00.000000Z",
+        },
+        "meta": {
+            "store_id": store_id,
+            "product_id": product_id,
+            "product_name": "Atlas Pro",
+        },
     }
     resp = MagicMock()
     resp.status_code = 200
@@ -69,6 +97,8 @@ def isolated_db(tmp_path, monkeypatch):
     monkeypatch.delenv("MT5_BRIDGE_URLS", raising=False)
     monkeypatch.delenv("MT5_BRIDGE_TOKEN", raising=False)
     monkeypatch.delenv("MT5_BRIDGE_TOKENS", raising=False)
+    monkeypatch.delenv("LEMON_STORE_ID", raising=False)
+    monkeypatch.delenv("LEMON_PRODUCT_ID", raising=False)
     clock = _Clock(T0)
     monkeypatch.setattr(lic, "_now", clock)
     return db, clock
@@ -515,3 +545,659 @@ class TestLicenseEndpoints:
         assert lic_state["pro"] is False
         assert lic_state["accounts_configured"] >= 1
         assert lic_state["can_add_account"] is False
+
+
+# ---------------------------------------------------------------------------
+# Per-PC activation, store/product check, deactivate
+# ---------------------------------------------------------------------------
+def _capture_post(monkeypatch, responder):
+    calls = []
+
+    def post(url, data=None, **kwargs):
+        calls.append((url, dict(data or {})))
+        return responder(url, dict(data or {}), **kwargs)
+
+    monkeypatch.setattr(lic.httpx, "post", post)
+    return calls
+
+
+def _ok_or_deactivate(url, data, **kwargs):
+    if url == lic.LEMON_DEACTIVATE_URL:
+        return _lemon_response(False, status="inactive", deactivated=True, instance_id=None)
+    return _lemon_response(True, status="active")
+
+
+class TestPerPcActivation:
+    def test_instance_name_is_a_stable_hash_without_the_raw_material(self, monkeypatch):
+        monkeypatch.setattr(lic, "_machine_material", lambda: "SECRET-GUID")
+        name = lic.machine_instance_name()
+        assert name.startswith("atlas-")
+        assert "SECRET-GUID" not in name
+        digest = name.removeprefix("atlas-")
+        assert len(digest) == 32
+        assert digest == hashlib.sha256(b"SECRET-GUID").hexdigest()[:32]
+        assert lic.machine_instance_name() == name
+
+    def test_activate_posts_instance_name_and_stores_instance_id(self, isolated_db, monkeypatch):
+        calls = _capture_post(monkeypatch, lambda url, data, **k: _lemon_response(True, status="active"))
+        state = lic.activate(VALID_KEY)
+        assert state["activated"] is True
+        assert state["pro"] is True
+        assert calls[0][0] == lic.LEMON_ACTIVATE_URL
+        assert calls[0][1]["license_key"] == VALID_KEY
+        assert calls[0][1]["instance_name"].startswith("atlas-")
+        assert "instance_id" not in calls[0][1]
+        assert VALID_KEY not in calls[0][1]["instance_name"]
+        record = lic.load_record()
+        assert record["instance_id"] == INSTANCE_ID
+        assert record["license_key"] == VALID_KEY
+        _assert_no_key(state, VALID_KEY)
+
+    def test_same_pc_does_not_activate_again(self, isolated_db, monkeypatch):
+        calls = _capture_post(monkeypatch, lambda url, data, **k: _lemon_response(True, status="active"))
+        lic.activate(VALID_KEY)
+        again = lic.activate(VALID_KEY)
+        assert again["activated"] is True
+        assert again["pro"] is True
+        assert [url for url, _data in calls] == [lic.LEMON_ACTIVATE_URL, lic.LEMON_VALIDATE_URL]
+        assert calls[1][1]["instance_id"] == INSTANCE_ID
+        assert calls[1][1]["license_key"] == VALID_KEY
+        assert "instance_name" not in calls[1][1]
+
+    def test_revalidate_sends_instance_id(self, isolated_db, monkeypatch):
+        db, clock = isolated_db
+        calls = _capture_post(monkeypatch, lambda url, data, **k: _lemon_response(True, status="active"))
+        lic.activate(VALID_KEY)
+        clock.when = T0 + timedelta(days=2)
+        assert lic.is_pro_active() is True
+        assert calls[1][0] == lic.LEMON_VALIDATE_URL
+        assert calls[1][1]["license_key"] == VALID_KEY
+        assert calls[1][1]["instance_id"] == INSTANCE_ID
+        state = lic.public_state()
+        _assert_no_key(state, VALID_KEY)
+
+    def test_activation_limit_stays_free_and_keeps_account_data(self, isolated_db, monkeypatch, caplog):
+        db, _clock = isolated_db
+        cx = sqlite3.connect(str(db))
+        cx.execute(
+            "CREATE TABLE mt5_overrides (login INTEGER PRIMARY KEY, kill_switch INTEGER NOT NULL)"
+        )
+        cx.execute("INSERT INTO mt5_overrides (login, kill_switch) VALUES (5609382, 1)")
+        cx.commit()
+        cx.close()
+
+        def post(url, data, **kwargs):
+            return _lemon_response(
+                False,
+                status="active",
+                error=f"This license key has reached the activation limit. license_key={VALID_KEY}",
+                instance_id=None,
+            )
+
+        calls = _capture_post(monkeypatch, post)
+        with caplog.at_level(logging.WARNING, logger="atlas.license"):
+            state = lic.activate(VALID_KEY)
+        assert state["activated"] is False
+        assert state["pro"] is False
+        assert state["status"] == "free"
+        assert state["message"] == (
+            "This key is already active on another PC. Deactivate it there or contact support."
+        )
+        assert calls[0][0] == lic.LEMON_ACTIVATE_URL
+        _assert_no_key(state, VALID_KEY)
+        assert VALID_KEY not in caplog.text
+        record = lic.load_record()
+        assert record["valid"] == 0
+        assert record["lemon_status"] == "activation_limit"
+        assert VALID_KEY not in (record.get("last_error") or "")
+        cx = sqlite3.connect(str(db))
+        assert cx.execute("SELECT kill_switch FROM mt5_overrides WHERE login=5609382").fetchone()[0] == 1
+        cx.close()
+
+    def test_limit_refusal_is_not_retried_as_validate_without_instance(self, isolated_db, monkeypatch):
+        _db, clock = isolated_db
+        calls = _capture_post(
+            monkeypatch,
+            lambda url, data, **k: _lemon_response(
+                False,
+                status="active",
+                error="This license key has reached the activation limit.",
+                instance_id=None,
+            ),
+        )
+        lic.activate(VALID_KEY)
+        clock.when = T0 + timedelta(days=2)
+        state = lic.public_state()
+        assert state["pro"] is False
+        assert state["status"] == "free"
+        assert [url for url, _data in calls] == [lic.LEMON_ACTIVATE_URL]
+
+    def test_wrong_store_and_product_do_not_grant_pro(self, isolated_db, monkeypatch):
+        monkeypatch.setenv("LEMON_STORE_ID", "10")
+        monkeypatch.setenv("LEMON_PRODUCT_ID", "20")
+        calls = _capture_post(
+            monkeypatch,
+            lambda url, data, **k: _lemon_response(
+                False, status="inactive", deactivated=True, instance_id=None,
+            ) if url == lic.LEMON_DEACTIVATE_URL else _lemon_response(
+                True, status="active", store_id=99, product_id=20,
+            ),
+        )
+        state = lic.activate(VALID_KEY)
+        assert state["activated"] is False
+        assert state["pro"] is False
+        assert "not from the Sr Atlas store" in state["message"]
+        assert calls[0][0] == lic.LEMON_ACTIVATE_URL
+        assert calls[1][0] == lic.LEMON_DEACTIVATE_URL
+        assert calls[1][1]["instance_id"] == INSTANCE_ID
+        assert lic.load_record()["instance_id"] == ""
+        assert lic.is_pro_active() is False
+
+        calls.clear()
+        monkeypatch.setattr(
+            lic.httpx, "post",
+            lambda *a, **k: _lemon_response(True, status="active", store_id=10, product_id=77),
+        )
+        state = lic.activate(VALID_KEY)
+        assert state["pro"] is False
+        assert "not for Sr Atlas Pro" in state["message"]
+
+        monkeypatch.setattr(
+            lic.httpx, "post",
+            lambda *a, **k: _lemon_response(True, status="active", store_id=10, product_id=20),
+        )
+        state = lic.activate(VALID_KEY)
+        assert state["activated"] is True
+        assert state["pro"] is True
+
+    def test_store_check_skipped_while_ids_are_zero(self, isolated_db, monkeypatch, caplog):
+        monkeypatch.setattr(lic, "_store_config_warnings_logged", set())
+        calls = {"n": 0}
+
+        def post(*args, **kwargs):
+            calls["n"] += 1
+            return _lemon_response(True, status="active", store_id=999, product_id=888)
+
+        monkeypatch.setattr(lic.httpx, "post", post)
+        with caplog.at_level(logging.WARNING, logger="atlas.license"):
+            state = lic.activate(VALID_KEY)
+            again = lic.activate(VALID_KEY)
+        assert state["pro"] is True
+        assert again["pro"] is True
+        warnings = [r for r in caplog.records if "LEMON_STORE_ID" in r.getMessage()]
+        assert len(warnings) == 1
+        assert VALID_KEY not in caplog.text
+
+    def test_explicit_refusal_ignores_offline_grace(self, isolated_db, monkeypatch):
+        _db, clock = isolated_db
+
+        def post(url, data=None, **kwargs):
+            if url == lic.LEMON_VALIDATE_URL:
+                return _lemon_response(
+                    False,
+                    status="disabled",
+                    error="This license key is disabled.",
+                    instance_id=None,
+                )
+            return _lemon_response(True, status="active")
+
+        monkeypatch.setattr(lic.httpx, "post", post)
+        lic.activate(VALID_KEY)
+        assert lic.is_pro_active() is True
+        clock.when = T0 + timedelta(days=2)
+        assert lic.is_pro_active() is False
+        state = lic.public_state()
+        assert state["status"] == "free"
+        assert state["pro"] is False
+        assert state["cached"] is False
+        assert "disabled" in state["message"].lower()
+        with pytest.raises(lic.AccountLimitError):
+            lic.enforce_account_limit(2)
+
+    def test_activate_retries_when_saved_instance_is_unknown(self, isolated_db, monkeypatch):
+        calls = _capture_post(
+            monkeypatch,
+            lambda url, data, **k: _lemon_response(
+                False,
+                status="active",
+                error="This license key instance does not exist.",
+                instance_id=None,
+            ) if url == lic.LEMON_VALIDATE_URL else _lemon_response(True, status="active"),
+        )
+        lic.activate(VALID_KEY)
+        again = lic.activate(VALID_KEY)
+        assert again["activated"] is True
+        assert again["pro"] is True
+        assert [url for url, _data in calls] == [
+            lic.LEMON_ACTIVATE_URL,
+            lic.LEMON_VALIDATE_URL,
+            lic.LEMON_ACTIVATE_URL,
+        ]
+
+    def test_unknown_instance_returns_free_without_a_new_activation(self, isolated_db, monkeypatch):
+        _db, clock = isolated_db
+        calls = _capture_post(
+            monkeypatch,
+            lambda url, data, **k: _lemon_response(
+                False,
+                status="active",
+                error="This license key instance does not exist.",
+                instance_id=None,
+            ) if url == lic.LEMON_VALIDATE_URL else _lemon_response(True, status="active"),
+        )
+        lic.activate(VALID_KEY)
+        clock.when = T0 + timedelta(days=2)
+        state = lic.public_state()
+        assert state["pro"] is False
+        assert "not active on this PC" in state["message"]
+        assert [url for url, _data in calls] == [lic.LEMON_ACTIVATE_URL, lic.LEMON_VALIDATE_URL]
+        assert lic.load_record()["instance_id"] == ""
+        clock.when = T0 + timedelta(days=4)
+        lic.public_state()
+        assert [url for url, _data in calls] == [lic.LEMON_ACTIVATE_URL, lic.LEMON_VALIDATE_URL]
+        again = lic.activate(VALID_KEY)
+        assert again["activated"] is True
+        assert again["pro"] is True
+        assert [url for url, _data in calls] == [
+            lic.LEMON_ACTIVATE_URL, lic.LEMON_VALIDATE_URL, lic.LEMON_ACTIVATE_URL,
+        ]
+
+    def test_legacy_row_registers_this_pc_on_refresh(self, isolated_db, monkeypatch):
+        db, _clock = isolated_db
+        old = (T0 - timedelta(days=2)).isoformat()
+        lic.ensure_schema()
+        cx = sqlite3.connect(str(db))
+        cx.execute(
+            "INSERT INTO atlas_license "
+            "(id, license_key, valid, lemon_status, last_verified_at, last_success_at, "
+            " last_error, updated_at, instance_id) "
+            "VALUES (1, ?, 1, 'active', ?, ?, '', ?, '')",
+            (VALID_KEY, old, old, old),
+        )
+        cx.commit()
+        cx.close()
+        calls = _capture_post(monkeypatch, lambda url, data, **k: _lemon_response(True, status="active"))
+        assert lic.is_pro_active() is True
+        assert calls[0][0] == lic.LEMON_ACTIVATE_URL
+        assert calls[0][1]["instance_name"].startswith("atlas-")
+        record = lic.load_record()
+        assert record["license_key"] == VALID_KEY
+        assert record["instance_id"] == INSTANCE_ID
+        assert record["valid"] == 1
+
+    def test_migrate_instance_column_keeps_existing_row(self, isolated_db):
+        db, _clock = isolated_db
+        cx = sqlite3.connect(str(db))
+        cx.executescript(
+            """
+            CREATE TABLE atlas_license (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                license_key TEXT NOT NULL DEFAULT '',
+                valid INTEGER NOT NULL DEFAULT 0,
+                lemon_status TEXT,
+                last_verified_at TEXT,
+                last_success_at TEXT,
+                last_error TEXT,
+                updated_at TEXT
+            );
+            CREATE TABLE mt5_overrides (
+                login INTEGER PRIMARY KEY,
+                kill_switch INTEGER NOT NULL DEFAULT 0
+            );
+            """
+        )
+        cx.execute(
+            "INSERT INTO atlas_license "
+            "(id, license_key, valid, lemon_status, last_verified_at, last_success_at, last_error, updated_at) "
+            "VALUES (1, ?, 1, 'active', ?, ?, '', ?)",
+            (VALID_KEY, T0.isoformat(), T0.isoformat(), T0.isoformat()),
+        )
+        cx.execute("INSERT INTO mt5_overrides (login, kill_switch) VALUES (5609382, 1)")
+        cx.commit()
+        cx.close()
+
+        lic.ensure_schema()
+        lic.ensure_schema()
+
+        cx = sqlite3.connect(str(db))
+        cols = [r[1] for r in cx.execute("PRAGMA table_info(atlas_license)")]
+        assert cols.count("instance_id") == 1
+        row = cx.execute(
+            "SELECT license_key, valid, lemon_status FROM atlas_license WHERE id=1"
+        ).fetchone()
+        assert row == (VALID_KEY, 1, "active")
+        assert cx.execute("SELECT kill_switch FROM mt5_overrides WHERE login=5609382").fetchone()[0] == 1
+        cx.close()
+        record = lic.load_record()
+        assert record["license_key"] == VALID_KEY
+        assert record["valid"] == 1
+        assert record["instance_id"] == ""
+
+    def test_deactivate_returns_free_and_calls_lemon(self, isolated_db, monkeypatch):
+        db, _clock = isolated_db
+        cx = sqlite3.connect(str(db))
+        cx.execute(
+            "CREATE TABLE mt5_overrides (login INTEGER PRIMARY KEY, kill_switch INTEGER NOT NULL)"
+        )
+        cx.execute("INSERT INTO mt5_overrides (login, kill_switch) VALUES (5609382, 1)")
+        cx.commit()
+        cx.close()
+        calls = _capture_post(monkeypatch, _ok_or_deactivate)
+        lic.activate(VALID_KEY)
+        assert lic.is_pro_active() is True
+        state = lic.deactivate()
+        assert state["deactivated"] is True
+        assert state["pro"] is False
+        assert state["status"] == "free"
+        assert state["key_present"] is False
+        assert "deactivated on this PC" in state["message"]
+        assert calls[-1][0] == lic.LEMON_DEACTIVATE_URL
+        assert calls[-1][1]["license_key"] == VALID_KEY
+        assert calls[-1][1]["instance_id"] == INSTANCE_ID
+        _assert_no_key(state, VALID_KEY)
+        record = lic.load_record()
+        assert record["license_key"] == ""
+        assert record["instance_id"] == ""
+        assert record["valid"] == 0
+        cx = sqlite3.connect(str(db))
+        assert cx.execute("SELECT kill_switch FROM mt5_overrides WHERE login=5609382").fetchone()[0] == 1
+        cx.close()
+
+    def test_deactivate_network_error_keeps_pro(self, isolated_db, monkeypatch):
+        def post(url, data=None, **kwargs):
+            if url == lic.LEMON_DEACTIVATE_URL:
+                req = httpx.Request("POST", url)
+                raise httpx.ConnectError("offline", request=req)
+            return _lemon_response(True, status="active")
+
+        monkeypatch.setattr(lic.httpx, "post", post)
+        lic.activate(VALID_KEY)
+        with pytest.raises(lic.LicenseNetworkError):
+            lic.deactivate()
+        assert lic.is_pro_active() is True
+        assert lic.load_record()["instance_id"] == INSTANCE_ID
+
+    def test_deactivate_endpoint(self, isolated_db, monkeypatch):
+        from fastapi.testclient import TestClient
+        import server
+
+        calls = _capture_post(monkeypatch, _ok_or_deactivate)
+        client = TestClient(server.app)
+        activated = client.post("/api/license/activate", json={"license_key": VALID_KEY})
+        assert activated.status_code == 200, activated.text
+        assert activated.json()["pro"] is True
+        response = client.post("/api/license/deactivate")
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["deactivated"] is True
+        assert body["pro"] is False
+        assert body["status"] == "free"
+        assert VALID_KEY not in response.text
+        assert calls[-1][0] == lic.LEMON_DEACTIVATE_URL
+        follow = client.get("/api/license")
+        assert follow.json()["pro"] is False
+        assert VALID_KEY not in follow.text
+
+    def test_deactivate_endpoint_network_and_empty(self, isolated_db, monkeypatch):
+        from fastapi.testclient import TestClient
+        import server
+
+        client = TestClient(server.app)
+        empty = client.post("/api/license/deactivate")
+        assert empty.status_code == 200, empty.text
+        assert empty.json()["pro"] is False
+        assert empty.json()["deactivated"] is True
+
+        def post(url, data=None, **kwargs):
+            if url == lic.LEMON_DEACTIVATE_URL:
+                req = httpx.Request("POST", url)
+                raise httpx.ConnectError("offline", request=req)
+            return _lemon_response(True, status="active")
+
+        monkeypatch.setattr(lic.httpx, "post", post)
+        activated = client.post("/api/license/activate", json={"license_key": VALID_KEY})
+        assert activated.status_code == 200, activated.text
+        failed = client.post("/api/license/deactivate")
+        assert failed.status_code == 503
+        assert VALID_KEY not in failed.text
+        assert client.get("/api/license").json()["pro"] is True
+
+    def test_partial_store_config_does_not_grant_pro(self, isolated_db, monkeypatch, caplog):
+        monkeypatch.setenv("LEMON_STORE_ID", "10")
+        monkeypatch.delenv("LEMON_PRODUCT_ID", raising=False)
+        monkeypatch.setattr(lic, "_store_config_warnings_logged", set())
+
+        def post(*args, **kwargs):
+            return _lemon_response(True, status="active", store_id=99, product_id=4)
+
+        monkeypatch.setattr(lic.httpx, "post", post)
+        with caplog.at_level(logging.WARNING, logger="atlas.license"):
+            state = lic.activate(VALID_KEY)
+            again = lic.activate(VALID_KEY)
+        assert state["activated"] is False
+        assert state["pro"] is False
+        assert again["pro"] is False
+        assert lic.is_pro_active() is False
+        warnings = [r for r in caplog.records if "partial license configuration" in r.getMessage()]
+        assert len(warnings) == 1
+        assert VALID_KEY not in caplog.text
+        _assert_no_key(state, VALID_KEY)
+
+    def test_unknown_instance_retry_network_clears_grace(self, isolated_db, monkeypatch):
+        _db, clock = isolated_db
+        activate_calls = {"n": 0}
+
+        def post(url, data=None, **kwargs):
+            if url == lic.LEMON_VALIDATE_URL:
+                return _lemon_response(
+                    False,
+                    status="active",
+                    error="This license key instance does not exist.",
+                    instance_id=None,
+                )
+            activate_calls["n"] += 1
+            if activate_calls["n"] == 1:
+                return _lemon_response(True, status="active")
+            req = httpx.Request("POST", url)
+            raise httpx.ConnectError("offline", request=req)
+
+        monkeypatch.setattr(lic.httpx, "post", post)
+        lic.activate(VALID_KEY)
+        assert lic.is_pro_active() is True
+        with pytest.raises(lic.LicenseNetworkError):
+            lic.activate(VALID_KEY)
+        record = lic.load_record()
+        assert record["valid"] == 0
+        assert record["lemon_status"] == "unknown_instance"
+        assert not record["last_success_at"]
+        assert lic.is_pro_active() is False
+
+        # A later successful-looking response must not restore the cleared grace.
+        monkeypatch.setattr(
+            lic.httpx, "post",
+            lambda *a, **k: _lemon_response(True, status="active"),
+        )
+        clock.when = T0 + timedelta(days=2)
+        assert lic.is_pro_active() is False
+        state = lic.public_state()
+        assert state["pro"] is False
+        assert state["cached"] is False
+
+    def test_different_key_with_instance_is_refused_without_remote(self, isolated_db, monkeypatch):
+        calls = _capture_post(
+            monkeypatch,
+            lambda url, data, **k: _lemon_response(True, status="active"),
+        )
+        lic.activate(VALID_KEY)
+        before = lic.load_record()
+        sent = len(calls)
+        state = lic.activate(OTHER_KEY)
+        assert len(calls) == sent
+        assert state["activated"] is False
+        assert state["pro"] is True
+        assert state["key_present"] is True
+        assert state["message"] == (
+            "Deactivate the current license on this PC first "
+            "(Settings → License → Deactivate on this PC)."
+        )
+        after = lic.load_record()
+        assert after["license_key"] == before["license_key"] == VALID_KEY
+        assert after["instance_id"] == INSTANCE_ID
+        assert after["valid"] == 1
+        assert after["last_success_at"] == before["last_success_at"]
+        _assert_no_key(state, VALID_KEY, OTHER_KEY)
+
+    def test_different_key_overdue_does_not_refresh(self, isolated_db, monkeypatch):
+        db, _clock = isolated_db
+        monkeypatch.setattr(
+            lic.httpx, "post",
+            lambda *a, **k: _lemon_response(True, status="active"),
+        )
+        lic.activate(VALID_KEY)
+        overdue = (T0 - timedelta(days=2)).isoformat()
+        cx = sqlite3.connect(str(db))
+        cx.execute(
+            "UPDATE atlas_license SET last_verified_at=?, last_success_at=? WHERE id=1",
+            (overdue, overdue),
+        )
+        cx.commit()
+        cx.close()
+        before = lic.load_record()
+        assert before["last_verified_at"] == overdue
+
+        def boom(*args, **kwargs):
+            raise AssertionError("refusing a different key must not call Lemon")
+
+        monkeypatch.setattr(lic.httpx, "post", boom)
+        state = lic.activate(OTHER_KEY)
+        assert state["activated"] is False
+        assert state["pro"] is True
+        assert state["key_present"] is True
+        assert state["message"] == (
+            "Deactivate the current license on this PC first "
+            "(Settings → License → Deactivate on this PC)."
+        )
+        assert lic.load_record() == before
+        _assert_no_key(state, VALID_KEY, OTHER_KEY)
+
+    def test_different_key_without_instance_activates(self, isolated_db, monkeypatch):
+        def post(url, data=None, **kwargs):
+            form = dict(data or {})
+            if form.get("license_key") == OTHER_KEY:
+                return _lemon_response(True, status="active", key=OTHER_KEY)
+            return _lemon_response(False, error="not found", key=form.get("license_key") or VALID_KEY)
+
+        monkeypatch.setattr(lic.httpx, "post", post)
+        first = lic.activate(VALID_KEY)
+        assert first["activated"] is False
+        assert first["pro"] is False
+        assert lic.load_record()["instance_id"] == ""
+        second = lic.activate(OTHER_KEY)
+        assert second["activated"] is True
+        assert second["pro"] is True
+        assert lic.load_record()["license_key"] == OTHER_KEY
+        assert lic.load_record()["instance_id"] == INSTANCE_ID
+        _assert_no_key(second, VALID_KEY, OTHER_KEY)
+
+    def test_store_ids_are_constants_unless_test_or_dev(self, isolated_db, monkeypatch):
+        assert lic.LEMON_STORE_ID == 0
+        assert lic.LEMON_PRODUCT_ID == 0
+        monkeypatch.setenv("LEMON_STORE_ID", "10")
+        monkeypatch.setenv("LEMON_PRODUCT_ID", "20")
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+        monkeypatch.delenv("ATLAS_ENV", raising=False)
+        assert lic.lemon_store_id() == 0
+        assert lic.lemon_product_id() == 0
+        monkeypatch.setattr(
+            lic.httpx, "post",
+            lambda *a, **k: _lemon_response(True, status="active", store_id=99, product_id=4),
+        )
+        state = lic.activate(VALID_KEY)
+        assert state["activated"] is True
+        assert state["pro"] is True
+        monkeypatch.setenv("ATLAS_ENV", "development")
+        assert lic.lemon_store_id() == 10
+        assert lic.lemon_product_id() == 20
+
+    def test_deactivate_success_clears_key_instance_and_pro(self, isolated_db, monkeypatch):
+        calls = _capture_post(monkeypatch, _ok_or_deactivate)
+        lic.activate(VALID_KEY)
+        state = lic.deactivate()
+        assert state["deactivated"] is True
+        assert state["pro"] is False
+        assert state["key_present"] is False
+        assert state["status"] == "free"
+        record = lic.load_record()
+        assert record["license_key"] == ""
+        assert record["instance_id"] == ""
+        assert record["valid"] == 0
+        assert not record["last_success_at"]
+        assert calls[-1][0] == lic.LEMON_DEACTIVATE_URL
+        assert calls[-1][1]["license_key"] == VALID_KEY
+        assert calls[-1][1]["instance_id"] == INSTANCE_ID
+        _assert_no_key(state, VALID_KEY)
+
+    def test_deactivate_network_changes_nothing(self, isolated_db, monkeypatch):
+        def post(url, data=None, **kwargs):
+            if url == lic.LEMON_DEACTIVATE_URL:
+                req = httpx.Request("POST", url)
+                raise httpx.ConnectError("offline", request=req)
+            return _lemon_response(True, status="active")
+
+        monkeypatch.setattr(lic.httpx, "post", post)
+        lic.activate(VALID_KEY)
+        before = lic.load_record()
+        with pytest.raises(lic.LicenseNetworkError):
+            lic.deactivate()
+        after = lic.load_record()
+        assert after["license_key"] == before["license_key"] == VALID_KEY
+        assert after["instance_id"] == INSTANCE_ID
+        assert after["valid"] == 1
+        assert after["last_success_at"] == before["last_success_at"]
+        state = lic.public_state()
+        assert state["pro"] is True
+        assert state["key_present"] is True
+
+    @pytest.mark.parametrize(
+        "status,error",
+        [
+            ("disabled", "This license key is disabled."),
+            ("expired", "This license key has expired."),
+            ("active", "This license key instance does not exist."),
+        ],
+    )
+    def test_deactivate_explicit_refusal_clears_local(self, isolated_db, monkeypatch, status, error):
+        _db, clock = isolated_db
+
+        def post(url, data=None, **kwargs):
+            if url == lic.LEMON_DEACTIVATE_URL:
+                return _lemon_response(
+                    False,
+                    status=status,
+                    error=error,
+                    deactivated=False,
+                    instance_id=None,
+                )
+            return _lemon_response(True, status="active")
+
+        monkeypatch.setattr(lic.httpx, "post", post)
+        lic.activate(VALID_KEY)
+        assert lic.is_pro_active() is True
+        state = lic.deactivate()
+        assert state["deactivated"] is False
+        assert state["pro"] is False
+        assert state["key_present"] is False
+        record = lic.load_record()
+        assert record["license_key"] == ""
+        assert record["instance_id"] == ""
+        assert record["valid"] == 0
+        assert not record["last_success_at"]
+        _assert_no_key(state, VALID_KEY)
+        monkeypatch.setattr(
+            lic.httpx, "post",
+            lambda *a, **k: _lemon_response(True, status="active"),
+        )
+        clock.when = T0 + timedelta(days=2)
+        assert lic.is_pro_active() is False
+        assert lic.public_state()["pro"] is False
+        assert lic.public_state()["cached"] is False
