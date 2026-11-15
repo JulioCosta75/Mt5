@@ -17,6 +17,7 @@ from mt5_adapter import (
     account_from_bridge,
     drawdown_from_equity,
     eas_from_bridge,
+    mark_stale,
     orders_passthrough,
     positions_passthrough,
     trades_from_deals,
@@ -109,8 +110,7 @@ def build_router(cache, alert_store=None) -> APIRouter:
             for d in cached_keys:
                 payload = d.get("payload")
                 if payload:
-                    payload["stale"] = True
-                    out.append(payload)
+                    out.append(mark_stale(payload))
         return out
 
     @router.get("/accounts/{account_id}")
@@ -122,17 +122,13 @@ def build_router(cache, alert_store=None) -> APIRouter:
         if not client:
             cached = await cache.get(f"account:{login}")
             if cached:
-                p = cached["payload"]
-                p["stale"] = True
-                return p
+                return mark_stale(cached["payload"])
             raise HTTPException(503, "bridge unreachable and no cache")
         bridge_acc = await _try_account(client)
         if not bridge_acc:
             cached = await cache.get(f"account:{login}")
             if cached:
-                p = cached["payload"]
-                p["stale"] = True
-                return p
+                return mark_stale(cached["payload"])
             raise HTTPException(503, "bridge unreachable")
         return await _enriched_account(client, bridge_acc)
 
