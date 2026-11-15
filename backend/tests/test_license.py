@@ -99,6 +99,10 @@ def isolated_db(tmp_path, monkeypatch):
     monkeypatch.delenv("MT5_BRIDGE_TOKENS", raising=False)
     monkeypatch.delenv("LEMON_STORE_ID", raising=False)
     monkeypatch.delenv("LEMON_PRODUCT_ID", raising=False)
+    # Behaviour tests pin the unconfigured ids. Production values are asserted
+    # on the module constants, without this fixture.
+    monkeypatch.setattr(lic, "LEMON_STORE_ID", 0)
+    monkeypatch.setattr(lic, "LEMON_PRODUCT_ID", 0)
     clock = _Clock(T0)
     monkeypatch.setattr(lic, "_now", clock)
     return db, clock
@@ -711,6 +715,8 @@ class TestPerPcActivation:
         assert state["pro"] is True
 
     def test_store_check_skipped_while_ids_are_zero(self, isolated_db, monkeypatch, caplog):
+        monkeypatch.setattr(lic, "LEMON_STORE_ID", 0)
+        monkeypatch.setattr(lic, "LEMON_PRODUCT_ID", 0)
         monkeypatch.setattr(lic, "_store_config_warnings_logged", set())
         calls = {"n": 0}
 
@@ -963,6 +969,8 @@ class TestPerPcActivation:
         assert client.get("/api/license").json()["pro"] is True
 
     def test_partial_store_config_does_not_grant_pro(self, isolated_db, monkeypatch, caplog):
+        monkeypatch.setattr(lic, "LEMON_STORE_ID", 0)
+        monkeypatch.setattr(lic, "LEMON_PRODUCT_ID", 0)
         monkeypatch.setenv("LEMON_STORE_ID", "10")
         monkeypatch.delenv("LEMON_PRODUCT_ID", raising=False)
         monkeypatch.setattr(lic, "_store_config_warnings_logged", set())
@@ -1099,9 +1107,24 @@ class TestPerPcActivation:
         assert lic.load_record()["instance_id"] == INSTANCE_ID
         _assert_no_key(second, VALID_KEY, OTHER_KEY)
 
+    def test_production_lemon_ids(self, monkeypatch):
+        assert lic.LEMON_STORE_ID == 524518
+        assert lic.LEMON_PRODUCT_ID == 1529348
+        monkeypatch.delenv("LEMON_STORE_ID", raising=False)
+        monkeypatch.delenv("LEMON_PRODUCT_ID", raising=False)
+        assert lic.lemon_store_id() == 524518
+        assert lic.lemon_product_id() == 1529348
+        monkeypatch.setenv("LEMON_STORE_ID", "10")
+        monkeypatch.setenv("LEMON_PRODUCT_ID", "20")
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+        monkeypatch.delenv("ATLAS_ENV", raising=False)
+        assert lic.lemon_store_id() == 524518
+        assert lic.lemon_product_id() == 1529348
+
     def test_store_ids_are_constants_unless_test_or_dev(self, isolated_db, monkeypatch):
-        assert lic.LEMON_STORE_ID == 0
-        assert lic.LEMON_PRODUCT_ID == 0
+        # Unconfigured installation, pinned. Customer mode ignores the environment.
+        monkeypatch.setattr(lic, "LEMON_STORE_ID", 0)
+        monkeypatch.setattr(lic, "LEMON_PRODUCT_ID", 0)
         monkeypatch.setenv("LEMON_STORE_ID", "10")
         monkeypatch.setenv("LEMON_PRODUCT_ID", "20")
         monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)

@@ -22,11 +22,11 @@ once per day. If the remote call fails (no network, timeouts, 5xx), the last
 successful *valid* check is honoured for 7 days. An explicit refusal never
 uses that grace period.
 
-`LEMON_STORE_ID` and `LEMON_PRODUCT_ID` are module constants (0 until the
-founder sets the real ids). Customer PCs do not read them from the
-environment. Tests and development may override. The store/product check is
-skipped only while both are 0. If only one is set, Pro is not granted and
-the misconfiguration is logged once.
+`LEMON_STORE_ID` (524518, Forge Factory Lab) and `LEMON_PRODUCT_ID`
+(1529348, Sr. Atlas Pro) are module constants. Customer PCs do not read
+them from the environment. Tests and development may override. The
+store/product check is skipped only while both are 0. If only one is set,
+Pro is not granted and the misconfiguration is logged once.
 """
 from __future__ import annotations
 
@@ -195,9 +195,10 @@ def _now_iso() -> str:
     return _now().isoformat()
 
 
-# Baked in. 0 until the founder supplies the real Lemon Squeezy ids.
-LEMON_STORE_ID = 0
-LEMON_PRODUCT_ID = 0
+# Baked in. Customer installations do not read these from the environment.
+# Forge Factory Lab (forgefactorylab.lemonsqueezy.com) and Sr. Atlas Pro.
+LEMON_STORE_ID = 524518
+LEMON_PRODUCT_ID = 1529348
 _DEV_OVERRIDE_MODES = frozenset({"dev", "development", "test"})
 
 
