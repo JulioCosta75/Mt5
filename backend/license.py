@@ -822,12 +822,8 @@ def _message_for(status: str, cached: bool) -> str:
     return FREE_MESSAGE
 
 
-def public_state() -> dict:
-    """License state safe to send to the browser / reports / logs.
-
-    Never includes the license key.
-    """
-    record = _refresh_if_due(load_record())
+def _format_public_state(record: dict) -> dict:
+    """Public view of one stored row. Does not call Lemon or write the database."""
     status = _compute_status(record)
     pro = status == _STATUS_PRO_ACTIVE
     cached = _using_cache(record, status)
@@ -858,6 +854,18 @@ def public_state() -> dict:
     if key and key in dumped:
         raise RuntimeError("license public_state attempted to expose the license key")
     return out
+
+
+def public_state(*, refresh: bool = True) -> dict:
+    """License state safe to send to the browser / reports / logs.
+
+    Never includes the license key. ``refresh=False`` does not revalidate and
+    does not write the stored row.
+    """
+    record = load_record()
+    if refresh:
+        record = _refresh_if_due(record)
+    return _format_public_state(record)
 
 
 def _clear_local_license(message: str) -> None:
@@ -944,7 +952,7 @@ def activate(license_key: str) -> dict:
                 record["last_success_at"] = None
             _save_record(record)
 
-    state = public_state()
+    state = _format_public_state(existing) if blocked else public_state()
     if blocked:
         state["activated"] = False
         state["message"] = DIFFERENT_KEY_MESSAGE

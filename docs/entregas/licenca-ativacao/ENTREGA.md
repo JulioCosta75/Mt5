@@ -130,3 +130,25 @@ exit code 0 — 50 passed, 12 warnings, 0.76s. Os warnings são os mesmos de `on
 - Codex neste HEAD.
 - Chamada real à Lemon Squeezy.
 - O botão no browser.
+
+## Recusa local sem revalidar — 2026-11-15T16:44:08Z
+
+P2 em `f346289`: a recusa de uma chave diferente chamava `public_state()`, e um `last_verified_at` com mais de um dia disparava `_refresh_if_due()`.
+
+### VERIFIED
+
+- A resposta dessa recusa sai de `_format_public_state` sobre o registo já lido. Não chama `_refresh_if_due` nem a Lemon, e não grava.
+- `public_state(refresh=False)` existe para o mesmo formato sem revalidar. O caminho normal de `public_state()` continua a revalidar.
+- Teste com `last_verified_at` e `last_success_at` dois dias no passado: nenhuma chamada HTTP, o registo depois é igual ao de antes, `activated` é falso, `pro` mantém-se, e a frase pedida está na resposta.
+- `LEMON_STORE_ID` e `LEMON_PRODUCT_ID` continuam `0`. O id de produto não foi escrito.
+
+```text
+cd backend && python3 -m pytest tests/test_license.py -q --tb=short
+```
+
+exit code 0 — 51 passed, 12 warnings, 0.76s. Os warnings são os mesmos de `on_event` e do parser de formulários. Nenhum teste falhou.
+
+### NOT VERIFIED
+
+- Codex neste HEAD.
+- Chamada real à Lemon Squeezy.

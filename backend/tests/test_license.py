@@ -1047,6 +1047,39 @@ class TestPerPcActivation:
         assert after["last_success_at"] == before["last_success_at"]
         _assert_no_key(state, VALID_KEY, OTHER_KEY)
 
+    def test_different_key_overdue_does_not_refresh(self, isolated_db, monkeypatch):
+        db, _clock = isolated_db
+        monkeypatch.setattr(
+            lic.httpx, "post",
+            lambda *a, **k: _lemon_response(True, status="active"),
+        )
+        lic.activate(VALID_KEY)
+        overdue = (T0 - timedelta(days=2)).isoformat()
+        cx = sqlite3.connect(str(db))
+        cx.execute(
+            "UPDATE atlas_license SET last_verified_at=?, last_success_at=? WHERE id=1",
+            (overdue, overdue),
+        )
+        cx.commit()
+        cx.close()
+        before = lic.load_record()
+        assert before["last_verified_at"] == overdue
+
+        def boom(*args, **kwargs):
+            raise AssertionError("refusing a different key must not call Lemon")
+
+        monkeypatch.setattr(lic.httpx, "post", boom)
+        state = lic.activate(OTHER_KEY)
+        assert state["activated"] is False
+        assert state["pro"] is True
+        assert state["key_present"] is True
+        assert state["message"] == (
+            "Deactivate the current license on this PC first "
+            "(Settings → License → Deactivate on this PC)."
+        )
+        assert lic.load_record() == before
+        _assert_no_key(state, VALID_KEY, OTHER_KEY)
+
     def test_different_key_without_instance_activates(self, isolated_db, monkeypatch):
         def post(url, data=None, **kwargs):
             form = dict(data or {})
