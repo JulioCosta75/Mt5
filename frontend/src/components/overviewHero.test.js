@@ -28,4 +28,22 @@ describe("Overview hero uses existing KPI / MT5 status fields", () => {
     expect(mt5FromStatus({ state: "unconfigured" }, false).word).toBe("OFFLINE");
     expect(mt5FromStatus({ state: "connected" }, true).word).toBe("OFFLINE");
   });
+
+  test("health is OFFLINE while any account is served from cache", () => {
+    const accounts = [{ id: "MT5-1", status: "OFFLINE", stale: true }, { id: "MT5-2", status: "LIVE" }];
+    const result = healthFromKpis({ critical_alerts: 0, active_alerts: 0 }, accounts);
+    expect(result.word).toBe("OFFLINE");
+    expect(result.signal).toBe("cell-neg");
+    expect(result.detail).toBe("1 account offline · data may be outdated");
+  });
+
+  test("health ignores live accounts", () => {
+    expect(healthFromKpis({ critical_alerts: 0, active_alerts: 0 }, [{ status: "LIVE" }]).word).toBe("OK");
+  });
+
+  test("MT5 card tells a closed terminal from a bridge outage", () => {
+    const r = mt5FromStatus({ state: "mt5_offline" }, false);
+    expect(r.word).toBe("MT5 OFFLINE");
+    expect(r.signal).toBe("cell-neg");
+  });
 });

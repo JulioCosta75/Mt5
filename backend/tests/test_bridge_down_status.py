@@ -59,3 +59,46 @@ def test_status_follows_failure_then_recovery(monkeypatch):
 
     monkeypatch.setattr(server, "_LAST_BRIDGE_OK", True)
     assert client.get("/api/mt5/config").json()["status"]["state"] == "connected"
+
+
+@pytest.mark.parametrize(
+    ("last_ok", "reachable", "expected"),
+    [
+        (False, True, "mt5_offline"),   # bridge up, terminal closed (test 2026-11-14)
+        (False, False, "bridge_down"),
+        (False, None, "bridge_down"),   # reachability not measured: unchanged
+        (True, True, "connected"),
+    ],
+)
+def test_terminal_closed_is_not_bridge_down(monkeypatch, last_ok, reachable, expected):
+    monkeypatch.setattr(server, "MT5_MODE", True)
+    monkeypatch.setattr(server, "_LAST_BRIDGE_OK", last_ok)
+    monkeypatch.setattr(server, "_LAST_BRIDGE_REACHABLE", reachable)
+    assert server._connection_status(CFG)["state"] == expected
+
+
+def test_probe_reads_bridge_health(monkeypatch):
+    import asyncio
+    import mt5_client
+
+    class Bridge:
+        def __init__(self, health=None, fail=False):
+            self._h, self._fail = health, fail
+
+        async def health(self):
+            if self._fail:
+                raise RuntimeError("connection refused")
+            return self._h
+
+    monkeypatch.setattr(server, "MT5_MODE", True)
+    monkeypatch.setattr(mt5_client, "clients", lambda: [Bridge({"terminal_connected": False, "account_logged_in": False})])
+    asyncio.run(server._probe_bridge_health())
+    assert server._connection_status(CFG)["state"] == "mt5_offline"
+
+    monkeypatch.setattr(mt5_client, "clients", lambda: [Bridge({"terminal_connected": True, "account_logged_in": True})])
+    asyncio.run(server._probe_bridge_health())
+    assert server._connection_status(CFG)["state"] == "connected"
+
+    monkeypatch.setattr(mt5_client, "clients", lambda: [Bridge(fail=True)])
+    asyncio.run(server._probe_bridge_health())
+    assert server._connection_status(CFG)["state"] == "bridge_down"

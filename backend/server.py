@@ -446,6 +446,11 @@ def _supervision_snapshot() -> dict:
 
 # Last bridge reachability measured by _mt5_live_accounts (None = not measured yet).
 _LAST_BRIDGE_OK: Optional[bool] = None
+# Whether the bridge process itself answered its /health probe (None = not
+# measured). Lets the dashboard tell "bridge down" from "MT5 closed": in the
+# founder's test of 2026-11-14 the card said BRIDGE DOWN while the bridge was
+# up and only the terminal was closed.
+_LAST_BRIDGE_REACHABLE: Optional[bool] = None
 
 
 async def _mt5_live_accounts() -> tuple[list[dict], bool]:
@@ -777,9 +782,35 @@ class MT5ConfigIn(BaseModel):
     bridge_port: Optional[int] = 8002
 
 
+async def _probe_bridge_health() -> None:
+    """Refresh the bridge/terminal measurement from the bridge's /health.
+
+    Called by GET /api/mt5/config (polled by the dashboard) so the connection
+    card follows reality within one poll instead of waiting for the next
+    account fetch. No-op outside MT5 mode or without a configured bridge.
+    """
+    global _LAST_BRIDGE_OK, _LAST_BRIDGE_REACHABLE
+    if not MT5_MODE:
+        return
+    from mt5_client import clients
+    bridges = clients()
+    if not bridges:
+        return
+    try:
+        h = await bridges[0].health()
+    except Exception:  # noqa: BLE001
+        _LAST_BRIDGE_REACHABLE = False
+        _LAST_BRIDGE_OK = False
+        return
+    _LAST_BRIDGE_REACHABLE = True
+    _LAST_BRIDGE_OK = bool(h.get("terminal_connected")) and bool(h.get("account_logged_in"))
+
+
 def _connection_status(cfg: dict) -> dict:
     configured = bool(cfg.get("configured"))
-    if MT5_MODE and _LAST_BRIDGE_OK is False:
+    if MT5_MODE and _LAST_BRIDGE_OK is False and _LAST_BRIDGE_REACHABLE:
+        state = "mt5_offline"      # bridge up, but MT5 closed / not logged in
+    elif MT5_MODE and _LAST_BRIDGE_OK is False:
         state = "bridge_down"      # MT5 mode, but the last bridge check failed
     elif MT5_MODE:
         state = "connected"        # backend started with a bridge URL
@@ -808,6 +839,7 @@ def _connection_status(cfg: dict) -> dict:
 @app.get("/api/mt5/config")
 async def get_mt5_config():
     cfg = _mt5cfg.load()
+    await _probe_bridge_health()
     return {"config": _mt5cfg.masked(cfg), "status": _connection_status(cfg)}
 
 

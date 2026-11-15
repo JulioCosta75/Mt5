@@ -14,7 +14,11 @@ import SupervisionPanel from "@/components/SupervisionPanel";
 import { StrategiesView, RiskView, ReportsView, AuditView } from "@/components/TabViews";
 import RevolutionView from "@/pages/Revolution";
 
-const MT5_STATUS_POLL_MS = 30000;
+const MT5_STATUS_POLL_MS = 15000;
+// Accounts, KPIs and alerts used to load only once (and on REFRESH FEED), so
+// the table kept showing OFFLINE after MT5 had reconnected (founder's test,
+// 2026-11-14). They now refresh on their own on this interval.
+const FEED_POLL_MS = 15000;
 
 const TABS = ["Overview", "Strategies", "Risk", "Reports", "Audit"];
 
@@ -190,8 +194,29 @@ export default function Dashboard() {
     return () => { cancelled = true; };
   }, [loadGlobals]);
 
+  // Automatic feed refresh: accounts/KPIs/alerts and the selected account's
+  // detail. Skipped while the tab is hidden or a refresh is still running.
+  const pollBusyRef = useRef(false);
+  useEffect(() => {
+    const id = setInterval(async () => {
+      if (pollBusyRef.current) return;
+      if (typeof document !== "undefined" && document.hidden) return;
+      pollBusyRef.current = true;
+      try {
+        await loadGlobals();
+        const sid = selectedIdRef.current;
+        if (sid) await loadAccountDetail(sid);
+      } catch (_) {
+        /* keep the last good data; the next tick retries */
+      } finally {
+        pollBusyRef.current = false;
+      }
+    }, FEED_POLL_MS);
+    return () => clearInterval(id);
+  }, [loadGlobals, loadAccountDetail]);
+
   // MT5 connection status follows the backend's bridge measurements, so it is
-  // re-read on mount, on every feed refresh and every 30 s.
+  // re-read on mount, on every feed refresh and every 15 s.
   const loadMt5Status = useCallback(async () => {
     try {
       const c = await api.getMt5Config();
@@ -289,7 +314,7 @@ export default function Dashboard() {
       )}
       {activeTab === "Overview" ? (
         <>
-          <OverviewHero kpis={kpis} mt5Status={mt5Status} isSample={isSample} />
+          <OverviewHero kpis={kpis} accounts={accounts} mt5Status={mt5Status} isSample={isSample} />
           <KpiTicker kpis={kpis} className="ticker-row-compact" />
         </>
       ) : (
