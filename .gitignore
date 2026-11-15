@@ -67,6 +67,9 @@ knowledge.db
 notifications.db
 ai_usage.db
 
+# Isolated Telegram DEMO outbound queue (never commit runtime state)
+telegram_demo_outbound/data/
+
 # Archive files and large assets
 **/*.zip
 **/*.tar.gz
