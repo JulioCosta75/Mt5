@@ -552,9 +552,16 @@ async def _live_supervision_snapshot() -> dict:
     accounts, bridge_ok = await _mt5_live_accounts()
     terminal_offline = False
     if bridge_ok is False:
-        await _probe_bridge_health()
-        if _LAST_BRIDGE_REACHABLE is True and _LAST_TERMINAL_OK is False:
-            terminal_offline = True
+        # The account fetch can already use the 8s client timeout. Cap this
+        # extra /health probe so the snapshot stays inside the frontend's 15s
+        # request timeout. A hang or error keeps the bridge-down path.
+        try:
+            await asyncio.wait_for(_probe_bridge_health(), timeout=3)
+        except Exception:
+            terminal_offline = False
+        else:
+            if _LAST_BRIDGE_REACHABLE is True and _LAST_TERMINAL_OK is False:
+                terminal_offline = True
     # Live alerts come from the fixed-rule engine store — never mock ALERTS.
     open_alerts = await _atlas_alert_store.list_open()
     return _supervision_snapshot_from_accounts(

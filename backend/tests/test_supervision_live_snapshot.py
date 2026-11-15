@@ -9,6 +9,7 @@ import asyncio
 import importlib
 import os
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -248,3 +249,30 @@ class TestLiveSupervisionTerminalProbe:
         assert snap["services"]["bridge_ok"] is True
         assert "mt5_terminal_ok" not in snap["services"]
         assert snap["status"] == "OK"
+
+    def test_hanging_probe_stays_on_bridge_down_path(self, mod, monkeypatch):
+        async def probe():
+            mod._LAST_BRIDGE_REACHABLE = True
+            mod._LAST_TERMINAL_OK = False
+            await asyncio.sleep(30)
+
+        started = time.perf_counter()
+        snap = self._run(mod, monkeypatch, [_live_account(stale=True)], False, probe)
+        elapsed = time.perf_counter() - started
+        assert elapsed < 5
+        assert snap["services"]["bridge_ok"] is False
+        assert "mt5_terminal_ok" not in snap["services"]
+        assert snap["status"] == "WARNING"
+        assert "mt5 bridge is unavailable" in snap["message"].lower()
+        assert "metatrader 5 is closed" not in snap["message"].lower()
+
+    def test_probe_error_stays_on_bridge_down_path(self, mod, monkeypatch):
+        async def probe():
+            mod._LAST_BRIDGE_REACHABLE = True
+            mod._LAST_TERMINAL_OK = False
+            raise RuntimeError("health probe failed")
+
+        snap = self._run(mod, monkeypatch, [], False, probe)
+        assert snap["services"]["bridge_ok"] is False
+        assert "mt5_terminal_ok" not in snap["services"]
+        assert "mt5 bridge is unavailable" in snap["message"].lower()
