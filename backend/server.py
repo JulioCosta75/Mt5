@@ -332,6 +332,7 @@ def _supervision_snapshot_from_accounts(
     *,
     bridge_ok: bool | None = None,
     alerts: list[dict] | None = None,
+    terminal_offline: bool = False,
 ) -> dict:
     alert_rows = ALERTS if alerts is None else alerts
     total_equity = sum(a.get("equity", 0.0) for a in accounts)
@@ -364,20 +365,30 @@ def _supervision_snapshot_from_accounts(
     else:
         status = "OK"
 
-    bridge_down = bridge_ok is False
-    # Historical real cache is not mock; still never report OK while the bridge is down.
-    if bridge_down and status == "OK":
+    bridge_down = bridge_ok is False and not terminal_offline
+    # Historical real cache is not mock; still never report OK while the bridge
+    # is down or the terminal is closed. ALERT (set above) keeps priority.
+    if (bridge_down or terminal_offline) and status == "OK":
         status = "WARNING"
 
     services = {
         "backend_ok": True,
         "store_ok": True,
-        "bridge_ok": bridge_ok if bridge_ok is not None else (True if MT5_MODE else None),
-        "dashboard_ok": True,
+        "bridge_ok": True if terminal_offline else (
+            bridge_ok if bridge_ok is not None else (True if MT5_MODE else None)
+        ),
     }
+    if terminal_offline:
+        services["mt5_terminal_ok"] = False
+    services["dashboard_ok"] = True
 
-    if bridge_down:
-        if accounts:
+    if terminal_offline or bridge_down:
+        if terminal_offline:
+            cache_note = (
+                "MetaTrader 5 is closed or not logged in; displayed data comes from cache "
+                "and may be outdated. Atlas reconnects automatically when it is open again."
+            )
+        elif accounts:
             cache_note = (
                 "MT5 bridge is unavailable; displayed data comes from cache "
                 "and may be outdated."
@@ -539,12 +550,18 @@ async def _live_supervision_snapshot() -> dict:
     if not MT5_MODE:
         return _supervision_snapshot()
     accounts, bridge_ok = await _mt5_live_accounts()
+    terminal_offline = False
+    if bridge_ok is False:
+        await _probe_bridge_health()
+        if _LAST_BRIDGE_REACHABLE is True and _LAST_TERMINAL_OK is False:
+            terminal_offline = True
     # Live alerts come from the fixed-rule engine store — never mock ALERTS.
     open_alerts = await _atlas_alert_store.list_open()
     return _supervision_snapshot_from_accounts(
         accounts,
         bridge_ok=bridge_ok,
         alerts=to_api_alerts(open_alerts),
+        terminal_offline=terminal_offline,
     )
 
 

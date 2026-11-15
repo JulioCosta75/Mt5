@@ -143,6 +143,9 @@ export default function SupervisionPanel({ serverTime, onAfterGenerate }) {
               <ServiceDot label="Backend" ok={svc.backend_ok} />
               <ServiceDot label="Store" ok={svc.store_ok} />
               <ServiceDot label="Bridge" ok={svc.bridge_ok} />
+              {svc.mt5_terminal_ok !== undefined && (
+                <ServiceDot label="MT5 terminal" ok={svc.mt5_terminal_ok} />
+              )}
               <ServiceDot label="Dashboard" ok={svc.dashboard_ok} />
             </div>
           </>
