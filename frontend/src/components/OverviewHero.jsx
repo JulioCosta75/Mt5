@@ -1,7 +1,20 @@
 import React from "react";
 import { Cable, Shield, Users } from "lucide-react";
 
-export function healthFromKpis(kpis) {
+export function healthFromKpis(kpis, accounts = []) {
+  // Accounts served from cache (MT5 closed, bridge down) are not live: health
+  // cannot read OK while any of them is shown OFFLINE (founder's test, 2026-11-14).
+  const offline = (Array.isArray(accounts) ? accounts : []).filter(
+    (a) => a && (a.stale || a.status === "OFFLINE")
+  ).length;
+  if (offline > 0) {
+    return {
+      word: "OFFLINE",
+      signal: "cell-neg",
+      fill: 15,
+      detail: `${offline} account${offline === 1 ? "" : "s"} offline · data may be outdated`,
+    };
+  }
   const critical = Number(kpis?.critical_alerts || 0);
   const active = Number(kpis?.active_alerts || 0);
   if (critical > 0) {
@@ -20,6 +33,9 @@ export function mt5FromStatus(mt5Status, isSample) {
   }
   if (state === "pending_restart") {
     return { word: "PENDING", signal: "cell-warn", fill: 50, detail: "Settings saved. Atlas is restarting." };
+  }
+  if (state === "mt5_offline") {
+    return { word: "MT5 OFFLINE", signal: "cell-neg", fill: 15, detail: "MetaTrader 5 is closed or not logged in. Atlas reconnects automatically when it is open again." };
   }
   if (state === "bridge_down") {
     return { word: "BRIDGE DOWN", signal: "cell-neg", fill: 15, detail: "MetaTrader 5 is not responding. Data shown may be outdated." };
@@ -44,8 +60,8 @@ function HeroCard({ testId, icon, label, word, wordClass, detail, fill }) {
   );
 }
 
-export default function OverviewHero({ kpis, mt5Status, isSample = false }) {
-  const health = healthFromKpis(kpis);
+export default function OverviewHero({ kpis, accounts = [], mt5Status, isSample = false }) {
+  const health = healthFromKpis(kpis, accounts);
   const mt5 = mt5FromStatus(mt5Status, isSample);
   const live = kpis?.accounts_live;
   const total = kpis?.accounts_total;

@@ -24,6 +24,10 @@ describe("sampleMode helpers — truthful mock presentation", () => {
     expect(isSamplePresentation({ state: "connected", mode: "mt5" }, "mt5")).toBe(false);
   });
 
+  test("mt5_offline in mt5 mode is live (cached), not sample", () => {
+    expect(isSamplePresentation({ state: "mt5_offline", mode: "mt5" }, "mt5")).toBe(false);
+  });
+
   test("bridge_down in mt5 mode is live (cached), not sample", () => {
     expect(isSamplePresentation({ state: "bridge_down", mode: "mt5" }, "mt5")).toBe(false);
   });

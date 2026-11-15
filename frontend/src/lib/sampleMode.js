@@ -3,7 +3,7 @@
  * Live connected mode must not receive simulated labels.
  */
 
-const LIVE_STATES = new Set(["connected", "bridge_down"]);
+const LIVE_STATES = new Set(["connected", "bridge_down", "mt5_offline"]);
 
 export function isSamplePresentation(mt5Status, healthMode) {
   if (healthMode === "mock") return true;
