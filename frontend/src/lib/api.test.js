@@ -21,6 +21,7 @@ describe("resolveApiBase — never /undefined/api", () => {
     const base = resolveApiBase("");
     expect(`${base}/license`).toBe("/api/license");
     expect(`${base}/license/activate`).toBe("/api/license/activate");
+    expect(`${base}/license/deactivate`).toBe("/api/license/deactivate");
     expect(`${base}/license`).not.toMatch(/undefined/i);
   });
 
@@ -28,5 +29,6 @@ describe("resolveApiBase — never /undefined/api", () => {
     const apiSrc = fs.readFileSync(path.join(__dirname, "api.js"), "utf8");
     expect(apiSrc).toMatch(/resolveApiBase\(process\.env\.REACT_APP_BACKEND_URL\)/);
     expect(apiSrc).not.toMatch(/\$\{BACKEND_URL\}\/api/);
+    expect(apiSrc).toMatch(/deactivateLicense:\s*\(\)\s*=>\s*client\.post\("\/license\/deactivate"\)/);
   });
 });

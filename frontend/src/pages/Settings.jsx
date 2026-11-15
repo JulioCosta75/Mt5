@@ -30,6 +30,7 @@ export default function Settings() {
   const [license, setLicense] = useState(null);
   const [licenseKey, setLicenseKey] = useState("");
   const [activating, setActivating] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
   const [licenseBanner, setLicenseBanner] = useState(null); // {type, text}
 
   const load = useCallback(async () => {
@@ -130,6 +131,28 @@ export default function Settings() {
       });
     } finally {
       setActivating(false);
+    }
+  };
+
+  const onDeactivateLicense = async () => {
+    if (!window.confirm("Deactivate the Pro license on this PC? Atlas will return to the free version on this computer.")) return;
+    setDeactivating(true);
+    setLicenseBanner(null);
+    try {
+      const res = await api.deactivateLicense();
+      setLicense(res);
+      setLicenseBanner({
+        type: res.deactivated ? "ok" : "error",
+        text: res.message || "Pro license deactivated on this PC.",
+      });
+    } catch (err) {
+      const detail = err?.response?.data?.detail;
+      setLicenseBanner({
+        type: "error",
+        text: detail || "Could not reach the license server. Try again in a moment.",
+      });
+    } finally {
+      setDeactivating(false);
     }
   };
 
@@ -292,10 +315,21 @@ export default function Settings() {
               onChange={(e) => setLicenseKey(e.target.value)}
               placeholder="Paste your Lemon Squeezy license key"
             />
-            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-              <button type="submit" className="btn success" data-testid="license-activate" disabled={activating || loading}>
+            <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+              <button type="submit" className="btn success" data-testid="license-activate" disabled={activating || deactivating || loading}>
                 {activating ? "ACTIVATING…" : "ACTIVATE"}
               </button>
+              {license?.key_present && (
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="license-deactivate"
+                  onClick={onDeactivateLicense}
+                  disabled={deactivating || activating || loading}
+                >
+                  {deactivating ? "DEACTIVATING…" : "Deactivate on this PC"}
+                </button>
+              )}
             </div>
           </form>
         </div>
