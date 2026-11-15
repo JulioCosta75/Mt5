@@ -26,7 +26,7 @@ Comportamento observado nos testes que correram:
 - A revalidação, passadas mais de 24 h, envia `license_key` e `instance_id`. No mesmo dia continua a haver uma só chamada.
 - Limite de ativações: Free, sem Pro, com a frase «This key is already active on another PC. Deactivate it there or contact support.» A linha de `mt5_overrides` que existia no mesmo ficheiro mantém-se. A chave não aparece na resposta, no log nem em `last_error`. No dia seguinte essa recusa não é tratada como validate sem instância.
 - Com `LEMON_STORE_ID=10` e `LEMON_PRODUCT_ID=20`, loja 99 ou produto 77 não dá Pro. A loja errada, depois de a Lemon aceitar a ativação, é seguida de `POST /v1/licenses/deactivate` dessa instância, e o `instance_id` local fica vazio. Loja 10 e produto 20 dão Pro.
-- Com as duas variáveis ausentes (0), uma resposta válida de outra loja e outro produto continua Pro. O aviso `LEMON_STORE_ID or LEMON_PRODUCT_ID is 0; store and product check is skipped.` aparece uma vez.
+- Com as duas variáveis ausentes (0), uma resposta válida de outra loja e outro produto continua Pro. O aviso de configuração aparece uma vez. O texto atual é `LEMON_STORE_ID and LEMON_PRODUCT_ID are 0; store and product check is skipped.`
 - Falha de rede ou HTTP 503, dois dias depois de um Pro válido, mantém Pro (`cached`). Oito dias depois, volta a Free. Uma resposta `disabled` ao fim de dois dias tira o Pro na hora, sem margem, e o limite de 1 conta volta a ser aplicado.
 - Instância desconhecida na revalidação: Free, sem nova ativação automática. O `instance_id` local é esquecido. Um `activate` seguinte volta a registar o PC.
 - Uma linha antiga com chave Pro e sem `instance_id` é registada na revalidação (`/licenses/activate`) e a chave gravada não muda.
@@ -61,7 +61,7 @@ O texto do botão no fonte é «Deactivate on this PC». Em `frontend/src/index.
 
 ## INFERENCE
 
-- A verificação da loja e do produto só corre quando `LEMON_STORE_ID` e `LEMON_PRODUCT_ID` são os dois maiores que 0. Um só definido deixaria o outro em 0 e rejeitaria chaves válidas. Enquanto um deles é 0, o aviso é emitido uma vez por processo.
+- A verificação da loja e do produto compara os dois ids só quando ambos são maiores que 0. Se só um está definido, a resposta não dá Pro. Isso ficou verificado na correção abaixo.
 - Uma instalação que já tinha a chave Pro gravada, sem `instance_id`, regista este PC na próxima revalidação (mais de um dia desde `last_verified_at`). Sem isso o limite de ativações não passava a valer para essa chave. Uma recusa já gravada, sem instância, não é repetida sozinha.
 - Se a Lemon aceita a ativação e a loja ou o produto não são os nossos, o Atlas tenta libertar essa instância. Se essa libertação falhar por rede, o Pro fica negado na mesma e o lugar remoto pode continuar ocupado.
 - A margem de 7 dias fica só quando a última resposta bem sucedida continua `valid` e a chamada nova é rede, timeout ou HTTP ≥ 500. Qualquer resposta confirmada com `valid` falso ignora a margem.
@@ -74,4 +74,30 @@ O texto do botão no fonte é «Deactivate on this PC». Em `frontend/src/index.
 - O botão no browser. Carregar em desativar chamaria a Lemon ao vivo.
 - Suite pytest completa e suite Jest completa.
 - Instalador Windows e bridge.
-- Revisão Codex e o «sim» do Fundador. Não fazer merge sem isso.
+- Revisão Codex do novo HEAD e o «sim» do Fundador. Não fazer merge sem isso.
+
+## Correção Codex em `83e6bb7` — 2026-11-15T16:33:09Z
+
+Os quatro achados eram válidos. Esta correção mexe só em `backend/license.py`, `backend/tests/test_license.py` e neste ficheiro.
+
+### VERIFIED
+
+- **P1.** A comparação loja/produto é saltada só quando `LEMON_STORE_ID` e `LEMON_PRODUCT_ID` são os dois 0. Com `LEMON_STORE_ID=10` e `LEMON_PRODUCT_ID` ausente, uma chave da loja 99 não fica Pro. O aviso `partial license configuration is a mismatch and Pro is not granted` sai uma vez. A segunda ativação não repete o aviso.
+- **P2, instância desconhecida.** A recusa é gravada antes da nova ativação: `valid=0`, `lemon_status=unknown_instance`, `last_success_at` vazio. Se a nova ativação falha por rede, `LicenseNetworkError` sai e o registo continua inválido. Dois dias depois, mesmo com o `httpx` a responder como Pro, `is_pro_active()` fica falso e `cached` fica falso.
+- **P2, trocar a chave A por uma chave B inválida.** Antes de gravar B, o Atlas chama `/licenses/deactivate` com a chave e o `instance_id` de A. Se essa chamada confirma a libertação, B fica Free e `prev_license_key` fica vazio. Se falha por rede, A fica em `prev_license_key` e `prev_instance_id` (colunas novas, `ALTER TABLE ... ADD COLUMN` só se faltarem). B não fica Pro e `last_success_at` fica vazio. Colar A outra vez chama validate com o `instance_id` guardado, não activate. «Deactivate on this PC» (`deactivate()`) liberta essa instância e apaga `prev_*`.
+- **P2, desativação recusada.** Resposta `disabled` ou `expired` grava a recusa, põe `valid=0`, limpa `last_success_at` e mantém o `instance_id`. `pro` fica falso no mesmo dia. Dois dias depois, uma falha de rede no validate não repõe o Pro.
+
+```text
+cd backend && python3 -m pytest tests/test_license.py -q --tb=short
+```
+
+exit code 0 — 47 passed, 12 warnings, 0.88s. Os warnings são os mesmos de `on_event` e do parser de formulários. Nenhum teste falhou.
+
+### INFERENCE
+
+- Se a libertação de A confirma e a chamada seguinte, para B, falha por rede, o registo local de A já foi marcado inválido e sem instância. A margem antiga não regressa.
+
+### NOT VERIFIED
+
+- Codex outra vez, neste HEAD.
+- Chamada real à Lemon Squeezy.

@@ -23,8 +23,8 @@ successful *valid* check is honoured for 7 days. An explicit refusal never
 uses that grace period.
 
 `LEMON_STORE_ID` and `LEMON_PRODUCT_ID` come from the environment and default
-to 0. While either is 0, the store/product check is skipped and a warning is
-logged once.
+to 0. The store/product check is skipped only while both are 0. If only one
+is set, Pro is not granted and the misconfiguration is logged once.
 """
 from __future__ import annotations
 
@@ -69,6 +69,7 @@ _REFUSAL_WRONG_STORE = "wrong_store"
 _REFUSAL_WRONG_PRODUCT = "wrong_product"
 _REFUSAL_UNKNOWN_INSTANCE = "unknown_instance"
 _REFUSAL_INVALID = "invalid"
+_REFUSAL_MISCONFIGURED = "misconfigured"
 
 FREE_LIMIT_MESSAGE = (
     "The free version includes 1 MT5 account. "
@@ -114,7 +115,15 @@ CACHED_PRO_MESSAGE = (
     "could not be reached just now)."
 )
 _STORE_UNCONFIGURED_WARNING = (
-    "LEMON_STORE_ID or LEMON_PRODUCT_ID is 0; store and product check is skipped."
+    "LEMON_STORE_ID and LEMON_PRODUCT_ID are 0; store and product check is skipped."
+)
+_STORE_PARTIAL_WARNING = (
+    "LEMON_STORE_ID or LEMON_PRODUCT_ID is set while the other is 0; "
+    "partial license configuration is a mismatch and Pro is not granted."
+)
+MISCONFIGURED_MESSAGE = (
+    "License server configuration is incomplete. "
+    "Atlas stays on the free version (1 MT5 account)."
 )
 
 _REFUSAL_MESSAGES = {
@@ -125,6 +134,7 @@ _REFUSAL_MESSAGES = {
     _REFUSAL_WRONG_PRODUCT: WRONG_PRODUCT_MESSAGE,
     _REFUSAL_UNKNOWN_INSTANCE: UNKNOWN_INSTANCE_MESSAGE,
     _REFUSAL_INVALID: INVALID_KEY_MESSAGE,
+    _REFUSAL_MISCONFIGURED: MISCONFIGURED_MESSAGE,
 }
 
 _SCHEMA = """
@@ -137,12 +147,16 @@ CREATE TABLE IF NOT EXISTS atlas_license (
     last_success_at TEXT,
     last_error TEXT,
     updated_at TEXT,
-    instance_id TEXT
+    instance_id TEXT,
+    prev_license_key TEXT,
+    prev_instance_id TEXT
 );
 """
 
+_ADDITIVE_COLUMNS = ("instance_id", "prev_license_key", "prev_instance_id")
+
 _lock = threading.Lock()
-_store_product_warning_logged = False
+_store_config_warnings_logged: set[str] = set()
 
 # UUID-shaped Lemon keys and explicit "license_key=..." assignments.
 _KEY_ASSIGNMENT_RE = re.compile(
@@ -193,15 +207,28 @@ def lemon_product_id() -> int:
     return _env_int("LEMON_PRODUCT_ID")
 
 
-def _store_product_check_enabled() -> bool:
-    """True only when both ids are configured. Warn once while either is 0."""
-    global _store_product_warning_logged
-    if lemon_store_id() == 0 or lemon_product_id() == 0:
-        if not _store_product_warning_logged:
-            _store_product_warning_logged = True
-            logger.warning(_STORE_UNCONFIGURED_WARNING)
-        return False
-    return True
+def _warn_store_config_once(kind: str, message: str) -> None:
+    if kind in _store_config_warnings_logged:
+        return
+    _store_config_warnings_logged.add(kind)
+    logger.warning(message)
+
+
+def _note_store_config() -> str:
+    """Return skip, fail, or check.
+
+    The match is skipped only when both ids are 0. One configured id is a
+    mismatch: Pro is not granted, and the misconfiguration is logged once.
+    """
+    store = lemon_store_id()
+    product = lemon_product_id()
+    if store == 0 and product == 0:
+        _warn_store_config_once("unconfigured", _STORE_UNCONFIGURED_WARNING)
+        return "skip"
+    if store == 0 or product == 0:
+        _warn_store_config_once("partial", _STORE_PARTIAL_WARNING)
+        return "fail"
+    return "check"
 
 
 def _machine_material() -> str:
@@ -287,9 +314,11 @@ def ensure_schema(path: Optional[Path] = None) -> None:
     with _cx(path) as cx:
         cx.executescript(_SCHEMA)
         cols = {row[1] for row in cx.execute("PRAGMA table_info(atlas_license)")}
-        if "instance_id" not in cols:
+        for name in _ADDITIVE_COLUMNS:
+            if name in cols:
+                continue
             try:
-                cx.execute("ALTER TABLE atlas_license ADD COLUMN instance_id TEXT")
+                cx.execute(f"ALTER TABLE atlas_license ADD COLUMN {name} TEXT")
             except sqlite3.OperationalError as exc:
                 if "duplicate column" not in str(exc).lower():
                     raise
@@ -305,6 +334,8 @@ def _empty_row() -> dict:
         "last_error": None,
         "updated_at": None,
         "instance_id": "",
+        "prev_license_key": "",
+        "prev_instance_id": "",
     }
 
 
@@ -312,7 +343,12 @@ def _row_to_dict(row: sqlite3.Row | None) -> dict:
     if row is None:
         return _empty_row()
     keys = set(row.keys())
-    instance_id = row["instance_id"] if "instance_id" in keys else ""
+
+    def _text(name: str) -> str:
+        if name not in keys:
+            return ""
+        return row[name] or ""
+
     return {
         "license_key": row["license_key"] or "",
         "valid": int(row["valid"] or 0),
@@ -321,7 +357,9 @@ def _row_to_dict(row: sqlite3.Row | None) -> dict:
         "last_success_at": row["last_success_at"],
         "last_error": row["last_error"],
         "updated_at": row["updated_at"],
-        "instance_id": instance_id or "",
+        "instance_id": _text("instance_id"),
+        "prev_license_key": _text("prev_license_key"),
+        "prev_instance_id": _text("prev_instance_id"),
     }
 
 
@@ -330,7 +368,8 @@ def load_record(path: Optional[Path] = None) -> dict:
     with _cx(path) as cx:
         row = cx.execute(
             "SELECT license_key, valid, lemon_status, last_verified_at, "
-            "last_success_at, last_error, updated_at, instance_id "
+            "last_success_at, last_error, updated_at, instance_id, "
+            "prev_license_key, prev_instance_id "
             "FROM atlas_license WHERE id=?",
             (_ROW_ID,),
         ).fetchone()
@@ -340,12 +379,14 @@ def load_record(path: Optional[Path] = None) -> dict:
 def _save_record(record: dict, path: Optional[Path] = None) -> None:
     ensure_schema(path)
     key = record.get("license_key") or ""
+    prev_key = record.get("prev_license_key") or ""
     with _cx(path) as cx:
         cx.execute(
             "INSERT INTO atlas_license "
             "(id, license_key, valid, lemon_status, last_verified_at, "
-            " last_success_at, last_error, updated_at, instance_id) "
-            "VALUES (?,?,?,?,?,?,?,?,?) "
+            " last_success_at, last_error, updated_at, instance_id, "
+            " prev_license_key, prev_instance_id) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?) "
             "ON CONFLICT(id) DO UPDATE SET "
             " license_key=excluded.license_key,"
             " valid=excluded.valid,"
@@ -354,7 +395,9 @@ def _save_record(record: dict, path: Optional[Path] = None) -> None:
             " last_success_at=excluded.last_success_at,"
             " last_error=excluded.last_error,"
             " updated_at=excluded.updated_at,"
-            " instance_id=excluded.instance_id",
+            " instance_id=excluded.instance_id,"
+            " prev_license_key=excluded.prev_license_key,"
+            " prev_instance_id=excluded.prev_instance_id",
             (
                 _ROW_ID,
                 key,
@@ -362,9 +405,11 @@ def _save_record(record: dict, path: Optional[Path] = None) -> None:
                 record.get("lemon_status"),
                 record.get("last_verified_at"),
                 record.get("last_success_at"),
-                scrub(record.get("last_error"), extra_secrets=[key]),
+                scrub(record.get("last_error"), extra_secrets=[key, prev_key]),
                 record.get("updated_at") or _now_iso(),
                 record.get("instance_id") or "",
+                prev_key,
+                record.get("prev_instance_id") or "",
             ),
         )
 
@@ -445,8 +490,11 @@ def _classify_refusal(payload: dict, info: dict) -> str:
 
 
 def _store_product_refusal(payload: dict) -> Optional[str]:
-    if not _store_product_check_enabled():
+    mode = _note_store_config()
+    if mode == "skip":
         return None
+    if mode == "fail":
+        return _REFUSAL_MISCONFIGURED
     got_store, got_product = _meta_ids(payload)
     if got_store != lemon_store_id():
         return _REFUSAL_WRONG_STORE
@@ -497,8 +545,8 @@ def _interpret(payload: Any, mode: str) -> dict:
             "refusal": None,
         }
 
-    # Still note an unconfigured store check, including on a refusal, once.
-    _store_product_check_enabled()
+    # Still note an unconfigured or partial store check, including on a refusal, once.
+    _note_store_config()
     return _refusal_result(_classify_refusal(payload, info), instance_id)
 
 
@@ -629,8 +677,14 @@ def _apply_remote_result(record: dict, key: str, result: dict) -> dict:
     return record
 
 
+def _release_confirmed(result: dict) -> bool:
+    return bool(result.get("deactivated")) or result.get("refusal") == _REFUSAL_UNKNOWN_INSTANCE
+
+
 def _reject_foreign_activation(key: str, result: dict) -> dict:
-    if result.get("refusal") in (_REFUSAL_WRONG_STORE, _REFUSAL_WRONG_PRODUCT):
+    if result.get("refusal") in (
+        _REFUSAL_WRONG_STORE, _REFUSAL_WRONG_PRODUCT, _REFUSAL_MISCONFIGURED,
+    ):
         instance_id = (result.get("instance_id") or "").strip()
         if instance_id:
             _release_instance(key, instance_id)
@@ -788,9 +842,9 @@ def public_state() -> dict:
             out["message"] = record["last_error"]
     # Defence in depth: never leak the stored key even if a future field is added.
     dumped = str(out)
-    key = record.get("license_key") or ""
-    if key and key in dumped:
-        raise RuntimeError("license public_state attempted to expose the license key")
+    for secret in (record.get("license_key") or "", record.get("prev_license_key") or ""):
+        if secret and secret in dumped:
+            raise RuntimeError("license public_state attempted to expose the license key")
     return out
 
 
@@ -806,15 +860,54 @@ def _clear_local_license(message: str) -> None:
             "last_error": message,
             "updated_at": now,
             "instance_id": "",
+            "prev_license_key": "",
+            "prev_instance_id": "",
         }
     )
+
+
+def _persist_explicit_refusal(
+    record: dict,
+    key: str,
+    result: dict,
+    *,
+    keep_instance: Optional[str] = None,
+) -> dict:
+    """Save a confirmed refusal and drop offline grace.
+
+    `last_success_at` is cleared so a later network failure cannot restore Pro.
+    """
+    updated = _apply_remote_result(record, key, result)
+    updated["valid"] = 0
+    updated["last_success_at"] = None
+    if keep_instance is not None:
+        updated["instance_id"] = keep_instance
+    _save_record(updated)
+    return updated
+
+
+def _assign_recovery(record: dict, existing: dict, key: str, recovery: Optional[tuple[str, str]]) -> dict:
+    """Keep a previous activation that could not be released."""
+    prev_key = (existing.get("prev_license_key") or "").strip()
+    prev_instance = (existing.get("prev_instance_id") or "").strip()
+    if recovery and recovery[0] != key:
+        record["prev_license_key"] = recovery[0]
+        record["prev_instance_id"] = recovery[1]
+    elif prev_key and prev_key != key:
+        record["prev_license_key"] = prev_key
+        record["prev_instance_id"] = prev_instance
+    else:
+        record["prev_license_key"] = ""
+        record["prev_instance_id"] = ""
+    return record
 
 
 def activate(license_key: str) -> dict:
     """Activate a key on this PC and persist the result.
 
     The same key with the same stored `instance_id` is not activated again.
-    Network failures do not change the stored record.
+    A recovered previous key is validated, not activated a second time.
+    Network failures do not restore Pro after an explicit refusal.
     """
     key = (license_key or "").strip()
     if not key:
@@ -824,26 +917,62 @@ def activate(license_key: str) -> dict:
         existing = load_record()
         stored_key = (existing.get("license_key") or "").strip()
         stored_instance = (existing.get("instance_id") or "").strip()
+        prev_key = (existing.get("prev_license_key") or "").strip()
+        prev_instance = (existing.get("prev_instance_id") or "").strip()
+        recovery: Optional[tuple[str, str]] = None
+
         if stored_key == key and stored_instance:
             result = _keep_instance(
                 validate_with_lemon(key, stored_instance), stored_instance
             )
-            # The saved instance is gone. Register this PC again, once, because
-            # the operator asked to activate — the daily refresh does not.
-            if (
-                not result.get("network_error")
-                and result.get("refusal") == _REFUSAL_UNKNOWN_INSTANCE
-            ):
+            if result.get("network_error"):
+                raise LicenseNetworkError(NETWORK_ACTIVATE_MESSAGE)
+            # The saved instance is gone. Persist that before registering again,
+            # so a network failure on the retry cannot keep the old grace.
+            if result.get("refusal") == _REFUSAL_UNKNOWN_INSTANCE:
+                existing = _persist_explicit_refusal(existing, key, result)
                 result = activate_with_lemon(key)
+                if result.get("network_error"):
+                    raise LicenseNetworkError(NETWORK_ACTIVATE_MESSAGE)
+        elif prev_key == key and prev_instance:
+            result = _keep_instance(
+                validate_with_lemon(key, prev_instance), prev_instance
+            )
+            if result.get("network_error"):
+                raise LicenseNetworkError(NETWORK_ACTIVATE_MESSAGE)
+            if result.get("refusal") == _REFUSAL_UNKNOWN_INSTANCE:
+                existing["prev_license_key"] = ""
+                existing["prev_instance_id"] = ""
+                existing = _persist_explicit_refusal(existing, key, result)
+                result = activate_with_lemon(key)
+                if result.get("network_error"):
+                    raise LicenseNetworkError(NETWORK_ACTIVATE_MESSAGE)
         else:
+            if stored_key and stored_key != key and stored_instance:
+                release = deactivate_with_lemon(stored_key, stored_instance)
+                if _release_confirmed(release):
+                    # The remote slot is gone. Drop local Pro before the new
+                    # call so a network failure cannot keep the old grace.
+                    existing = dict(existing)
+                    existing["valid"] = 0
+                    existing["instance_id"] = ""
+                    existing["last_success_at"] = None
+                    existing["lemon_status"] = "inactive"
+                    existing["last_verified_at"] = _now_iso()
+                    existing["updated_at"] = existing["last_verified_at"]
+                    _save_record(existing)
+                else:
+                    recovery = (stored_key, stored_instance)
             result = activate_with_lemon(key)
-        if result.get("network_error"):
-            raise LicenseNetworkError(NETWORK_ACTIVATE_MESSAGE)
-        result = _reject_foreign_activation(key, result)
+            if result.get("network_error"):
+                raise LicenseNetworkError(NETWORK_ACTIVATE_MESSAGE)
 
+        result = _reject_foreign_activation(key, result)
         record = _apply_remote_result(existing, key, result)
         if not result.get("valid"):
             record["valid"] = 0
+            record["last_success_at"] = None
+        record = _assign_recovery(record, existing, key, recovery)
         _save_record(record)
 
     state = public_state()
@@ -860,33 +989,82 @@ def activate(license_key: str) -> dict:
 def deactivate() -> dict:
     """Deactivate this PC and return the installation to Free.
 
-    Network failures do not change the stored record. Account data is untouched.
+    A network failure does not change the stored record. An explicit disabled
+    or expired refusal removes Pro immediately and keeps the instance for retry.
+    Account data is untouched.
     """
     with _lock:
         record = load_record()
         key = (record.get("license_key") or "").strip()
         instance_id = (record.get("instance_id") or "").strip()
+        prev_key = (record.get("prev_license_key") or "").strip()
+        prev_instance = (record.get("prev_instance_id") or "").strip()
         failed_message = ""
-        if not key:
-            outcome = "already_free"
-        elif not instance_id:
-            _clear_local_license(DEACTIVATED_MESSAGE)
-            outcome = "cleared"
-        else:
-            result = deactivate_with_lemon(key, instance_id)
-            if result.get("network_error"):
-                raise LicenseNetworkError(NETWORK_ACTIVATE_MESSAGE)
-            released = result.get("deactivated") or result.get("refusal") == _REFUSAL_UNKNOWN_INSTANCE
-            if released:
+        primary = (key, instance_id) if key and instance_id else None
+        recovered = (
+            (prev_key, prev_instance)
+            if prev_key and prev_instance and (prev_key, prev_instance) != (key, instance_id)
+            else None
+        )
+
+        if primary is None and recovered is None:
+            if not key:
+                outcome = "already_free"
+            else:
                 _clear_local_license(DEACTIVATED_MESSAGE)
                 outcome = "cleared"
+        else:
+            target = primary or recovered
+            target_is_primary = primary is not None
+            assert target is not None
+            result = deactivate_with_lemon(target[0], target[1])
+            if result.get("network_error"):
+                raise LicenseNetworkError(NETWORK_ACTIVATE_MESSAGE)
+            if _release_confirmed(result):
+                if target_is_primary and recovered is not None:
+                    extra = deactivate_with_lemon(recovered[0], recovered[1])
+                    if extra.get("network_error") or not _release_confirmed(extra):
+                        now = _now_iso()
+                        kept = dict(record)
+                        kept["license_key"] = ""
+                        kept["instance_id"] = ""
+                        kept["valid"] = 0
+                        kept["lemon_status"] = None
+                        kept["last_success_at"] = None
+                        kept["last_verified_at"] = now
+                        kept["updated_at"] = now
+                        kept["last_error"] = DEACTIVATED_MESSAGE
+                        kept["prev_license_key"] = recovered[0]
+                        kept["prev_instance_id"] = recovered[1]
+                        _save_record(kept)
+                    else:
+                        _clear_local_license(DEACTIVATED_MESSAGE)
+                else:
+                    _clear_local_license(DEACTIVATED_MESSAGE)
+                outcome = "cleared"
+            elif result.get("refusal") in (_REFUSAL_DISABLED, _REFUSAL_EXPIRED):
+                if target_is_primary:
+                    _persist_explicit_refusal(
+                        record, key, result, keep_instance=instance_id
+                    )
+                else:
+                    now = _now_iso()
+                    kept = dict(record)
+                    kept["valid"] = 0
+                    kept["last_success_at"] = None
+                    kept["lemon_status"] = result.get("lemon_status")
+                    kept["last_error"] = result.get("error")
+                    kept["last_verified_at"] = now
+                    kept["updated_at"] = now
+                    _save_record(kept)
+                outcome = "refused"
+                failed_message = result.get("error") or INVALID_KEY_MESSAGE
             else:
-                # Keep the stored instance so the customer can retry.
                 outcome = "failed"
                 failed_message = result.get("error") or INVALID_KEY_MESSAGE
 
     state = public_state()
-    if outcome == "failed":
+    if outcome in ("failed", "refused"):
         state["deactivated"] = False
         state["message"] = failed_message
         return state
