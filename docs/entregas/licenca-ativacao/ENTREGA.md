@@ -78,7 +78,9 @@ O texto do botão no fonte é «Deactivate on this PC». Em `frontend/src/index.
 
 ## Correção Codex em `83e6bb7` — 2026-11-15T16:33:09Z
 
-Os quatro achados eram válidos. Esta correção mexe só em `backend/license.py`, `backend/tests/test_license.py` e neste ficheiro.
+Os quatro achados eram válidos. O desenho com `prev_license_key` / `prev_instance_id` desta secção foi retirado na simplificação de `c5ecf02`, mais abaixo. As colunas ficam na tabela, sem uso.
+
+Esta correção mexeu só em `backend/license.py`, `backend/tests/test_license.py` e neste ficheiro.
 
 ### VERIFIED
 
@@ -101,3 +103,30 @@ exit code 0 — 47 passed, 12 warnings, 0.88s. Os warnings são os mesmos de `on
 
 - Codex outra vez, neste HEAD.
 - Chamada real à Lemon Squeezy.
+
+## Simplificação em `c5ecf02` — 2026-11-15T16:39:55Z
+
+Os três P2 novos vinham da recuperação com `prev_*`. Em vez de fechar cada ramo, esse caminho deixou de existir. Ficheiros: `backend/license.py`, `backend/tests/test_license.py` e este.
+
+### VERIFIED
+
+- `prev_license_key` e `prev_instance_id` já não entram em ler, gravar, ativar, desativar nem na resposta pública. O `CREATE TABLE` e o `ALTER TABLE ... ADD COLUMN` mantêm as colunas. Não há `DROP COLUMN`.
+- Com `instance_id` guardado, uma chave diferente é recusada com «Deactivate the current license on this PC first (Settings → License → Deactivate on this PC).» O registo não muda e não há chamada remota. O Pro da chave atual mantém-se.
+- Sem `instance_id`, uma chave diferente segue a ativação normal.
+- `deactivate()` com sucesso apaga a chave, o `instance_id` e o Pro.
+- Falha de rede em `deactivate()` não altera o registo, levanta `LicenseNetworkError`, e `key_present` continua verdadeiro.
+- Recusa explícita `disabled`, `expired` ou instância desconhecida apaga a chave, o `instance_id` e `last_success_at`. `pro` fica falso. Dois dias depois, uma resposta que seria Pro não repõe o Pro.
+- `LEMON_STORE_ID` e `LEMON_PRODUCT_ID` são constantes do módulo, ambas `0`. Sem `PYTEST_CURRENT_TEST` e sem `ATLAS_ENV` de desenvolvimento, as variáveis de ambiente não mudam os ids: uma chave da loja 99 continua Pro. Com `ATLAS_ENV=development`, o override de teste volta a valer. A regra «os dois a 0 saltam o teste; um só definido não dá Pro» mantém-se nos testes.
+- A recusa de instância desconhecida continua a ser gravada, com a margem limpa, antes de uma nova ativação.
+
+```text
+cd backend && python3 -m pytest tests/test_license.py -q --tb=short
+```
+
+exit code 0 — 50 passed, 12 warnings, 0.76s. Os warnings são os mesmos de `on_event` e do parser de formulários. Nenhum teste falhou.
+
+### NOT VERIFIED
+
+- Codex neste HEAD.
+- Chamada real à Lemon Squeezy.
+- O botão no browser.

@@ -1023,111 +1023,117 @@ class TestPerPcActivation:
         assert state["pro"] is False
         assert state["cached"] is False
 
-    def test_bad_replacement_releases_previous_key(self, isolated_db, monkeypatch):
-        calls = []
-
-        def post(url, data=None, **kwargs):
-            form = dict(data or {})
-            calls.append((url, form))
-            if url == lic.LEMON_DEACTIVATE_URL:
-                return _lemon_response(False, status="inactive", deactivated=True, instance_id=None)
-            if form.get("license_key") == OTHER_KEY:
-                return _lemon_response(False, error="not found", key=OTHER_KEY)
-            return _lemon_response(True, status="active", key=form.get("license_key") or VALID_KEY)
-
-        monkeypatch.setattr(lic.httpx, "post", post)
+    def test_different_key_with_instance_is_refused_without_remote(self, isolated_db, monkeypatch):
+        calls = _capture_post(
+            monkeypatch,
+            lambda url, data, **k: _lemon_response(True, status="active"),
+        )
         lic.activate(VALID_KEY)
+        before = lic.load_record()
+        sent = len(calls)
         state = lic.activate(OTHER_KEY)
+        assert len(calls) == sent
         assert state["activated"] is False
-        assert state["pro"] is False
-        assert lic.is_pro_active() is False
-        record = lic.load_record()
-        assert record["license_key"] == OTHER_KEY
-        assert record["valid"] == 0
-        assert not record["last_success_at"]
-        assert record["prev_license_key"] == ""
-        assert record["prev_instance_id"] == ""
-        release = [item for item in calls if item[0] == lic.LEMON_DEACTIVATE_URL]
-        assert release
-        assert release[0][1]["license_key"] == VALID_KEY
-        assert release[0][1]["instance_id"] == INSTANCE_ID
+        assert state["pro"] is True
+        assert state["key_present"] is True
+        assert state["message"] == (
+            "Deactivate the current license on this PC first "
+            "(Settings → License → Deactivate on this PC)."
+        )
+        after = lic.load_record()
+        assert after["license_key"] == before["license_key"] == VALID_KEY
+        assert after["instance_id"] == INSTANCE_ID
+        assert after["valid"] == 1
+        assert after["last_success_at"] == before["last_success_at"]
         _assert_no_key(state, VALID_KEY, OTHER_KEY)
 
-    def test_failed_release_keeps_recovery_for_validate_and_deactivate(self, isolated_db, monkeypatch):
-        calls = []
-
+    def test_different_key_without_instance_activates(self, isolated_db, monkeypatch):
         def post(url, data=None, **kwargs):
             form = dict(data or {})
-            calls.append((url, form))
-            if url == lic.LEMON_DEACTIVATE_URL:
-                req = httpx.Request("POST", url)
-                raise httpx.ConnectError("offline", request=req)
             if form.get("license_key") == OTHER_KEY:
-                return _lemon_response(False, error="not found", key=OTHER_KEY)
-            return _lemon_response(True, status="active", key=form.get("license_key") or VALID_KEY)
+                return _lemon_response(True, status="active", key=OTHER_KEY)
+            return _lemon_response(False, error="not found", key=form.get("license_key") or VALID_KEY)
 
         monkeypatch.setattr(lic.httpx, "post", post)
-        lic.activate(VALID_KEY)
-        state = lic.activate(OTHER_KEY)
-        assert state["pro"] is False
-        assert state["activated"] is False
-        record = lic.load_record()
-        assert record["license_key"] == OTHER_KEY
-        assert record["valid"] == 0
-        assert not record["last_success_at"]
-        assert record["instance_id"] == ""
-        assert record["prev_license_key"] == VALID_KEY
-        assert record["prev_instance_id"] == INSTANCE_ID
-        assert lic.is_pro_active() is False
-        _assert_no_key(state, VALID_KEY, OTHER_KEY)
-
-        before = len(calls)
-        restored = lic.activate(VALID_KEY)
-        new_calls = calls[before:]
-        assert restored["activated"] is True
-        assert restored["pro"] is True
-        assert new_calls[0][0] == lic.LEMON_VALIDATE_URL
-        assert new_calls[0][1]["license_key"] == VALID_KEY
-        assert new_calls[0][1]["instance_id"] == INSTANCE_ID
-        assert lic.LEMON_ACTIVATE_URL not in [url for url, _form in new_calls]
-        assert lic.load_record()["prev_license_key"] == ""
+        first = lic.activate(VALID_KEY)
+        assert first["activated"] is False
+        assert first["pro"] is False
+        assert lic.load_record()["instance_id"] == ""
+        second = lic.activate(OTHER_KEY)
+        assert second["activated"] is True
+        assert second["pro"] is True
+        assert lic.load_record()["license_key"] == OTHER_KEY
         assert lic.load_record()["instance_id"] == INSTANCE_ID
-        _assert_no_key(restored, VALID_KEY, OTHER_KEY)
+        _assert_no_key(second, VALID_KEY, OTHER_KEY)
 
-    def test_deactivate_releases_recovered_instance(self, isolated_db, monkeypatch):
-        phase = {"release": False}
+    def test_store_ids_are_constants_unless_test_or_dev(self, isolated_db, monkeypatch):
+        assert lic.LEMON_STORE_ID == 0
+        assert lic.LEMON_PRODUCT_ID == 0
+        monkeypatch.setenv("LEMON_STORE_ID", "10")
+        monkeypatch.setenv("LEMON_PRODUCT_ID", "20")
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+        monkeypatch.delenv("ATLAS_ENV", raising=False)
+        assert lic.lemon_store_id() == 0
+        assert lic.lemon_product_id() == 0
+        monkeypatch.setattr(
+            lic.httpx, "post",
+            lambda *a, **k: _lemon_response(True, status="active", store_id=99, product_id=4),
+        )
+        state = lic.activate(VALID_KEY)
+        assert state["activated"] is True
+        assert state["pro"] is True
+        monkeypatch.setenv("ATLAS_ENV", "development")
+        assert lic.lemon_store_id() == 10
+        assert lic.lemon_product_id() == 20
 
-        def post(url, data=None, **kwargs):
-            form = dict(data or {})
-            if url == lic.LEMON_DEACTIVATE_URL and not phase["release"]:
-                req = httpx.Request("POST", url)
-                raise httpx.ConnectError("offline", request=req)
-            if url == lic.LEMON_DEACTIVATE_URL:
-                assert form["license_key"] == VALID_KEY
-                assert form["instance_id"] == INSTANCE_ID
-                return _lemon_response(False, status="inactive", deactivated=True, instance_id=None)
-            if form.get("license_key") == OTHER_KEY:
-                return _lemon_response(False, error="not found", key=OTHER_KEY)
-            return _lemon_response(True, status="active")
-
-        monkeypatch.setattr(lic.httpx, "post", post)
+    def test_deactivate_success_clears_key_instance_and_pro(self, isolated_db, monkeypatch):
+        calls = _capture_post(monkeypatch, _ok_or_deactivate)
         lic.activate(VALID_KEY)
-        lic.activate(OTHER_KEY)
-        assert lic.load_record()["prev_instance_id"] == INSTANCE_ID
-        phase["release"] = True
         state = lic.deactivate()
         assert state["deactivated"] is True
         assert state["pro"] is False
         assert state["key_present"] is False
+        assert state["status"] == "free"
         record = lic.load_record()
         assert record["license_key"] == ""
-        assert record["prev_license_key"] == ""
-        assert record["prev_instance_id"] == ""
         assert record["instance_id"] == ""
-        _assert_no_key(state, VALID_KEY, OTHER_KEY)
+        assert record["valid"] == 0
+        assert not record["last_success_at"]
+        assert calls[-1][0] == lic.LEMON_DEACTIVATE_URL
+        assert calls[-1][1]["license_key"] == VALID_KEY
+        assert calls[-1][1]["instance_id"] == INSTANCE_ID
+        _assert_no_key(state, VALID_KEY)
 
-    @pytest.mark.parametrize("status", ["disabled", "expired"])
-    def test_deactivate_explicit_refusal_removes_pro(self, isolated_db, monkeypatch, status):
+    def test_deactivate_network_changes_nothing(self, isolated_db, monkeypatch):
+        def post(url, data=None, **kwargs):
+            if url == lic.LEMON_DEACTIVATE_URL:
+                req = httpx.Request("POST", url)
+                raise httpx.ConnectError("offline", request=req)
+            return _lemon_response(True, status="active")
+
+        monkeypatch.setattr(lic.httpx, "post", post)
+        lic.activate(VALID_KEY)
+        before = lic.load_record()
+        with pytest.raises(lic.LicenseNetworkError):
+            lic.deactivate()
+        after = lic.load_record()
+        assert after["license_key"] == before["license_key"] == VALID_KEY
+        assert after["instance_id"] == INSTANCE_ID
+        assert after["valid"] == 1
+        assert after["last_success_at"] == before["last_success_at"]
+        state = lic.public_state()
+        assert state["pro"] is True
+        assert state["key_present"] is True
+
+    @pytest.mark.parametrize(
+        "status,error",
+        [
+            ("disabled", "This license key is disabled."),
+            ("expired", "This license key has expired."),
+            ("active", "This license key instance does not exist."),
+        ],
+    )
+    def test_deactivate_explicit_refusal_clears_local(self, isolated_db, monkeypatch, status, error):
         _db, clock = isolated_db
 
         def post(url, data=None, **kwargs):
@@ -1135,13 +1141,10 @@ class TestPerPcActivation:
                 return _lemon_response(
                     False,
                     status=status,
-                    error=f"This license key is {status}.",
+                    error=error,
                     deactivated=False,
                     instance_id=None,
                 )
-            if url == lic.LEMON_VALIDATE_URL:
-                req = httpx.Request("POST", url)
-                raise httpx.ConnectError("offline", request=req)
             return _lemon_response(True, status="active")
 
         monkeypatch.setattr(lic.httpx, "post", post)
@@ -1150,13 +1153,17 @@ class TestPerPcActivation:
         state = lic.deactivate()
         assert state["deactivated"] is False
         assert state["pro"] is False
-        assert status in state["message"].lower()
+        assert state["key_present"] is False
         record = lic.load_record()
+        assert record["license_key"] == ""
+        assert record["instance_id"] == ""
         assert record["valid"] == 0
-        assert record["lemon_status"] == status
-        assert record["instance_id"] == INSTANCE_ID
         assert not record["last_success_at"]
-        assert lic.public_state()["pro"] is False
+        _assert_no_key(state, VALID_KEY)
+        monkeypatch.setattr(
+            lic.httpx, "post",
+            lambda *a, **k: _lemon_response(True, status="active"),
+        )
         clock.when = T0 + timedelta(days=2)
         assert lic.is_pro_active() is False
         assert lic.public_state()["pro"] is False
