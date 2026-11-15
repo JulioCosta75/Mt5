@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, fmt } from "@/lib/api";
 import { srAtlasRound } from "@/assets/branding";
 import { isSamplePresentation } from "@/lib/sampleMode";
+import { dashboardReducer, globalsFromSettled, shouldApplyAccountDetail } from "./dashboardFeed";
 import KpiTicker from "@/components/KpiTicker";
 import OverviewHero from "@/components/OverviewHero";
 import AccountsTable from "@/components/AccountsTable";
@@ -123,33 +124,8 @@ const initialState = {
   loading: true,
 };
 
-function reducer(state, action) {
-  switch (action.type) {
-    case "SET_GLOBALS":
-      return {
-        ...state,
-        kpis: action.kpis,
-        accounts: action.accounts,
-        alerts: action.alerts,
-        selectedId: state.selectedId || (action.accounts[0]?.id ?? null),
-      };
-    case "SET_DETAIL":
-      return { ...state, equity: action.equity, drawdown: action.drawdown, trades: action.trades };
-    case "SELECT":
-      return { ...state, selectedId: action.id };
-    case "ACK_ALERT":
-      return { ...state, alerts: state.alerts.map(a => a.id === action.id ? { ...a, acknowledged: true } : a) };
-    case "REFRESHING":
-      return { ...state, refreshing: action.value };
-    case "LOADING":
-      return { ...state, loading: action.value };
-    default:
-      return state;
-  }
-}
-
 export default function Dashboard() {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [state, dispatch] = useReducer(dashboardReducer, initialState);
   const { kpis, accounts, selectedId, equity, drawdown, trades, alerts, refreshing, loading } = state;
   const [sessionId] = useState(() => Math.floor(Math.random() * 9000 + 1000));
   const [activeTab, setActiveTab] = useState("Overview");
@@ -157,18 +133,15 @@ export default function Dashboard() {
   const [mt5Status, setMt5Status] = useState(null);
   const [knowledgeEnabled, setKnowledgeEnabled] = useState(false);
   const [healthMode, setHealthMode] = useState(null);
-  const selectedIdRef = useRef(null);
-  useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
 
   const isSample = isSamplePresentation(mt5Status, healthMode);
+  // A rejected or invalid feed arrives as null. The reducer keeps that feed's
+  // previous rows, so one timeout does not clear the table or the alerts.
   const loadGlobals = useCallback(async () => {
     const settled = await Promise.allSettled([api.kpis(), api.accounts(), api.alerts()]);
-    const kpis = settled[0].status === "fulfilled" ? settled[0].value : null;
-    const accountsRaw = settled[1].status === "fulfilled" ? settled[1].value : [];
-    const accounts = Array.isArray(accountsRaw) ? accountsRaw : [];
-    const alertsPayload = settled[2].status === "fulfilled" ? settled[2].value : null;
-    const alerts = Array.isArray(alertsPayload?.alerts) ? alertsPayload.alerts : [];
-    dispatch({ type: "SET_GLOBALS", kpis, accounts, alerts });
+    dispatch({ type: "SET_GLOBALS", ...globalsFromSettled(settled) });
   }, []);
 
   const loadAccountDetail = useCallback(async (id) => {
@@ -178,6 +151,7 @@ export default function Dashboard() {
       api.drawdown(id, 220),
       api.trades(id, { limit: 100 }),
     ]);
+    if (!shouldApplyAccountDetail(id, selectedIdRef.current)) return;
     dispatch({ type: "SET_DETAIL", equity: eq.series || [], drawdown: dd, trades: tr.trades || [] });
   }, []);
 

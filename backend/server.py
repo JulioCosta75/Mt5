@@ -444,13 +444,17 @@ def _supervision_snapshot() -> dict:
     return _supervision_snapshot_from_accounts(ACCOUNTS, bridge_ok=None)
 
 
-# Last bridge reachability measured by _mt5_live_accounts (None = not measured yet).
+# Last account-fetch reachability from _mt5_live_accounts (None = not measured yet).
+# /account requires the bearer token. The /health probe must not write this flag:
+# /health does not check the token, so a bad token would otherwise look connected.
 _LAST_BRIDGE_OK: Optional[bool] = None
 # Whether the bridge process itself answered its /health probe (None = not
 # measured). Lets the dashboard tell "bridge down" from "MT5 closed": in the
 # founder's test of 2026-11-14 the card said BRIDGE DOWN while the bridge was
 # up and only the terminal was closed.
 _LAST_BRIDGE_REACHABLE: Optional[bool] = None
+# Terminal connected and logged in, from the same /health body. Not an account fetch.
+_LAST_TERMINAL_OK: Optional[bool] = None
 
 
 async def _mt5_live_accounts() -> tuple[list[dict], bool]:
@@ -783,13 +787,16 @@ class MT5ConfigIn(BaseModel):
 
 
 async def _probe_bridge_health() -> None:
-    """Refresh the bridge/terminal measurement from the bridge's /health.
+    """Refresh bridge reachability and terminal login from the bridge's /health.
 
     Called by GET /api/mt5/config (polled by the dashboard) so the connection
     card follows reality within one poll instead of waiting for the next
     account fetch. No-op outside MT5 mode or without a configured bridge.
+
+    Does not write _LAST_BRIDGE_OK. /health is unauthenticated, so its result
+    must not replace the account-fetch result (a bad token stays a failure).
     """
-    global _LAST_BRIDGE_OK, _LAST_BRIDGE_REACHABLE
+    global _LAST_BRIDGE_REACHABLE, _LAST_TERMINAL_OK
     if not MT5_MODE:
         return
     from mt5_client import clients
@@ -800,18 +807,20 @@ async def _probe_bridge_health() -> None:
         h = await bridges[0].health()
     except Exception:  # noqa: BLE001
         _LAST_BRIDGE_REACHABLE = False
-        _LAST_BRIDGE_OK = False
+        _LAST_TERMINAL_OK = None
         return
     _LAST_BRIDGE_REACHABLE = True
-    _LAST_BRIDGE_OK = bool(h.get("terminal_connected")) and bool(h.get("account_logged_in"))
+    _LAST_TERMINAL_OK = bool(h.get("terminal_connected")) and bool(h.get("account_logged_in"))
 
 
 def _connection_status(cfg: dict) -> dict:
     configured = bool(cfg.get("configured"))
-    if MT5_MODE and _LAST_BRIDGE_OK is False and _LAST_BRIDGE_REACHABLE:
+    if MT5_MODE and _LAST_BRIDGE_REACHABLE is False:
+        state = "bridge_down"      # bridge process did not answer /health
+    elif MT5_MODE and _LAST_BRIDGE_REACHABLE is True and _LAST_TERMINAL_OK is False:
         state = "mt5_offline"      # bridge up, but MT5 closed / not logged in
     elif MT5_MODE and _LAST_BRIDGE_OK is False:
-        state = "bridge_down"      # MT5 mode, but the last bridge check failed
+        state = "bridge_down"      # account fetch failed (bridge down, or bad token)
     elif MT5_MODE:
         state = "connected"        # backend started with a bridge URL
     elif configured:
