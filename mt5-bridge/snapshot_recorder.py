@@ -11,6 +11,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 logger = logging.getLogger(__name__)
 
+RECONNECT_CHECK_SECONDS = 15
+
 
 class SnapshotRecorder:
     def __init__(self, mt5_service, storage, interval_seconds: int = 10):
@@ -19,6 +21,14 @@ class SnapshotRecorder:
         self.interval_seconds = interval_seconds
         self.scheduler = BackgroundScheduler(timezone="UTC")
         self._job = None
+        self._reconnect_job = None
+
+    def _reconnect_tick(self):
+        """Reconnect if the MT5 terminal session was lost (MT5 restarted)."""
+        try:
+            self.mt5_service.ensure_connected()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("reconnect check failed: %s", e)
 
     def _tick(self):
         try:
@@ -36,6 +46,15 @@ class SnapshotRecorder:
             seconds=self.interval_seconds,
             next_run_time=None,
         )
+        # Independent, ACTIVE job (the snapshot job above is added paused by
+        # next_run_time=None and is left as it was in Phase 2).
+        self._reconnect_job = self.scheduler.add_job(
+            self._reconnect_tick,
+            "interval",
+            seconds=RECONNECT_CHECK_SECONDS,
+            max_instances=1,
+            coalesce=True,
+        )
         self.scheduler.start()
         logger.info("SnapshotRecorder started (every %ss)", self.interval_seconds)
 
@@ -43,3 +62,4 @@ class SnapshotRecorder:
         if self.scheduler.running:
             self.scheduler.shutdown(wait=False)
         self._job = None
+        self._reconnect_job = None

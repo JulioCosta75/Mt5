@@ -12,7 +12,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import subprocess
 import threading
+import time
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
@@ -29,6 +32,15 @@ except Exception as _imp_err:  # noqa: BLE001  (ImportError on non-Windows, etc.
 
 logger = logging.getLogger(__name__)
 _lock = threading.Lock()
+
+# Automatic reconnection (founder authorization, 2026-11-14). After the MT5
+# terminal is closed and reopened, the old IPC session is gone and the bridge
+# used to stay disconnected until it was restarted by hand (demo test of
+# 2026-11-13). ensure_connected() re-initializes the session, but only when a
+# terminal process is running: mt5.initialize() would otherwise launch a
+# terminal the operator closed on purpose.
+RECONNECT_MIN_SECONDS = 30.0
+RECONNECT_MAX_SECONDS = 300.0
 
 
 class MT5Error(RuntimeError):
@@ -56,6 +68,8 @@ class MT5Service:
         self.configured = configured
         self._initialized = False
         self._last_error: str | None = None
+        self._next_reconnect_at = 0.0
+        self._reconnect_interval = RECONNECT_MIN_SECONDS
 
     # ---- lifecycle ----
     def initialize(self):
@@ -169,6 +183,102 @@ class MT5Service:
             self._last_error = None
             logger.info("MT5 connected: login=%s server=%s", self.login, self.server)
             self._warn_if_algo_trading_disabled()
+
+    # ---- automatic reconnection ----
+    def _terminal_image_names(self) -> list[str]:
+        names = ["terminal64.exe", "terminal.exe"]
+        if self.terminal_path:
+            base = os.path.basename(self.terminal_path.replace("\\", "/")).lower()
+            if base and base not in names:
+                names.insert(0, base)
+        return names
+
+    def _terminal_process_running(self) -> bool:
+        """True only when the MT5 terminal Atlas uses is confirmed running.
+
+        Fails closed: if the probe cannot run or times out, return False and
+        defer the reconnect, because initialize() can launch a terminal the
+        operator closed on purpose.
+
+        * terminal_path configured: a process whose executable path is exactly
+          that file must be running (another broker's terminal does not count).
+        * no terminal_path: any MT5 terminal image name (tasklist).
+        """
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        try:
+            if self.terminal_path:
+                target = os.path.normcase(os.path.abspath(self.terminal_path))
+                out = subprocess.run(
+                    ["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                     "Get-Process -ErrorAction SilentlyContinue | "
+                     "Where-Object { $_.Path } | ForEach-Object { $_.Path }"],
+                    capture_output=True, text=True, timeout=15,
+                    creationflags=flags,
+                ).stdout
+                return any(
+                    os.path.normcase(os.path.abspath(line.strip())) == target
+                    for line in out.splitlines() if line.strip()
+                )
+            for name in self._terminal_image_names():
+                out = subprocess.run(
+                    ["tasklist", "/FI", f"IMAGENAME eq {name}", "/NH"],
+                    capture_output=True, text=True, timeout=10,
+                    creationflags=flags,
+                ).stdout
+                if name.lower() in out.lower():
+                    return True
+            return False
+        except Exception as e:  # noqa: BLE001
+            logger.warning("MT5 terminal probe failed (%s); reconnect deferred", e)
+            return False
+
+    def ensure_connected(self) -> bool:
+        """Reconnect when the terminal session was lost. Returns True if connected.
+
+        A lost broker link (terminal up, account known, term.connected False)
+        is left to the terminal itself; only a lost IPC session (no terminal
+        info or no account info) is re-initialized. The next attempt is
+        scheduled from the END of the previous one: 30 s, doubling up to 5 min
+        after each failure (initialize() itself can take minutes to time out).
+        """
+        if not self.configured or not _MT5_AVAILABLE:
+            return False
+        with _lock:
+            term = mt5.terminal_info() if self._initialized else None
+            acc = mt5.account_info() if self._initialized else None
+        if self._initialized and term is not None and acc is not None:
+            self._reconnect_interval = RECONNECT_MIN_SECONDS
+            return True
+        if time.monotonic() < self._next_reconnect_at:
+            return False
+        try:
+            if not self._terminal_process_running():
+                self._initialized = False
+                self._last_error = (
+                    "MetaTrader 5 terminal is not running. Atlas reconnects "
+                    "automatically when it is open again."
+                )
+                return False
+            logger.warning("MT5 session lost; reconnecting to the terminal")
+            with _lock:
+                try:
+                    mt5.shutdown()
+                except Exception:  # noqa: BLE001
+                    pass
+                self._initialized = False
+            try:
+                self.initialize()
+            except MT5Error as e:
+                self._last_error = str(e)
+                self._reconnect_interval = min(self._reconnect_interval * 2, RECONNECT_MAX_SECONDS)
+                logger.warning("MT5 reconnect failed (next try in %.0fs): %s", self._reconnect_interval, e)
+                return False
+            self._reconnect_interval = RECONNECT_MIN_SECONDS
+            logger.info("MT5 reconnected")
+            return True
+        finally:
+            self._next_reconnect_at = time.monotonic() + (
+                0.0 if self._initialized else self._reconnect_interval)
 
     def shutdown(self):
         with _lock:
