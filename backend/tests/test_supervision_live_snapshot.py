@@ -9,6 +9,7 @@ import asyncio
 import importlib
 import os
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -113,6 +114,57 @@ class TestSupervisionSnapshotSeverity:
         assert d["alerts"]["critical"] == 0
         assert d["alerts"]["warning"] == 0
 
+    def test_without_terminal_indicator_matches_today(self, snap_fn):
+        cached = _live_account(stale=True)
+        omitted = snap_fn([cached], bridge_ok=False, alerts=[])
+        explicit = snap_fn([cached], bridge_ok=False, alerts=[], terminal_offline=False)
+        omitted.pop("generated_at")
+        explicit.pop("generated_at")
+        assert omitted == explicit
+        assert list(omitted["services"]) == ["backend_ok", "store_ok", "bridge_ok", "dashboard_ok"]
+        assert omitted["services"]["bridge_ok"] is False
+        assert "mt5_terminal_ok" not in omitted["services"]
+        assert "mt5 bridge is unavailable" in omitted["message"].lower()
+
+    def test_terminal_offline_is_not_bridge_down(self, snap_fn):
+        cached = _live_account(stale=True)
+        d = snap_fn([cached], bridge_ok=False, alerts=[], terminal_offline=True)
+        assert d["services"]["bridge_ok"] is True
+        assert d["services"]["mt5_terminal_ok"] is False
+        assert list(d["services"]) == [
+            "backend_ok", "store_ok", "bridge_ok", "mt5_terminal_ok", "dashboard_ok",
+        ]
+        assert d["status"] == "WARNING"
+        assert d["message"] == (
+            "MetaTrader 5 is closed or not logged in; displayed data comes from cache "
+            "and may be outdated. Atlas reconnects automatically when it is open again."
+        )
+        assert "unavailable" not in d["message"].lower()
+
+    def test_terminal_offline_keeps_alert_priority(self, snap_fn):
+        critical_acc = _live_account(status="ERROR", stale=True, equity=500.0)
+        d = snap_fn(
+            [critical_acc],
+            bridge_ok=False,
+            alerts=[{"severity": "CRITICAL", "acknowledged": False}],
+            terminal_offline=True,
+        )
+        assert d["status"] == "ALERT"
+        assert d["services"]["bridge_ok"] is True
+        assert d["services"]["mt5_terminal_ok"] is False
+        msg = d["message"]
+        assert msg.startswith("ALERT:")
+        assert "MetaTrader 5 is closed or not logged in" in msg
+        assert "mt5 bridge is unavailable" not in msg.lower()
+
+    def test_terminal_offline_keeps_warning_detail(self, snap_fn):
+        paused = _live_account(status="PAUSED", stale=True)
+        d = snap_fn([paused], bridge_ok=False, alerts=[], terminal_offline=True)
+        assert d["status"] == "WARNING"
+        assert d["services"]["mt5_terminal_ok"] is False
+        assert d["message"].startswith("Degraded:")
+        assert "MetaTrader 5 is closed or not logged in" in d["message"]
+
 
 class TestMt5ModeIsolation:
     def test_mt5_mode_does_not_mount_mock_api_router(self):
@@ -129,6 +181,98 @@ class TestMt5ModeIsolation:
         snap = asyncio.run(mod._live_supervision_snapshot())
         assert snap["mode"] == "mt5"
         assert snap["services"]["bridge_ok"] is False
+        assert "mt5_terminal_ok" not in snap["services"]
         assert snap["status"] == "WARNING"
         assert snap["accounts"]["total"] == 0
         assert "all forge factory lab core services are online and healthy." not in snap["message"].lower()
+
+
+class TestLiveSupervisionTerminalProbe:
+    @pytest.fixture(scope="class")
+    def mod(self):
+        return _reload_server(mt5=True)
+
+    def _run(self, mod, monkeypatch, accounts, bridge_ok, probe):
+        async def fake_accounts():
+            return accounts, bridge_ok
+
+        async def fake_list_open():
+            return []
+
+        monkeypatch.setattr(mod, "_mt5_live_accounts", fake_accounts)
+        monkeypatch.setattr(mod, "_probe_bridge_health", probe)
+        monkeypatch.setattr(mod._atlas_alert_store, "list_open", fake_list_open)
+        monkeypatch.setattr(mod, "_LAST_BRIDGE_REACHABLE", None)
+        monkeypatch.setattr(mod, "_LAST_TERMINAL_OK", None)
+        return asyncio.run(mod._live_supervision_snapshot())
+
+    def test_closed_terminal_probes_and_sets_indicator(self, mod, monkeypatch):
+        calls = {"n": 0}
+
+        async def probe():
+            calls["n"] += 1
+            mod._LAST_BRIDGE_REACHABLE = True
+            mod._LAST_TERMINAL_OK = False
+
+        snap = self._run(mod, monkeypatch, [_live_account(stale=True)], False, probe)
+        assert calls["n"] == 1
+        assert snap["services"]["bridge_ok"] is True
+        assert snap["services"]["mt5_terminal_ok"] is False
+        assert snap["status"] == "WARNING"
+        assert "MetaTrader 5 is closed or not logged in" in snap["message"]
+
+    def test_unreachable_bridge_has_no_indicator(self, mod, monkeypatch):
+        async def probe():
+            mod._LAST_BRIDGE_REACHABLE = False
+            mod._LAST_TERMINAL_OK = None
+
+        snap = self._run(mod, monkeypatch, [], False, probe)
+        assert snap["services"]["bridge_ok"] is False
+        assert "mt5_terminal_ok" not in snap["services"]
+        assert "mt5 bridge is unavailable" in snap["message"].lower()
+
+    def test_logged_in_terminal_with_failed_fetch_stays_bridge_down(self, mod, monkeypatch):
+        async def probe():
+            mod._LAST_BRIDGE_REACHABLE = True
+            mod._LAST_TERMINAL_OK = True
+
+        snap = self._run(mod, monkeypatch, [], False, probe)
+        assert snap["services"]["bridge_ok"] is False
+        assert "mt5_terminal_ok" not in snap["services"]
+        assert "mt5 bridge is unavailable" in snap["message"].lower()
+
+    def test_live_fetch_does_not_probe(self, mod, monkeypatch):
+        async def probe():
+            raise AssertionError("health probe must not run when the account fetch succeeded")
+
+        snap = self._run(mod, monkeypatch, [_live_account()], True, probe)
+        assert snap["services"]["bridge_ok"] is True
+        assert "mt5_terminal_ok" not in snap["services"]
+        assert snap["status"] == "OK"
+
+    def test_hanging_probe_stays_on_bridge_down_path(self, mod, monkeypatch):
+        async def probe():
+            mod._LAST_BRIDGE_REACHABLE = True
+            mod._LAST_TERMINAL_OK = False
+            await asyncio.sleep(30)
+
+        started = time.perf_counter()
+        snap = self._run(mod, monkeypatch, [_live_account(stale=True)], False, probe)
+        elapsed = time.perf_counter() - started
+        assert elapsed < 5
+        assert snap["services"]["bridge_ok"] is False
+        assert "mt5_terminal_ok" not in snap["services"]
+        assert snap["status"] == "WARNING"
+        assert "mt5 bridge is unavailable" in snap["message"].lower()
+        assert "metatrader 5 is closed" not in snap["message"].lower()
+
+    def test_probe_error_stays_on_bridge_down_path(self, mod, monkeypatch):
+        async def probe():
+            mod._LAST_BRIDGE_REACHABLE = True
+            mod._LAST_TERMINAL_OK = False
+            raise RuntimeError("health probe failed")
+
+        snap = self._run(mod, monkeypatch, [], False, probe)
+        assert snap["services"]["bridge_ok"] is False
+        assert "mt5_terminal_ok" not in snap["services"]
+        assert "mt5 bridge is unavailable" in snap["message"].lower()
